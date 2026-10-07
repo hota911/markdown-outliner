@@ -91,7 +91,7 @@ const en = {
 
   opening: 'Opening file…',
   noFiles: 'There are no Markdown files in this folder.',
-  help: '↑↓: move the cursor · Enter: add (at the start of the text: above) · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several',
+  help: '↑↓: move the cursor · Enter: add (at the start of the text: above) · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several · / at the start or after a space: commands',
   closeToast: 'Close notification',
 
   bookmarks: {
@@ -148,6 +148,24 @@ const en = {
     extractTitle: 'Move the item with its children and notes to a new file and embed it',
     extract: 'Move to file',
     childrenEnd: (title: string) => `End of the children of ${title}`,
+  },
+
+  // The menu that `/` opens in an item's text. A command matches the typed text by its label or
+  // keywords in either language, so `/done` and `/完了` both work in both.
+  slash: {
+    commands: 'Commands',
+    files: 'File to embed',
+    command: {
+      todo: { label: 'Not started', keywords: 'todo open' },
+      'in-progress': { label: 'In progress', keywords: 'doing wip start' },
+      done: { label: 'Done', keywords: 'complete finish check' },
+      task: { label: 'Turn into task', keywords: 'checkbox' },
+      bullet: { label: 'Turn into bullet', keywords: 'list plain' },
+      note: { label: 'Note', keywords: 'memo' },
+      zoom: { label: 'Zoom in', keywords: 'focus' },
+      extract: { label: 'Move to file', keywords: 'extract new file' },
+      embed: { label: 'Embed existing file', keywords: 'file link' },
+    },
   },
 
   // The bar shown above the soft keyboard on touch screens, for the keys a soft keyboard lacks.
@@ -320,7 +338,7 @@ const ja: Messages = {
 
   opening: 'ファイルを開いています…',
   noFiles: 'このフォルダには Markdown ファイルがありません。',
-  help: '↑↓: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択',
+  help: '↑↓: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択 · 先頭か空白の後の /: コマンド',
   closeToast: '通知を閉じる',
 
   bookmarks: {
@@ -376,6 +394,22 @@ const ja: Messages = {
     extractTitle: '項目を子とノートごと新しいファイルへ移して埋め込みにする',
     extract: 'ファイルにする',
     childrenEnd: title => title + ' の子項目の末尾',
+  },
+
+  slash: {
+    commands: 'コマンド',
+    files: '埋め込むファイル',
+    command: {
+      todo: { label: '未着手', keywords: 'みちゃくしゅ タスク' },
+      'in-progress': { label: '進行中', keywords: 'しんこうちゅう 着手' },
+      done: { label: '完了', keywords: 'かんりょう 済み' },
+      task: { label: 'タスクにする', keywords: 'たすく チェック' },
+      bullet: { label: '箇条書きにする', keywords: 'かじょうがき' },
+      note: { label: 'ノート', keywords: 'のーと メモ' },
+      zoom: { label: 'ズーム', keywords: 'ずーむ 開く' },
+      extract: { label: 'ファイルにする', keywords: 'ふぁいる 切り出す' },
+      embed: { label: '既存のファイルを埋め込む', keywords: 'うめこみ ふぁいる' },
+    },
   },
 
   touchBar: {

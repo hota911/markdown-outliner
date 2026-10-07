@@ -169,6 +169,28 @@ export function updateStatus(text: string, line: number, status: Status): EditRe
   return result(doc, line);
 }
 
+// Drops the status box of a task; a bullet stays as it is. (updateStatus turns a bullet into a task.)
+export function toBullet(text: string, line: number): EditResult {
+  const doc = target(text, line), match = item(doc.lines[line])!;
+  if (doc.row.kind === 'embed') throw new CoreError('embedHasNoStatus');
+  doc.lines[line] = match[1] + match[2] + ' ' + match[4];
+  return result(doc, line);
+}
+
+// Embeds `name`, a path relative to the folder of this file, with the line extractToFile writes.
+// An empty item without note or children becomes the embed; otherwise it goes in as the next sibling.
+export function embedFile(text: string, line: number, name: string): EditResult {
+  if (typeof name !== 'string' || !/^[^\\[\]#|^]+\.md$/.test(name)) throw new CoreError('invalidFileName');
+  const doc = target(text, line);
+  const embed = item(doc.lines[line])![1] + '- ![[' + name + ']]';
+  if (doc.row.kind !== 'embed' && !doc.row.title && doc.row.end === line + 1) {
+    doc.lines[line] = embed;
+    return result(doc, line);
+  }
+  doc.lines.splice(doc.row.end, 0, embed);
+  return result(doc, doc.row.end);
+}
+
 export function updateNote(text: string, line: number, note: string): EditResult {
   if (typeof note !== 'string' || note.includes('\r')) throw new CoreError('noteFormat');
   const doc = target(text, line);

@@ -70,7 +70,7 @@ describe('Japanese UI', () => {
     expect(screen.getByText('進行中 #travel「hotel」 · tasks.md')).toBeTruthy();
     expect(container.querySelector('.save-state').textContent).toBe('保存済み');
     expect(container.querySelector('.help').textContent).toBe(
-      '↑↓: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択');
+      '↑↓: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択 · 先頭か空白の後の /: コマンド');
 
     await user.click(row('#later').getByRole('button', { name: 'ファイルにする' }));
     await waitFor(() => expect(screen.getByText('タスク.md を作成しました。Undo の履歴は消去しました。')).toBeTruthy());

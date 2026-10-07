@@ -1,5 +1,6 @@
 <script lang="ts">
   import Item from './Item.svelte';
+  import SlashMenu from './SlashMenu.svelte';
   import { syncValue, type Controller, type OutlineView } from './controller.svelte.ts';
 
   let { ctrl, outline }: { ctrl: Controller; outline: OutlineView } = $props();
@@ -34,6 +35,7 @@
   {#if outline.zoom}
     {@const zoom = outline.zoom}
     {@const path = outline.path}
+    {@const slashMenu = ctrl.slashMenu(path, zoom.row.line)}
     <section class="zoom-heading">
       <textarea
         class="title-input zoom-title"
@@ -45,8 +47,13 @@
         data-path={path}
         data-line={zoom.row.line}
         data-field="title"
+        aria-controls={slashMenu?.id}
+        aria-activedescendant={slashMenu ? slashMenu.id + '-' + slashMenu.index : undefined}
         {...zoomTitleEvents}
       ></textarea>
+      {#if slashMenu}
+        <SlashMenu {ctrl} menu={slashMenu} />
+      {/if}
       {#if zoom.status}
         {@const status = zoom.status}
         <button type="button" class="task-status" title={status.label} aria-label={status.label} onclick={() => ctrl.setStatus(path, zoom.row.line, status.next)}>{status.icon}</button>
