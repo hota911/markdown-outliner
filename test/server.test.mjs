@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, writeFile, readFile, symlink, rename } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile, readFile, rm, symlink, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { configMarker, createOutlinerServer, injectConfig } from '../server.mjs';
@@ -104,6 +104,43 @@ test('serves the built web assets and nothing else', async () => {
   for (const other of ['/notes.txt', '/index.html', '/assets/missing.js', '/server.mjs', '/assets/../../server.mjs']) {
     assert.equal((await fetch(origin + other)).status, 404);
   }
+});
+
+test('serves a rebuilt web app without a restart', async t => {
+  const rebuiltRoot = await mkdtemp(path.join(tmpdir(), 'markdown-outliner-rebuilt-'));
+  await mkdir(path.join(rebuiltRoot, 'assets'));
+  await writeFile(path.join(rebuiltRoot, 'index.html'), `<head>${configMarker}</head><script src="./assets/old.js"></script>`);
+  await writeFile(path.join(rebuiltRoot, 'assets', 'old.js'), 'old\n');
+  const rebuiltServer = await createOutlinerServer(workspace, { webRoot: rebuiltRoot });
+  await new Promise(resolve => rebuiltServer.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => rebuiltServer.close(resolve)));
+  const rebuiltOrigin = `http://127.0.0.1:${rebuiltServer.address().port}`;
+  assert.match(await (await fetch(rebuiltOrigin)).text(), /old\.js/);
+
+  // Like `npm run build:web`, the rebuild replaces the hashed asset names.
+  await rm(path.join(rebuiltRoot, 'assets'), { recursive: true });
+  await mkdir(path.join(rebuiltRoot, 'assets'));
+  await writeFile(path.join(rebuiltRoot, 'index.html'), `<head>${configMarker}</head><script src="./assets/new.js"></script>`);
+  await writeFile(path.join(rebuiltRoot, 'assets', 'new.js'), 'new\n');
+
+  const html = await (await fetch(rebuiltOrigin)).text();
+  assert.match(html, /new\.js/);
+  assert.match(configOf(html).token, /^[a-f0-9]{48}$/);
+  const asset = await fetch(rebuiltOrigin + '/assets/new.js');
+  assert.equal(asset.status, 200);
+  assert.equal(await asset.text(), 'new\n');
+  const deleted = await fetch(rebuiltOrigin + '/assets/old.js');
+  assert.equal(deleted.status, 404);
+  assert.deepEqual(await deleted.json(), { code: 'notFound' });
+});
+
+test('does not serve symlinks that lead outside the web root', async () => {
+  const outside = await mkdtemp(path.join(tmpdir(), 'markdown-outliner-web-outside-'));
+  await writeFile(path.join(outside, 'secret.js'), 'secret\n');
+  await symlink(path.join(outside, 'secret.js'), path.join(webRoot, 'assets', 'linked.js'));
+  const response = await fetch(origin + '/assets/linked.js');
+  assert.equal(response.status, 404);
+  assert.doesNotMatch(await response.text(), /secret/);
 });
 
 test('embeds the configuration so file names cannot close the script element', () => {
