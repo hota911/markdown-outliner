@@ -10,9 +10,8 @@
     Submit after using it personally for a while; until then releases stay at 0.1.x (decided 2026-10-07).
     Add the plugin on community.obsidian.md after linking the GitHub account, and address the automated review. Entry for community-plugins.json:
     `{"id": "markdown-outliner", "name": "Markdown Outliner", "author": "hota911", "description": "Edit Markdown task lists as an outline, keep adding and restructuring tasks while filtering, and write changes back to embedded files.", "repo": "hota911/markdown-outliner"}`
-- [ ] Apply external changes in a tab whose input has focus
-  The page re-reads files every 3 seconds, but it defers external changes while an input has focus. Switching browser tabs keeps that focus, so when two tabs edit the same file the deferral never ends, and the status still shows 「保存済み」 (saved).
-  Plan: while a change is deferred, say so in the status. When the tab becomes visible again and there is no unsaved input, apply the external change and restore the focus to the same item.
+- [x] Apply external changes in a tab whose input has focus
+  The status now says when an external change is waiting. It is applied when the field loses focus, the window gets focus, or the browser tab is shown or hidden, keeping the focus and caret on the same item; files with unsaved input still become save conflicts. Switching Obsidian tabs hides the view, which blurs the field in Chromium, so the existing blur handling covers it (checked by simulation in `e2e/external-change.spec.ts`, not yet in Obsidian itself).
 - [ ] Merge save conflicts automatically
   Compare the loaded version, the on-screen edits, and the file on disk. Apply non-overlapping changes automatically and show a diff for confirmation only when the same line changed. This requires keeping the full text as loaded.
 - [ ] Check in Obsidian itself

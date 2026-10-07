@@ -37,6 +37,7 @@ const en = {
     busy: 'Working…',
     conflicts: (count: number) => `Save conflict in ${fileCount(count)} (input kept)`,
     unsaved: (count: number) => `${fileCount(count)} unsaved`,
+    externalPending: 'Changed elsewhere (shown when you leave the field)',
     saved: 'Saved',
   },
 
@@ -240,6 +241,7 @@ const ja: Messages = {
     busy: '処理中…',
     conflicts: count => '保存競合 ' + count + ' ファイル（入力保持）',
     unsaved: count => '未保存 ' + count + ' ファイル',
+    externalPending: '外部の変更あり（入力欄を離れると反映）',
     saved: '保存済み',
   },
 

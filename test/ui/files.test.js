@@ -144,6 +144,39 @@ describe('external changes and conflicts', () => {
     expect(titleValues()).toEqual(['from agent']);
   });
 
+  it('says an external change waits while a field has focus, and shows it on the same item when the window gets focus', async () => {
+    const { user, container, title, titleValues, adapter } = await setup({ 'tasks.md': '- [ ] top\n- [ ] alpha\n' });
+    await user.click(title('alpha'));
+    title('alpha').setSelectionRange(2, 2);
+    adapter.externalWrite('tasks.md', '- [ ] top\n- [ ] inserted\n- [ ] alpha\n');
+    await waitFor(() => expect(container.querySelector('.save-state').textContent).toBe('外部の変更あり（入力欄を離れると反映）'), { timeout: 4000 });
+    expect(titleValues()).toEqual(['top', 'alpha']);
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => expect(titleValues()).toEqual(['top', 'inserted', 'alpha']));
+    expect(document.activeElement).toBe(title('alpha'));
+    expect(title('alpha').selectionStart).toBe(2);
+    expect(container.querySelector('.save-state').textContent).toBe('保存済み');
+  });
+
+  it('shows an external change when the browser tab is shown again, and typing continues in the same item', async () => {
+    const { user, title, titleValues, adapter, saved } = await setup({ 'tasks.md': '- [ ] top\n- [ ] alpha\n' });
+    await user.click(title('alpha'));
+    adapter.externalWrite('tasks.md', '- [ ] inserted\n- [ ] top\n- [ ] alpha\n');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await waitFor(() => expect(titleValues()).toEqual(['inserted', 'top', 'alpha']));
+    await user.keyboard('!');
+    expect(await saved()).toBe('- [ ] inserted\n- [ ] top\n- [ ] alpha!\n');
+  });
+
+  it('keeps unsaved input as a conflict instead of applying the external change when the tab is shown again', async () => {
+    const { user, screen, title, adapter } = await setup({ 'tasks.md': '- [ ] a\n' });
+    await user.type(title('a'), 'b');
+    adapter.externalWrite('tasks.md', '- [ ] changed elsewhere\n');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await waitFor(() => expect(screen.getByText(/保存競合 1 ファイル/)).toBeTruthy());
+    expect(title('ab')).toBeTruthy();
+  });
+
   it('picks up external changes periodically', async () => {
     const { titleValues, adapter } = await setup({ 'tasks.md': '- [ ] a\n' });
     adapter.externalWrite('tasks.md', '- [ ] polled\n');
