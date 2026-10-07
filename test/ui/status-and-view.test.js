@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fireEvent } from '@testing-library/dom';
+import { fireEvent, within } from '@testing-library/dom';
 import { flush, setup } from './harness.js';
 
 describe('status button', () => {
@@ -102,6 +102,17 @@ describe('filtering', () => {
     expect(titleValues()).toEqual(['parent', 'open child #work', 'doing #home']);
   });
 
+  it('status options show the same icon as the items with that status and are named without it', async () => {
+    const { screen, container } = await setup({ 'tasks.md': text });
+    const select = screen.getByRole('combobox', { name: '表示する状態' });
+    const iconOf = status => container.querySelector(`.task-status[data-status="${status}"]`).textContent;
+    const shown = ['すべて', '◌ 完了以外', `${iconOf('todo')} 未着手`, `${iconOf('in-progress')} 進行中`, `${iconOf('done')} 完了`];
+    expect(within(select).getAllByRole('option').map(option => option.textContent)).toEqual(shown);
+    for (const name of ['すべて', '完了以外', '未着手', '進行中', '完了']) {
+      expect(within(select).getByRole('option', { name })).toBeTruthy();
+    }
+  });
+
   it('filters by words and #tags from the search box on Enter', async () => {
     const { user, screen, titleValues } = await setup({ 'tasks.md': text });
     await user.type(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }), '#work{Enter}');
@@ -110,6 +121,96 @@ describe('filtering', () => {
     await user.clear(search);
     await user.type(search, 'DONE{Enter}');
     expect(titleValues()).toEqual(['done top']);
+  });
+
+  const contextNote = '配下の項目が絞り込みに一致するため表示';
+  const contextTitles = screen => screen.queryAllByRole('textbox', { name: '項目の内容', description: contextNote }).map(node => node.value);
+  const depth = node => node.closest('.outline-item').style.getPropertyValue('--depth');
+
+  it('shows a non-matching parent of a match as dimmed context, keeping the child under it', async () => {
+    const { user, screen, titleValues, title } = await setup({ 'tasks.md': '- [ ] A\n- [x] B\n  - [ ] C\n' });
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'todo');
+    expect(titleValues()).toEqual(['A', 'B', 'C']);
+    expect(contextTitles(screen)).toEqual(['B']);
+    expect([depth(title('B')), depth(title('C'))]).toEqual(['0', '1']);
+    expect(title('B').closest('.outline-item').classList.contains('is-context')).toBe(true);
+    expect(title('C').closest('.outline-item').classList.contains('is-context')).toBe(false);
+  });
+
+  it('keeps ancestors of text matches as context and hides non-matching siblings', async () => {
+    const { user, screen, titleValues } = await setup({ 'tasks.md': text });
+    await user.type(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }), '#work{Enter}');
+    expect(titleValues()).toEqual(['parent', 'open child #work']);
+    expect(contextTitles(screen)).toEqual(['parent']);
+  });
+
+  it('shows no context when nothing is filtered', async () => {
+    const { screen, titleValues } = await setup({ 'tasks.md': text });
+    expect(titleValues()).toHaveLength(5);
+    expect(contextTitles(screen)).toEqual([]);
+  });
+
+  it('shows an embed only when something in the embedded file matches, with its ancestors as context', async () => {
+    const { user, screen, titleValues } = await setup({
+      'tasks.md': '- [x] host\n  - ![[work.md]]\n  - ![[home.md]]\n- [ ] other\n',
+      'work.md': '- [x] project\n  - [ ] step\n',
+      'home.md': '- [x] chores\n',
+    });
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'todo');
+    expect(titleValues()).toEqual(['host', 'project', 'step', 'other']);
+    expect(contextTitles(screen)).toEqual(['host', 'project']);
+    expect(screen.getByText('ファイル: work.md')).toBeTruthy();
+    expect(screen.queryByText('ファイル: home.md')).toBeNull();
+  });
+
+  it('shows #tags like links; clicking one filters by it once, clicking other text edits', async () => {
+    const { user, screen, title, titleValues } = await setup({ 'tasks.md': text });
+    const display = title('open child #work').closest('.title-area').querySelector('.title-display');
+    const tag = within(display).getByText('#work');
+    expect(tag.classList.contains('tag')).toBe(true);
+
+    await user.click(tag);
+    expect(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }).value).toBe('#work');
+    expect(titleValues()).toEqual(['parent', 'open child #work']);
+    await user.click(within(title('open child #work').closest('.title-area')).getByText('#work'));
+    expect(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }).value).toBe('#work');
+
+    await user.click(within(title('open child #work').closest('.title-area')).getByText('open child'));
+    expect(document.activeElement).toBe(title('open child #work'));
+    expect(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }).value).toBe('#work');
+  });
+
+  // While a title is edited the textarea is on top, so ⌘/Ctrl-click finds the tag at the caret.
+  // jsdom does not place the caret from the pointer, so the tests put it where the click lands.
+  async function clickAt(node, offset, modifiers) {
+    node.focus();
+    node.setSelectionRange(offset, offset);
+    fireEvent.click(node, modifiers);
+    await flush();
+  }
+
+  it('⌘/Ctrl-click on a #tag adds it to the search once and filters right away', async () => {
+    const { user, screen, title, titleValues } = await setup({ 'tasks.md': text });
+    const search = () => screen.getByRole('searchbox', { name: '語句・タグで絞り込み' });
+    await user.type(search(), 'child{Enter}');
+    expect(titleValues()).toEqual(['parent', 'finished child', 'open child #work']);
+
+    await clickAt(title('open child #work'), 'open child #wo'.length, { metaKey: true });
+    expect(search().value).toBe('child #work');
+    expect(titleValues()).toEqual(['parent', 'open child #work']);
+
+    await clickAt(title('open child #work'), 'open child '.length, { ctrlKey: true });
+    expect(search().value).toBe('child #work');
+    expect(titleValues()).toEqual(['parent', 'open child #work']);
+  });
+
+  it('a plain click on a #tag, or ⌘-click on another word, only edits', async () => {
+    const { screen, title, titleValues } = await setup({ 'tasks.md': text });
+    await clickAt(title('doing #home'), 'doing #ho'.length, {});
+    await clickAt(title('doing #home'), 'do'.length, { metaKey: true });
+    expect(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }).value).toBe('');
+    expect(titleValues()).toEqual(['parent', 'finished child', 'open child #work', 'doing #home', 'done top']);
+    expect(document.activeElement).toBe(title('doing #home'));
   });
 
   it('reset shows everything again', async () => {
@@ -128,6 +229,60 @@ describe('filtering', () => {
     expect(titles().map(node => node.value)).toEqual(['doing #home', '#home']);
     expect(document.activeElement).toBe(titles()[1]);
     expect(await saved()).toBe(text + '- [/] #home\n');
+  });
+});
+
+describe('highlighting filter matches', () => {
+  const marks = row => row.queryAllByText((_, node) => node.tagName === 'MARK').map(node => node.textContent);
+  const search = async (user, screen, value) => user.type(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }), value + '{Enter}');
+
+  it('marks the matched words, ignoring case, and the matched #tags in titles', async () => {
+    const { user, screen, row, title } = await setup({ 'tasks.md': '- [ ] #workshop plan\n  - [ ] Plan the plan #work\n' });
+    await search(user, screen, 'PLAN #work');
+    expect(marks(row('Plan the plan #work'))).toEqual(['Plan', 'plan', '#work']);
+    // `#workshop` is another tag, so the parent is shown only as context and has no marks.
+    expect(marks(row('#workshop plan'))).toEqual([]);
+    expect(title('Plan the plan #work').closest('.title-area').querySelector('.title-display').textContent).toBe('Plan the plan #work');
+  });
+
+  it('marks matches inside link text and keeps the link', async () => {
+    const { user, screen, row } = await setup({ 'tasks.md': '- [ ] read [the docs](https://example.com) docs\n' });
+    await search(user, screen, 'docs');
+    const item = row('read [the docs](https://example.com) docs');
+    expect(marks(item)).toEqual(['docs', 'docs']);
+    expect(item.getByRole('link').textContent).toBe('the docs');
+  });
+
+  it('marks nothing without a text filter', async () => {
+    const { user, screen, container, title } = await setup({ 'tasks.md': '- [ ] a #work\n- [ ] plain\n- [x] b\n' });
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'todo');
+    expect(container.querySelector('mark')).toBeNull();
+    // A title without links, tags or marks has no rendered overlay.
+    expect(title('plain').closest('.title-area').querySelector('.title-display')).toBeNull();
+  });
+
+  it('marks a matched #tag inside its tag link, which still filters by it once on a click', async () => {
+    const { user, screen, row, title, titleValues } = await setup({ 'tasks.md': '- [ ] parent\n  - [ ] open child #work\n- [ ] other #work\n' });
+    await search(user, screen, 'open #work');
+    expect(titleValues()).toEqual(['parent', 'open child #work']);
+    expect(marks(row('open child #work'))).toEqual(['open', '#work']);
+    const tag = title('open child #work').closest('.title-area').querySelector('.title-display .tag');
+    expect(tag.dataset.tag).toBe('work');
+    expect(tag.querySelector('mark').textContent).toBe('#work');
+
+    await user.click(tag.querySelector('mark'));
+    expect(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }).value).toBe('open #work');
+    expect(document.activeElement).not.toBe(title('open child #work'));
+  });
+
+  it('a highlighted title can still be edited', async () => {
+    const { user, screen, container, title, saved } = await setup({ 'tasks.md': '- [ ] buy milk\n' });
+    await search(user, screen, 'milk');
+    await user.click(container.querySelector('mark'));
+    expect(document.activeElement).toBe(title('buy milk'));
+    await user.keyboard(' today');
+    expect(await saved()).toBe('- [ ] buy milk today\n');
+    expect(marks(screen)).toEqual(['milk']);
   });
 });
 

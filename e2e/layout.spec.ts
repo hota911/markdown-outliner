@@ -44,7 +44,8 @@ test.describe('item titles use the width of the page', () => {
     const outliner = await openOutliner(markdown);
     const line = await outliner.line(title);
     const field = line.getByRole('textbox', { name: 'Item text' });
-    await field.click();
+    // The title ends with #tags shown over the field until it is edited; click its start, not a tag.
+    await field.locator('..').click({ position: { x: 2, y: 8 } });
     await page.keyboard.press('End');
     await line.hover();
     const buttons = line.getByTitle('Add a child task').locator('..');
@@ -63,7 +64,7 @@ test.describe('item titles use the width of the page', () => {
 
   test('with a mouse, the touch bar stays hidden while a title is edited', async ({ openOutliner, page }) => {
     const outliner = await openOutliner(markdown);
-    await (await outliner.line(title)).getByRole('textbox', { name: 'Item text' }).click();
+    await (await outliner.line(title)).getByRole('textbox', { name: 'Item text' }).locator('..').click({ position: { x: 2, y: 8 } });
     await expect(page.getByRole('toolbar', { name: 'Edit the item' })).toBeHidden();
   });
 

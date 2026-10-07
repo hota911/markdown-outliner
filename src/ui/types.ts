@@ -12,6 +12,9 @@ export interface Adapter {
   // Missing when the web app was opened on a single file.
   create?(path: string, text: string): Promise<{ revision: Revision }>;
   openSource?(path: string): Promise<void>;
+  // Tags in use across the host's files, without `#`, for the `#` menu. Obsidian has them from its
+  // metadata cache; without this method the menu offers the tags of the files the outliner has read.
+  tags?(): Promise<string[]>;
 }
 
 export interface Doc {
