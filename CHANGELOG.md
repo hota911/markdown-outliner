@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The command and ribbon icon are named "Open outliner" in English and "アウトライナーを開く" in Japanese, following the display language.
 - When a file changes on disk while it has unsaved input, changes on different lines are now merged automatically instead of being reported as a save conflict. The merge clears the undo history, and a message says so. If both sides changed the same line, the conflicting lines are listed as "Your input" and "External version", and "Keep my lines" or "Use external lines" picks one version for those lines.
 - Enter with the cursor at the start of an item's text adds the new item above it instead of below, as in WorkFlowy and Logseq. The item keeps its note and children, and the cursor stays at its start. On an empty text, elsewhere in the text, or on the zoomed item, Enter works as before.
+- Embed lines (`- ![[file.md]]`) now move like items. They have a drag handle: drag it, press Alt+↑ / Alt+↓ on it, or select the line and use the selection's move buttons. Items can be dragged before and after an embed, and an embed can be put under an item, but nothing can be put under an embed. Embed lines move only within their file, and the embedded file is not changed.
 
 ### Fixed
 
