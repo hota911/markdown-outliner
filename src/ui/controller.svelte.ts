@@ -367,7 +367,8 @@ export class Controller {
     return true;
   };
 
-  private mutate(path: string, fn: (text: string) => core.EditResult, focus: Field | null) {
+  // `focusOffset` moves the focus that many lines below `result.line`, which stays visible too.
+  private mutate(path: string, fn: (text: string) => core.EditResult, focus: Field | null, focusOffset = 0) {
     const doc = this.docs.get(path)!;
     let result: core.EditResult;
     try { result = fn(doc.text); }
@@ -386,8 +387,8 @@ export class Controller {
     }
     this.kept.clear();
     if (focus && result.line !== null) {
-      this.kept.set(path, new Set([result.line]));
-      this.active = { path, line: result.line, field: focus };
+      this.kept.set(path, new Set([result.line, result.line + focusOffset]));
+      this.active = { path, line: result.line + focusOffset, field: focus };
     } else this.active = null;
     if (this.zoom && this.zoom.path === path) {
       const zoomLine = this.zoom.line;
@@ -438,6 +439,13 @@ export class Controller {
     const nextKind = kind || (source?.kind === 'bullet' ? 'bullet' : 'task');
     this.mutate(path, text => core.insert(text, line, { ...this.insertion(child), kind: nextKind }), 'title');
   };
+
+  // Enter at the start of a title: the new item goes above, and the caret stays at the start of
+  // the item, so repeated Enter keeps pushing it down.
+  private addAbove(path: string, row: KeyedRow) {
+    const kind = row.kind === 'bullet' ? 'bullet' : 'task';
+    this.mutate(path, text => core.insert(text, row.line, { ...this.insertion(false), kind, before: true }), 'title', 1);
+  }
 
   private merge(path: string, row: KeyedRow, backwards: boolean) {
     let column: number | undefined;
@@ -583,6 +591,7 @@ export class Controller {
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (event.shiftKey) this.toggleNote(path, row.line, field);
+      else if (collapsedSelection && node.selectionStart === 0 && node.value && !event.altKey) this.addAbove(path, row);
       else this.add(path, row.line, false);
     } else if (event.key === 'Tab') {
       event.preventDefault();
