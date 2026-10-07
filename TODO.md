@@ -32,6 +32,7 @@
     How to switch automatically when a .md file is opened (for example by frontmatter) has not been investigated.
 - [ ] Mac app
   - [ ] Add a Mac app version
+    Prototype: Swift + AppKit + WKWebView, built with `swiftc` from the Command Line Tools (`npm run build:mac`); the shared UI runs unchanged and the file API of server.mjs is ported to Swift. Checked on 2026-10-07 with a debug launch script (rendering, saving, external changes and merges, light and dark, Edit menu actions), not with real typing. Decide whether to continue with this approach; missing: an unsaved-changes guard on quit and folder switch.
   - [ ] Distribute the Mac app
 - [ ] Future features
   Not yet specified.

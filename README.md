@@ -46,6 +46,27 @@ node server.mjs [folder-or-file] [port]
 
 Then open `http://127.0.0.1:<port>/` (default port 4317). Without arguments the server edits the bundled `samples/` folder in place, so copy it first if you want to keep the originals. Passing a single `.md` file restricts the server to that file. The server only listens on 127.0.0.1, serves the built app from `dist/web/`, and bookmarks are stored in the browser's local storage. `npm start` builds the web app and runs the server with the defaults.
 
+## Mac app (prototype)
+
+A minimal native macOS app (macOS 11 or later) that runs the same UI in a `WKWebView`. It is a prototype to judge the approach: it is not distributed, notarized, or tested beyond the checks below. Building it needs Node.js and the Xcode Command Line Tools (`swiftc`, `codesign`); the Xcode app is not required.
+
+```sh
+npm ci
+npm run build:mac   # writes dist/mac/Markdown Outliner.app (ad-hoc signed)
+open "dist/mac/Markdown Outliner.app"
+```
+
+On first launch the app asks for a folder, which plays the role of the folder passed to `server.mjs`: the app lists, reads, saves, and creates `.md` files inside it, and opens `tasks.md` first. File > Open Folder… (Cmd+O) switches to another folder. The last folder is remembered as a plain path in the app's user defaults; the app is not sandboxed, so it needs no security-scoped bookmark. `open "dist/mac/Markdown Outliner.app" --args -folder <path>` opens a folder for one launch without remembering it. Bookmarks are stored per folder in the same user defaults (`io.github.hota911.markdown-outliner`).
+
+How it works:
+
+- `mac/main.swift` creates the window, the menus (including the standard Edit menu, so Cmd+C/V/X/A/Z reach the web view), and a `WKWebView` that loads the page from the app's `Resources/web` through the `outliner://app/` URL scheme, without `file://` or a local HTTP server.
+- The page (`src/mac/`, built by `vite.mac.config.ts`) implements the `Adapter` by posting messages to `window.webkit.messageHandlers.outliner` (`src/mac/adapter.ts`). `mac/main.swift` answers them with `WKScriptMessageHandlerWithReply`.
+- `mac/Workspace.swift` ports the file API of `server.mjs`: the same path checks (no `..`, absolute paths, backslashes, or symbolic links leading outside the folder), SHA-256 revisions, the revision check on save that lets the outliner merge external changes, and the same error codes, which the page shows with the web version's messages. `npm run test:mac` compiles and runs `mac/Tests/WorkspaceTests.swift` against it.
+- Colors come from `src/web/theme.css`, so the page follows the system's light or dark appearance.
+
+Limits: the window has no unsaved-changes guard, so input typed less than a second before quitting or switching folders can be lost; one window and one folder at a time; only the native architecture is built. `npm run build:mac -- --debug` builds a debug variant whose `-debugScript <file>` launch argument evaluates a script in the page (see `mac/main.swift`); it was used to check rendering, saving, external changes, merges, and both appearances without UI automation permissions.
+
 ## Development
 
 The UI is written in Svelte 5 and TypeScript and built with Vite. Open development tasks are listed in [TODO.md](TODO.md).
@@ -62,6 +83,8 @@ npm run test:ui     # screen tests (test/ui/) and Obsidian adapter tests with Vi
 npm run test:e2e    # build the web app, then run the drag and drop tests (e2e/) in Chromium with Playwright
 npm run test:obsidian # macOS only: build the plugin, then test it inside the Obsidian desktop app (obsidian-e2e/)
 npm run build       # write dist/web/ and the plugin files dist/main.js, manifest.json, styles.css
+npm run build:mac   # macOS only: build the Mac app prototype into dist/mac/
+npm run test:mac    # macOS only: compile and run the Swift file API tests
 ```
 
 `npm run dev` edits `samples/` by default; set `OUTLINER_WORKSPACE` to a folder or a single Markdown file to edit something else.
@@ -72,7 +95,7 @@ The screen tests drive the rendered DOM with keyboard and pointer events against
 
 `npm run test:obsidian` tests the built plugin inside the Obsidian desktop app on macOS. It uses `/Applications/Obsidian.app`, or the app bundle set in `OBSIDIAN_APP`, and skips its tests when neither exists. Each test starts a separate Obsidian process with a new temporary profile (`--user-data-dir`) and a temporary vault copied from `samples/`, then deletes both, so it never reads or changes your Obsidian settings, vaults, or a running Obsidian. Playwright attaches to the window over the DevTools protocol. The tests check that the plugin loads without console errors; that the ribbon icon and the commands open the outliner and the per-file outline view; that edits, status changes and drag and drop are saved to the file; that "Open as Markdown" switches back and the outline tab is restored after a restart; that the text follows the light and dark themes; and that the labels are Japanese when Obsidian's language is Japanese. The test vault turns off native menus so Playwright can click Obsidian's menus. These tests open Obsidian windows on your screen and are not run in CI, `npm test`, or `npm run test:e2e`.
 
-CI runs lint, typecheck, `npm test`, `npm run test:e2e` and `npm run build` on pull requests and on pushes to `main`.
+CI runs lint, typecheck, `npm test`, `npm run test:e2e` and `npm run build` on pull requests and on pushes to `main`, and `npm run test:mac` and `npm run build:mac` in a separate macOS job.
 
 Source layout:
 
@@ -80,6 +103,7 @@ Source layout:
 - `src/ui/`: the outliner UI, shared by both versions. `controller.svelte.ts` holds the editing state and operations, the `.svelte` files render it, and `mount.ts` mounts it into an element.
 - `src/obsidian/`: the Obsidian plugin entry point (`main.ts`).
 - `src/web/`: the standalone web page.
+- `src/mac/` and `mac/`: the page and the Swift sources of the Mac app prototype; `vite.mac.config.ts` and `scripts/build-mac.mjs` build it.
 - `src/styles.css`: styles for both versions. Colors and fonts use Obsidian's theme variables, so the plugin follows the Obsidian theme; `src/web/theme.css` defines them for the web page in light and dark sets that follow the system setting.
 - `server.mjs`: the local web server and file API, also mounted by the dev server.
 - `vite.config.ts`: the plugin build (a single CommonJS `main.js`).
