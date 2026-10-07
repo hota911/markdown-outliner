@@ -27,8 +27,10 @@
   English and Japanese messages live in src/ui/messages.ts; Obsidian follows its display language (1.8.7+, otherwise English) and the web version follows the browser language.
 - [ ] Obsidian integration
   - [ ] Open the outliner from the side menu
-  - [ ] Open each file in its own tab
-    How to switch automatically when a .md file is opened has not been investigated.
+  - [x] Open each file in its own tab
+    Experimental: "Open as outline" in the file menu and as a command opens a tab bound to one file (view type `markdown-outliner-file`); "Open as Markdown" in the tab's menu switches back. Not yet checked in Obsidian itself.
+  - [ ] Switch a .md file to the outline automatically
+    How to switch automatically when a .md file is opened (for example by frontmatter) has not been investigated.
 - [ ] Mac app
   - [ ] Add a Mac app version
   - [ ] Distribute the Mac app
