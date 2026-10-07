@@ -17,7 +17,7 @@ export type ServerErrorCode =
   | 'notMarkdown' | 'selectedFileOnly' | 'fileMissing' | 'outsideWorkspace' | 'fileTooLarge' | 'invalidContent'
   | 'saveBusy' | 'externalChange' | 'externalChangeBeforeSave' | 'saveRace' | 'createInSingleFile' | 'folderMissing'
   | 'createOutsideFolder' | 'fileExists' | 'badToken' | 'badOrigin' | 'contentTooLarge' | 'notFound' | 'hostRejected'
-  | 'internal';
+  | 'invalidName' | 'renameOtherFolder' | 'renameInSingleFile' | 'renameSymlink' | 'internal';
 
 const enStatus: Record<Status, string> = { todo: 'Not started', 'in-progress': 'In progress', done: 'Done' };
 const jaStatus: Record<Status, string> = { todo: '未着手', 'in-progress': '進行中', done: '完了' };
@@ -46,8 +46,8 @@ const en = {
     filter: 'Status to show',
     searchPlaceholder: 'Filter by words or #tags',
     search: 'Filter by words or tags',
-    bookmarkSearch: 'Bookmark this search',
-    removeSearchBookmark: 'Remove this search bookmark',
+    bookmarkSearch: 'Bookmark the current view',
+    removeSearchBookmark: 'Remove the bookmark of the current view',
     openSourceTitle: 'Open the current file in the regular editor',
     openSource: 'Open as Markdown',
     resetTitle: 'Reset the search, tag and status filters',
@@ -91,21 +91,25 @@ const en = {
 
   opening: 'Opening file…',
   noFiles: 'There are no Markdown files in this folder.',
-  help: '↑↓: move the cursor · Enter: add (at the start of the text: above) · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several · / at the start or after a space: commands',
+  help: '↑↓: move the cursor · Enter: add (at the start of the text: above) · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several · / or # at the start or after a space: commands or tags · click a #tag: add it to the filter (while editing: ⌘/Ctrl-click)',
   closeToast: 'Close notification',
 
   bookmarks: {
     heading: 'Bookmarks',
     expand: 'Expand sidebar',
     collapse: 'Collapse sidebar',
-    addFileTitle: 'Bookmark the current file',
-    addFile: 'Add file',
+    addViewTitle: 'Bookmark the current file with its filters and zoom',
+    addView: 'Add current view',
     settingsUnreadable: 'Cannot read the settings.',
-    empty: 'Bookmark files and searches here.',
+    empty: 'Bookmark the current file together with its filters and zoom. Rename a bookmark with ✎.',
     remove: (label: string) => `Remove ${label}`,
+    rename: (label: string) => `Rename ${label}`,
+    nameInput: 'Bookmark name (Enter: save, Esc: cancel, empty: default name)',
     unreadableLabel: 'Unreadable bookmark',
     searchLabel: (status: string, tags: string, text: string, file: string) =>
       status + (tags ? ' ' + tags : '') + (text ? ` "${text}"` : '') + ' · ' + file,
+    zoomLabel: (label: string, title: string) => `${label} › ${title}`,
+    zoomMissing: (title: string) => `Cannot find the zoomed item "${title}". Showing the whole file.`,
     listUnreadable: 'Cannot read the bookmark settings. Check the settings file.',
     exists: 'This bookmark already exists.',
     invalid: 'Cannot read the settings of this bookmark.',
@@ -118,6 +122,10 @@ const en = {
     missing: 'Cannot open the file. Check its location and name.',
     openEmbeddedTitle: 'Open the embedded file directly',
     openEmbedded: 'Open this file',
+    renameTitle: 'Rename the embedded file',
+    rename: 'Rename',
+    renameLabel: (embed: string) => `New name for ${embed}, without .md`,
+    renameHint: 'Enter: rename · Esc: cancel',
     zoomTitlePlaceholder: 'Enter a title',
     zoomTitle: 'Title of the zoomed item',
     zoomNoteTitle: 'Edit the note of the zoomed item',
@@ -131,7 +139,6 @@ const en = {
 
   item: {
     fold: 'Collapse or expand children',
-    embedSource: (path: string) => `File: ${path}`,
     dragHandle: 'Select, or drag to move',
     taskPlaceholder: 'Enter a task',
     bulletPlaceholder: 'Enter a bullet',
@@ -148,13 +155,16 @@ const en = {
     extractTitle: 'Move the item with its children and notes to a new file and embed it',
     extract: 'Move to file',
     childrenEnd: (title: string) => `End of the children of ${title}`,
+    filterContext: 'Shown because an item under it matches the filter',
   },
 
   // The menu that `/` opens in an item's text. A command matches the typed text by its label or
-  // keywords in either language, so `/done` and `/完了` both work in both.
+  // keywords in either language, so `/done` and `/完了` both work in both. `#` opens the same menu
+  // with the tags in use.
   slash: {
     commands: 'Commands',
     files: 'File to embed',
+    tags: 'Tags',
     command: {
       todo: { label: 'Not started', keywords: 'todo open' },
       'in-progress': { label: 'In progress', keywords: 'doing wip start' },
@@ -193,6 +203,12 @@ const en = {
     untitledFile: 'Task',
     saveFailed: (detail: string) => `Could not save: ${detail}`,
     reloadKeptInput: 'Unsaved input is kept. Save, then reload.',
+    renameInvalidName: 'A file name cannot be empty, start with ".", or contain \\ / : * ? " < > | # ^ [ ].',
+    renameBusy: 'Cannot rename while saving or during a save conflict.',
+    renameUnsaved: 'Could not save the unsaved input. Save it, then rename.',
+    renameFailed: (detail: string) => `Could not rename the file: ${detail}`,
+    renameEmbedNotFound: (name: string) => `Renamed the file to ${name}, but could not update the link: no single embed of the old name was found. The text was left unchanged.`,
+    renamed: (name: string) => `Renamed the file to ${name}. The undo history was cleared.`,
   },
 
   core: {
@@ -212,19 +228,19 @@ const en = {
     invalidMoveDirection: 'Invalid move direction.',
     invalidReorder: 'Invalid options for reordering.',
     reorderSiblingsOnly: 'Only siblings with the same parent can be reordered.',
-    reorderAcrossEmbed: 'Cannot reorder across an embed.',
     reorderAcrossText: 'Cannot reorder across other text.',
     invalidReparent: 'Invalid options for moving under an item.',
     reparentIntoSelf: 'Cannot move an item under itself or its descendants.',
     reparentSiblingsOnly: 'Only siblings with the same parent can be moved under an item.',
     invalidInsertPosition: 'The insertion point must be a direct child of the target.',
     insertPositionInSelection: 'The insertion point cannot be a selected item or one of its descendants.',
-    reparentAcrossEmbed: 'Cannot move under an item across an embed.',
+    reparentIntoEmbed: 'Cannot move items under an embed.',
     reparentAcrossText: 'Cannot move under an item across other text.',
     invalidFileNameInput: 'Invalid options for the file name.',
     invalidFileName: 'Invalid file name.',
     extractEmbed: 'An embed line cannot be moved to a file.',
     invalidFilter: 'Invalid status filter.',
+    notEmbed: 'There is no embed on that line.',
   } satisfies Record<CoreErrorCode, string>,
 
   server: {
@@ -247,6 +263,10 @@ const en = {
     contentTooLarge: 'The content to save is too large.',
     notFound: 'The requested page does not exist.',
     hostRejected: 'This connection is not allowed.',
+    invalidName: 'A file name cannot be empty, start with ".", or contain \\ / : * ? " < > | # ^ [ ].',
+    renameOtherFolder: 'Only the file name can be changed, not its folder.',
+    renameInSingleFile: 'Cannot rename files when a single file was opened.',
+    renameSymlink: 'Cannot rename a symbolic link.',
     internal: 'The file operation failed. Keep your input and try again.',
   } satisfies Record<ServerErrorCode, string>,
 
@@ -293,8 +313,8 @@ const ja: Messages = {
     filter: '表示する状態',
     searchPlaceholder: '語句・#タグで絞り込み',
     search: '語句・タグで絞り込み',
-    bookmarkSearch: '検索をブックマーク',
-    removeSearchBookmark: '検索のブックマークを解除',
+    bookmarkSearch: '今の表示をブックマーク',
+    removeSearchBookmark: '今の表示のブックマークを解除',
     openSourceTitle: '表示中の元ファイルを通常エディタで開く',
     openSource: 'Markdown で開く',
     resetTitle: '検索・タグ・状態の絞り込みをリセット',
@@ -338,20 +358,24 @@ const ja: Messages = {
 
   opening: 'ファイルを開いています…',
   noFiles: 'このフォルダには Markdown ファイルがありません。',
-  help: '↑↓: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択 · 先頭か空白の後の /: コマンド',
+  help: '↑↓: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択 · 先頭か空白の後の / と #: コマンドとタグ · #タグをクリック: 絞り込みに追加（編集中は⌘/Ctrlクリック）',
   closeToast: '通知を閉じる',
 
   bookmarks: {
     heading: 'ブックマーク',
     expand: 'サイドバーを展開',
     collapse: 'サイドバーを縮小',
-    addFileTitle: '表示中のファイルをブックマーク',
-    addFile: 'ファイルを追加',
+    addViewTitle: '表示中のファイルを絞り込みとズームごとブックマーク',
+    addView: '今の表示を追加',
     settingsUnreadable: '設定を読み込めません。',
-    empty: 'ファイルや検索条件を登録できます。',
+    empty: '表示中のファイルを絞り込みやズームごと登録できます。名前は ✎ で変更できます。',
     remove: label => label + ' を削除',
+    rename: label => label + ' の名前を変更',
+    nameInput: 'ブックマーク名（Enter: 確定 · Esc: 取り消し · 空欄: 既定の名前）',
     unreadableLabel: '読み込めないブックマーク',
     searchLabel: (status, tags, text, file) => status + (tags ? ' ' + tags : '') + (text ? '「' + text + '」' : '') + ' · ' + file,
+    zoomLabel: (label, title) => label + ' › ' + title,
+    zoomMissing: title => 'ズームしていた項目「' + title + '」が見つかりません。ファイル全体を表示します。',
     listUnreadable: 'ブックマークの設定を読み込めません。設定ファイルを確認してください。',
     exists: 'このブックマークは登録済みです。',
     invalid: 'このブックマークの設定は読み込めません。',
@@ -364,6 +388,10 @@ const ja: Messages = {
     missing: 'ファイルを開けません。保存先とファイル名を確認してください。',
     openEmbeddedTitle: '埋め込み先のファイルを直接開く',
     openEmbedded: 'このファイルを開く',
+    renameTitle: '埋め込み先のファイル名を変更',
+    rename: '名前を変更',
+    renameLabel: embed => embed + ' の新しいファイル名（.md を除く）',
+    renameHint: 'Enter: 変更 · Esc: 取り消し',
     zoomTitlePlaceholder: 'タイトルを入力',
     zoomTitle: 'ズーム対象のタイトル',
     zoomNoteTitle: 'ズーム対象のノートを編集',
@@ -377,7 +405,6 @@ const ja: Messages = {
 
   item: {
     fold: '子項目を折りたたむ／開く',
-    embedSource: path => 'ファイル: ' + path,
     dragHandle: '項目を選択／ドラッグして移動',
     taskPlaceholder: 'タスクを入力',
     bulletPlaceholder: '箇条書きを入力',
@@ -394,11 +421,13 @@ const ja: Messages = {
     extractTitle: '項目を子とノートごと新しいファイルへ移して埋め込みにする',
     extract: 'ファイルにする',
     childrenEnd: title => title + ' の子項目の末尾',
+    filterContext: '配下の項目が絞り込みに一致するため表示',
   },
 
   slash: {
     commands: 'コマンド',
     files: '埋め込むファイル',
+    tags: 'タグ',
     // The hiragana readings keep a command matching while an IME still shows the reading.
     command: {
       todo: { label: '未着手', keywords: 'みちゃくしゅ タスク たすく' },
@@ -437,6 +466,12 @@ const ja: Messages = {
     untitledFile: 'タスク',
     saveFailed: detail => '保存できませんでした: ' + detail,
     reloadKeptInput: '未保存の入力を保持しています。保存後に再読込してください。',
+    renameInvalidName: 'ファイル名は空にできず、先頭の「.」と \\ / : * ? " < > | # ^ [ ] は使えません。',
+    renameBusy: '保存処理中または保存競合中は名前を変更できません。',
+    renameUnsaved: '未保存の入力を保存できませんでした。保存してから名前を変更してください。',
+    renameFailed: detail => 'ファイル名を変更できませんでした: ' + detail,
+    renameEmbedNotFound: name => name + ' に名前を変更しましたが、リンクを更新できませんでした。元の名前の埋め込みが1つに定まらないため、本文は変更していません。',
+    renamed: name => name + ' に名前を変更しました。Undo の履歴は消去しました。',
   },
 
   core: {
@@ -456,19 +491,19 @@ const ja: Messages = {
     invalidMoveDirection: '移動方向が不正です',
     invalidReorder: '並び替え条件が不正です',
     reorderSiblingsOnly: '同じ親の兄弟だけを並び替えできます',
-    reorderAcrossEmbed: '埋め込みの境界では並び替えできません',
     reorderAcrossText: '本文をまたいで並び替えできません',
     invalidReparent: '子への移動条件が不正です',
     reparentIntoSelf: '自分自身や子孫の子には移動できません',
     reparentSiblingsOnly: '同じ親の兄弟だけを子へ移動できます',
     invalidInsertPosition: '挿入位置には対象の直接の子を指定してください',
     insertPositionInSelection: '選択した項目やその子孫を挿入位置には指定できません',
-    reparentAcrossEmbed: '埋め込みの境界では子へ移動できません',
+    reparentIntoEmbed: '埋め込みの下には移動できません',
     reparentAcrossText: '本文をまたいで子へ移動できません',
     invalidFileNameInput: 'ファイル名の条件が不正です',
     invalidFileName: 'ファイル名が不正です',
     extractEmbed: '埋め込みの行はファイルにできません',
     invalidFilter: 'フィルター状態が不正です',
+    notEmbed: '指定行に埋め込みがありません',
   },
 
   server: {
@@ -491,6 +526,10 @@ const ja: Messages = {
     contentTooLarge: '保存内容が大きすぎます。',
     notFound: '指定した画面がありません。',
     hostRejected: 'この接続は許可されていません。',
+    invalidName: 'ファイル名は空にできず、先頭の「.」と \\ / : * ? " < > | # ^ [ ] は使えません。',
+    renameOtherFolder: 'ファイル名だけを変更でき、フォルダーは変更できません。',
+    renameInSingleFile: 'ファイルを指定して開いたときはファイル名を変更できません。',
+    renameSymlink: 'シンボリックリンクの名前は変更できません。',
     internal: 'ファイル操作に失敗しました。入力を保持してやり直してください。',
   },
 

@@ -41,6 +41,22 @@ test('Escape closes the menu and keeps the text', async ({ openOutliner, page })
   await expect(field).toBeFocused();
 });
 
+test('# lists the tags in use, and Enter inserts the chosen one', async ({ openOutliner, page }) => {
+  const outliner = await openOutliner('- [ ] Trip #travel\n- [ ] Read #reading\n- [ ] Plan\n');
+  const field = page.getByRole('textbox', { name: 'Item text' }).nth(2);
+  await field.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' #');
+  await expect(menu(page).getByRole('option')).toHaveText(['#reading', '#travel']);
+  await page.keyboard.type('tr');
+  await expect(menu(page).getByRole('option')).toHaveText(['#travel']);
+  await page.keyboard.press('Enter');
+  await expect(menu(page)).toBeHidden();
+  await page.keyboard.type('x');
+  await expect(field).toHaveValue('Plan #travel x');
+  await expect.poll(outliner.saved).toBe('- [ ] Trip #travel\n- [ ] Read #reading\n- [ ] Plan #travel x\n');
+});
+
 test.describe('embedding a file', () => {
   let workspace: string;
   const servers: Server[] = [];
@@ -72,7 +88,7 @@ test.describe('embedding a file', () => {
     await expect(option(page, 'notes/work.md')).toBeVisible();
     await expect(option(page, 'inbox.md')).toHaveCount(0);
     await option(page, 'notes/work.md').click();
-    await expect(page.getByText('File: notes/work.md')).toBeVisible();
+    await expect(page.locator('.embed-title')).toHaveText('notes/work.md');
     await expect(page.getByRole('textbox', { name: 'Item text' }).nth(1)).toHaveValue('Work task');
     await expect.poll(() => readFile(path.join(workspace, 'inbox.md'), 'utf8')).toBe('- [ ] Plan\n- ![[notes/work.md]]\n');
   });

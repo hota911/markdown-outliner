@@ -6,6 +6,7 @@ import { parseInline } from '../src/ui/inline.ts';
 const shape = nodes => nodes.map(node => {
   if (node.kind === 'text') return node.text;
   if (node.kind === 'code') return ['code', node.text];
+  if (node.kind === 'tag') return ['tag', node.tag];
   if (node.kind === 'link') return ['link', node.href, ...shape(node.children)];
   return [node.kind, ...shape(node.children)];
 });
@@ -54,4 +55,22 @@ test('text and code leaves know their offset in the source', () => {
   const walk = list => list.forEach(node => ('children' in node ? walk(node.children) : leaves.push([node.text, node.start])));
   walk(nodes);
   assert.deepEqual(leaves, [['a ', 0], ['b ', 4], ['c', 7], [' ', 11], ['d', 13], ['\ne', 15]]);
+});
+
+test('whole-word tags become tag nodes, also inside emphasis', () => {
+  assert.deepEqual(parsed('#work plan #home'), [['tag', 'work'], ' plan ', ['tag', 'home']]);
+  assert.deepEqual(parsed('**fix #bug now** and #日本語'), [['strong', 'fix ', ['tag', 'bug'], ' now'], ' and ', ['tag', '日本語']]);
+  assert.deepEqual(parseInline('a\n#b c'), [
+    { kind: 'text', text: 'a\n', start: 0 }, { kind: 'tag', tag: 'b', text: '#b', start: 2 }, { kind: 'text', text: ' c', start: 4 },
+  ]);
+});
+
+test('words that the search box would not treat as a tag stay text', () => {
+  // The whole word is `**#bug**`, `#bug**` or `a#b`, so none of them is the tag the text shows.
+  assert.equal(parseInline('a#b c##d'), null);
+  assert.deepEqual(parsed('**#bug**'), [['strong', '#bug']]);
+  assert.deepEqual(parsed('**fix #bug**'), [['strong', 'fix #bug']]);
+  assert.deepEqual(parsed('`#code` [#label](https://example.com) https://example.com/#anchor'), [
+    ['code', '#code'], ' ', ['link', 'https://example.com', '#label'], ' ', ['link', 'https://example.com/#anchor', 'https://example.com/#anchor'],
+  ]);
 });

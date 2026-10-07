@@ -189,11 +189,23 @@ test('親の異なる選択と対象、存在しない行、不正な条件を�
   assert.throws(() => core.reorder(text, [0], 2, 'middle'), { code: 'invalidReorder' });
 });
 
-test('本文や埋め込みをまたぐ並び替えを拒否する', () => {
+test('本文をまたぐ並び替えを拒否する', () => {
   assert.throws(() => core.reorder('- A\n# Heading\n- B\n', [0], 2, 'after'), { code: 'reorderAcrossText' });
-  assert.throws(() => core.reorder('- A\n- ![[work.md]]\n- B\n', [0], 2, 'after'), { code: 'reorderAcrossEmbed' });
-  assert.throws(() => core.reorder('- A\n- ![[work.md]]\n', [0], 1), { code: 'reorderAcrossEmbed' });
-  assert.throws(() => core.reorder('- A\n  - ![[work.md]]\n- B\n', [0], 2, 'after'), { code: 'reorderAcrossEmbed' });
+});
+
+test('埋め込みの行も項目と同じく並び替える', () => {
+  assert.deepEqual(core.reorder('- A\n- ![[work.md]]\n- B\n', [0], 2, 'after'), {
+    text: '- ![[work.md]]\n- B\n- A\n', line: 2, lines: [2]
+  });
+  assert.deepEqual(core.reorder('- A\n- ![[work.md]]\n', [1], 0), { text: '- ![[work.md]]\n- A\n', line: 0, lines: [0] });
+  assert.deepEqual(core.reorder('- A\n  - ![[work.md]]\n- B\n', [0], 2, 'after'), {
+    text: '- B\n- A\n  - ![[work.md]]\n', line: 1, lines: [1]
+  });
+});
+
+test('埋め込みの行を兄弟の間で上下に移す', () => {
+  assert.deepEqual(core.move('- A\n- ![[work.md]]\n- B\n', 1, 'up'), { text: '- ![[work.md]]\n- A\n- B\n', line: 0 });
+  assert.deepEqual(core.move('- A\n- ![[work.md]]\n- B\n', 1, 'down'), { text: '- A\n- B\n- ![[work.md]]\n', line: 2 });
 });
 
 test('複数選択を原順で対象の最後の子へ移しノートと子を保持する', () => {
@@ -243,15 +255,22 @@ test('自分自身や子孫を対象にした循環と異なる親の選択を�
   assert.throws(() => core.reparent(text, [0, 1], 3), { code: 'reparentSiblingsOnly' });
 });
 
-test('本文や埋め込みの境界をまたぐ子への移動を拒否する', () => {
+test('本文の境界をまたぐ子への移動を拒否する', () => {
   assert.throws(() => core.reparent('- A\n# Heading\n- target\n', [0], 2), { code: 'reparentAcrossText' });
   assert.throws(() => core.reparent('- target\n```md\n- code\n```\n- A\n', [4], 0), { code: 'reparentAcrossText' });
-  assert.throws(() => core.reparent('- A\n- ![[work.md]]\n- target\n', [0], 2), { code: 'reparentAcrossEmbed' });
-  assert.throws(() => core.reparent('- A\n- ![[work.md]]\n', [0], 1), { code: 'reparentAcrossEmbed' });
-  assert.throws(() => core.reparent('- ![[work.md]]\n- target\n', [0], 1), { code: 'reparentAcrossEmbed' });
-  assert.throws(() => core.reparent('- A\n  - ![[work.md]]\n- target\n', [0], 2), { code: 'reparentAcrossEmbed' });
-  assert.throws(() => core.reparent('- A\n- target\n  - ![[work.md]]\n', [0], 1), { code: 'reparentAcrossEmbed' });
-  assert.throws(() => core.reparent('- ![[work.md]]\n  - A\n  - target\n', [1], 2), { code: 'reparentAcrossEmbed' });
+});
+
+test('埋め込みの行を項目の子へ移し、項目を埋め込みの前後へ移す', () => {
+  assert.deepEqual(core.reparent('- ![[work.md]]\n- target\n', [0], 1), { text: '- target\n  - ![[work.md]]\n', line: 1, lines: [1] });
+  assert.deepEqual(core.reparent('- A\n- ![[work.md]]\n- target\n', [0], 2), { text: '- ![[work.md]]\n- target\n  - A\n', line: 2, lines: [2] });
+  assert.deepEqual(core.reparent('- A\n  - ![[work.md]]\n- target\n', [0], 2), { text: '- target\n  - A\n    - ![[work.md]]\n', line: 1, lines: [1] });
+  assert.deepEqual(core.reparent('- A\n- target\n  - ![[work.md]]\n', [0], 1), { text: '- target\n  - ![[work.md]]\n  - A\n', line: 2, lines: [2] });
+  assert.deepEqual(core.reparent('- target\n  - ![[work.md]]\n- moving\n', [2], 0, 1), { text: '- target\n  - moving\n  - ![[work.md]]\n', line: 1, lines: [1] });
+});
+
+test('埋め込みの行やその子の下へは移さない', () => {
+  assert.throws(() => core.reparent('- A\n- ![[work.md]]\n', [0], 1), { code: 'reparentIntoEmbed' });
+  assert.throws(() => core.reparent('- ![[work.md]]\n  - A\n  - target\n', [1], 2), { code: 'reparentIntoEmbed' });
 });
 
 test('子への移動で存在しない行や不正な選択を拒否する', () => {
@@ -299,8 +318,7 @@ test('挿入位置が直接の子でない場合や選択した子の場合を�
   assert.throws(() => core.reparent(text, [2, 4], 0, 4), { code: 'insertPositionInSelection' });
 });
 
-test('子の間への移動も埋め込みや本文の境界をまたげない', () => {
-  assert.throws(() => core.reparent('- target\n  - ![[work.md]]\n- moving\n', [2], 0, 1), { code: 'reparentAcrossEmbed' });
+test('子の間への移動も本文の境界をまたげない', () => {
   assert.throws(() => core.reparent('- target\n  - child\n# Heading\n- moving\n', [3], 0, 1), { code: 'reparentAcrossText' });
 });
 
@@ -332,12 +350,15 @@ test('ルート末尾へ移しても途中と末尾にあった空行を削除�
   });
 });
 
-test('ルートへの移動も本文と埋め込みの境界を拒否する', () => {
+test('ルートへの移動も本文の境界を拒否する', () => {
   assert.throws(() => core.reparent('- parent\n  - child\n# Footer\n', [1], null), { code: 'reparentAcrossText' });
   assert.throws(() => core.reparent('- before\n# Heading\n- parent\n  - child\n', [3], null, 0), { code: 'reparentAcrossText' });
-  assert.throws(() => core.reparent('- parent\n  - child\n- ![[work.md]]\n', [1], null), { code: 'reparentAcrossEmbed' });
-  assert.throws(() => core.reparent('- parent\n  - child\n- ![[work.md]]\n', [1], null, 2), { code: 'reparentAcrossEmbed' });
-  assert.throws(() => core.reparent('- ![[work.md]]\n  - child\n- after\n', [1], null, 2), { code: 'reparentAcrossEmbed' });
+});
+
+test('ルートへの移動で埋め込みの行をまたぐ', () => {
+  assert.deepEqual(core.reparent('- parent\n  - child\n- ![[work.md]]\n', [1], null), { text: '- parent\n- ![[work.md]]\n- child\n', line: 2, lines: [2] });
+  assert.deepEqual(core.reparent('- parent\n  - child\n- ![[work.md]]\n', [1], null, 2), { text: '- parent\n- child\n- ![[work.md]]\n', line: 1, lines: [1] });
+  assert.deepEqual(core.reparent('- parent\n  - ![[work.md]]\n- after\n', [1], null, 2), { text: '- parent\n- ![[work.md]]\n- after\n', line: 1, lines: [1] });
 });
 
 test('ルートの挿入位置に子や選択中の項目を指定できない', () => {
@@ -365,6 +386,23 @@ test('埋め込み行と不正なファイル名は切り出さない', () => {
   assert.throws(() => core.extractToFile('- ![[work.md]]\n', 0, 'work 2.md'), { code: 'extractEmbed' });
   assert.throws(() => core.extractToFile('- [ ] task\n', 0, 'a/b.md'), { code: 'invalidFileName' });
   assert.throws(() => core.extractToFile('- [ ] task\n', 0, 'task'), { code: 'invalidFileName' });
+});
+
+test('名前の変更ではフォルダーを残してファイル名だけを差し替える', () => {
+  assert.equal(core.renamedEmbed('sub/work.md', 'done jobs'), 'sub/done jobs.md');
+  assert.equal(core.renamedEmbed('../work.md', '作業'), '../作業.md');
+  for (const name of ['', ' x', '.hidden', 'a/b', 'a\\b', 'a:b', 'a*b', 'a?b', 'a"b', 'a<b', 'a>b', 'a|b', 'a#b', 'a^b', 'a[b', 'a]b', 'a\nb']) {
+    assert.equal(core.usableBaseName(name), false, JSON.stringify(name));
+    assert.throws(() => core.renamedEmbed('work.md', name), { code: 'invalidFileName' });
+  }
+  assert.equal(core.usableBaseName('done jobs 2'), true);
+});
+
+test('埋め込み行の参照先だけを書き換え、ホストが書き換えた拡張子なしのリンクも置き換える', () => {
+  assert.deepEqual(core.retargetEmbed('- [ ] a\n  - ![[sub/work.md]]\n', 1, 'sub/jobs.md'), { text: '- [ ] a\n  - ![[sub/jobs.md]]\n', line: 1 });
+  assert.equal(core.retargetEmbed('- ![[jobs]]\n', 0, 'jobs.md').text, '- ![[jobs.md]]\n');
+  assert.throws(() => core.retargetEmbed('- [ ] task\n', 0, 'jobs.md'), { code: 'notEmbed' });
+  assert.throws(() => core.retargetEmbed('- ![[work.md]]\n', 0, 'jobs'), { code: 'invalidFileName' });
 });
 
 test('タスクの状態を外して箇条書きにし、記号と字下げとノートを保つ', () => {
@@ -397,4 +435,9 @@ test('タイトルからタグと使えない文字を除いてファイル名�
   assert.equal(core.fileName('#work', ['Task.md'], 'Task'), 'Task 2.md');
   assert.equal(core.fileName('...hidden', [], 'タスク'), 'hidden.md');
   assert.equal(core.fileName('Plan', ['plan.md', 'Plan 2.md', 'other.md'], 'タスク'), 'Plan 3.md');
+});
+
+test('Obsidian の規則でタグを # なしで出現順に重複なく取り出す', () => {
+  const text = '# Heading\n- [ ] #work Plan #仕事/進行中, #my_tag-2\n  note #work #1984 #y1984\n- a#b https://example.com/#x ![[f.md#h]] ＃全角\n#start';
+  assert.deepEqual(core.tagsIn(text), ['work', '仕事/進行中', 'my_tag-2', 'y1984', 'start']);
 });

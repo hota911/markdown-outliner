@@ -3,8 +3,9 @@ import * as core from '../core.ts';
 import type { Status } from '../core.ts';
 import { merge3, type Side } from '../three-way-merge.ts';
 import { RowKeys, type KeyedRow } from './keys.ts';
+import { filterActive, rowMatches, type FilterQuery, type TextQuery } from './filter.ts';
 import { errorText, messages, type Messages } from './messages.ts';
-import type { Adapter, Bookmark, Doc, MountOptions, Preferences, Revision, StatusFilter } from './types.ts';
+import type { Adapter, Bookmark, BookmarkZoom, Doc, MountOptions, Preferences, Revision, StatusFilter } from './types.ts';
 
 export type Field = 'title' | 'note';
 type RowKind = 'task' | 'bullet';
@@ -24,9 +25,10 @@ export interface Drop {
 }
 
 type SlashCommand = keyof Messages['slash']['command'];
-// The `/` menu of a title. `start` is the offset of the `/`, and the text after it up to the caret
-// is `query`. The 'files' step lists the files to embed, filtered by the same query.
-interface Slash { path: string; line: number; start: number; query: string; step: 'commands' | 'files'; index: number; files: string[] }
+// The `/` or `#` menu of a title. `start` is the offset of the `/` or `#`, and the text after it up
+// to the caret is `query`. The 'files' step lists the files to embed, filtered by the same query.
+// The 'tags' step, opened by `#`, lists the tags in use (`tags`, sorted).
+interface Slash { path: string; line: number; start: number; query: string; step: 'commands' | 'files' | 'tags'; index: number; files: string[]; tags: string[] }
 export interface SlashMenu { id: string; label: string; options: { id: string; label: string }[]; index: number }
 // Gives each outliner its own option ids; Obsidian can show several outliners in one document.
 let slashMenus = 0;
@@ -36,6 +38,9 @@ let slashMenus = 0;
 function foldKana(text: string) {
   return text.normalize('NFKC').toLowerCase().replace(/[ァ-ヶ]/g, char => String.fromCharCode(char.charCodeAt(0) - 0x60));
 }
+
+const trigger = (slash: Slash) => slash.step === 'tags' ? '#' : '/';
+const sortTags = (tags: Iterable<string>) => [...new Set(tags)].sort((a, b) => a.localeCompare(b));
 
 // The path of `target` relative to the folder of `from`, as embeds are written (see normalize).
 function relativePath(from: string, target: string) {
@@ -48,6 +53,8 @@ function relativePath(from: string, target: string) {
 export const statuses: Status[] = ['todo', 'in-progress', 'done'];
 export const filters: StatusFilter[] = ['all', 'not-done', ...statuses];
 export const statusIcons: Record<Status, string> = { todo: '○', 'in-progress': '◐', done: '✓' };
+// Icons of the status filter options; 'all' has none since it is not narrowed to any status.
+export const filterIcons: Record<StatusFilter, string> = { all: '', 'not-done': '◌', ...statusIcons };
 const nextStatus = (status: Status | null) => statuses[(statuses.indexOf(status!) + 1) % statuses.length];
 
 // Attachment that writes the model value into an input on every render. A `value` attribute
@@ -70,6 +77,13 @@ export const syncNote = (value: () => string) => (node: HTMLTextAreaElement) => 
   if (node.value !== next) node.value = next;
 };
 
+// The tag (without `#`) of the whitespace-separated word around `offset`, or null when that word
+// is not a tag. A word counts as a tag exactly when the search box would treat it as one.
+export function tagAt(text: string, offset: number): string | null {
+  const word = text.slice(0, offset).match(/\S*$/)![0] + text.slice(offset).match(/^\S*/)![0];
+  return /^#[^#\s]+$/.test(word) ? word.slice(1) : null;
+}
+
 export interface ItemView {
   key: string;
   path: string;
@@ -81,6 +95,10 @@ export interface ItemView {
   hasChildren: boolean;
   showNote: boolean;
   status: { icon: string; label: string; next: Status } | null;
+  // Shown only because a descendant matches the active filter; rendered dimmed.
+  context: boolean;
+  // The search box words and #tags to mark in the title; null without a text filter and for context rows.
+  highlight: TextQuery | null;
   embed: { target: string | null; error: string | null; outline: OutlineView | null } | null;
   // Drop targets after the last shown descendant of each ancestor that ends here, innermost first.
   ends: { key: string; parentLine: number; depth: number; label: string }[];
@@ -97,7 +115,8 @@ export type OutlineView =
   | { kind: 'missing' }
   | { kind: 'outline'; path: string; zoom: ZoomView | null; items: ItemView[]; addKind: RowKind; appendLine: number | null; appendChild: boolean };
 
-export interface BookmarkView { bookmark: unknown; label: string; title: string }
+// `defaultLabel` is the label derived from the view, shown while renaming; empty for an unreadable bookmark.
+export interface BookmarkView { bookmark: unknown; label: string; title: string; defaultLabel: string }
 
 export interface View {
   fileList: string[];
@@ -120,12 +139,27 @@ export interface View {
 
 function validBookmark(bookmark: unknown): bookmark is Bookmark {
   const value = bookmark as Bookmark | null;
-  return !!value && typeof value.id === 'string' && ['file', 'search'].includes(value.kind)
+  const zoom = value?.zoom;
+  return !!value && typeof value.id === 'string' && ['file', 'search', 'view'].includes(value.kind)
     && typeof value.file === 'string' && value.file.length > 0
-    && ['all', ...statuses].includes(value.status)
+    && filters.includes(value.status)
     && Array.isArray(value.tags) && value.tags.every(tag => typeof tag === 'string')
-    && (value.searchText === undefined || typeof value.searchText === 'string');
+    && (value.searchText === undefined || typeof value.searchText === 'string')
+    && (zoom === undefined || !!zoom && typeof zoom.path === 'string' && Number.isInteger(zoom.line) && typeof zoom.title === 'string')
+    && (value.name === undefined || typeof value.name === 'string');
 }
+
+// What a bookmark restores. A 'file' bookmark of 0.1.x shows the file without filters.
+interface SavedView { file: string; status: StatusFilter; tags: string[]; searchText: string; zoom: BookmarkZoom | null }
+
+const savedView = (bookmark: Bookmark): SavedView => bookmark.kind === 'file'
+  ? { file: bookmark.file, status: 'all', tags: [], searchText: '', zoom: null }
+  : { file: bookmark.file, status: bookmark.status, tags: bookmark.tags, searchText: bookmark.searchText || '', zoom: bookmark.zoom ?? null };
+
+// The zoomed item is compared by title, the same way openBookmark() finds it again.
+const sameView = (a: SavedView, b: SavedView) => a.file === b.file && a.status === b.status
+  && JSON.stringify(a.tags) === JSON.stringify(b.tags) && a.searchText === b.searchText
+  && (a.zoom === null ? b.zoom === null : b.zoom !== null && a.zoom.path === b.zoom.path && a.zoom.title === b.zoom.title);
 
 // Saves of one file per save request, when external changes keep merging cleanly in between.
 const SAVE_ATTEMPTS = 3;
@@ -204,6 +238,10 @@ export class Controller {
     this.initialFile = initialFile;
     this.preferences = preferences;
     this.savePreferences = savePreferences;
+  }
+
+  get canRename() {
+    return !!this.adapter.rename;
   }
 
   private describe(error: unknown) {
@@ -517,6 +555,111 @@ export class Controller {
     this.showToast(this.t.edit.extracted(name));
   };
 
+  // Renames the file embedded at `line` of `path` within its folder, then points the embed at
+  // the new name. Other files that embed or link the old name are left to the host.
+  renameEmbed = async (path: string, line: number, baseName: string) => {
+    const row = this.rows(path).find(value => value.line === line);
+    if (row?.kind !== 'embed' || !row.embed) return;
+    const name = baseName.trim();
+    if (name === row.embed.replace(/^.*[/\\]/, '').replace(/\.md$/, '')) return;
+    if (!core.usableBaseName(name)) { this.showToast(this.t.edit.renameInvalidName); return; }
+    // The button is shown only when the host can rename.
+    const rename = this.adapter.rename?.bind(this.adapter);
+    if (!rename) return;
+    if (this.busy || this.polling) { this.showToast(this.t.edit.renameBusy); return; }
+    let target: string, embed: string, newTarget: string;
+    try {
+      target = this.normalize(path, row.embed);
+      embed = core.renamedEmbed(row.embed, name);
+      newTarget = this.normalize(path, embed);
+    } catch (error) { this.showToast(this.t.edit.renameFailed(this.describe(error))); return; }
+    // The host renames the file on disk, so unsaved input is saved first.
+    await this.saveAll();
+    if ([path, target].some(file => this.docs.get(file)?.dirty || this.docs.get(file)?.conflict)) {
+      this.showToast(this.t.edit.renameUnsaved);
+      return;
+    }
+    if (this.busy || this.polling) { this.showToast(this.t.edit.renameBusy); return; }
+    this.busy = true;
+    this.updateStatus();
+    try {
+      await rename(target, newTarget);
+    } catch (error) {
+      this.busy = false;
+      this.updateStatus();
+      this.showToast(this.t.edit.renameFailed(this.describe(error)));
+      return;
+    }
+    this.moveFile(target, newTarget);
+    // Obsidian may already have rewritten the embed while updating links, so the embedding file
+    // is read again before the line is changed.
+    let containing: { text: string; revision: Revision } | null = null;
+    try { containing = await this.adapter.read(path); } catch { /* Without it, the embed line is updated on the text already loaded. */ }
+    this.busy = false;
+    this.updateStatus();
+    const doc = this.docs.get(path)!;
+    const fileName = newTarget.split('/').pop()!;
+    if (containing && containing.revision !== doc.baseRevision && !doc.dirty) this.replaceText(path, doc, containing.text, containing);
+    // Snapshots hold the old path, and undo cannot rename the file back.
+    this.undo.length = 0;
+    this.redo.length = 0;
+    // Lines may have moved since Enter, through typing or an external change, so the line is
+    // found again rather than trusted.
+    const current = this.embedLineOf(path, line, [target, newTarget]);
+    if (current === null) {
+      this.render();
+      this.showToast(this.t.edit.renameEmbedNotFound(fileName));
+      return;
+    }
+    const id = this.key(path, current);
+    const folded = this.collapsed.has(id);
+    this.mutate(path, text => core.retargetEmbed(text, current, embed), null);
+    if (folded) this.collapsed.add(id);
+    this.render();
+    await this.saveAll();
+    this.showToast(this.t.edit.renamed(fileName));
+  };
+
+  // Moves every piece of state keyed by a file path after the host renamed that file.
+  private moveFile(from: string, to: string) {
+    const doc = this.docs.get(from);
+    if (doc) { this.docs.delete(from); this.docs.set(to, doc); }
+    this.fileList = [...this.fileList.filter(file => file !== from && file !== to), to].sort();
+    for (const id of [...this.collapsed]) {
+      if (!id.startsWith(from + ':')) continue;
+      this.collapsed.delete(id);
+      this.collapsed.add(to + id.slice(from.length));
+    }
+    const kept = this.kept.get(from);
+    if (kept) { this.kept.delete(from); this.kept.set(to, kept); }
+    if (this.current === from) this.current = to;
+    if (this.zoom?.path === from) this.zoom = { ...this.zoom, path: to };
+    if (this.active?.path === from) this.active = { ...this.active, path: to };
+    if (this.selectedPath === from) this.selectedPath = to;
+    let changed = false;
+    if (this.preferences.lastFile === from) { this.preferences.lastFile = to; changed = true; }
+    if (Array.isArray(this.preferences.bookmarks)) {
+      for (const bookmark of this.preferences.bookmarks) {
+        if (validBookmark(bookmark) && bookmark.file === from) { bookmark.file = to; changed = true; }
+      }
+    }
+    if (changed) this.persistPreferences();
+  }
+
+  // The line of `path` whose `![[...]]` item resolves to one of `targets`: `line` when it still
+  // does, else the only such line. Null when there is none or more than one, so nothing is guessed.
+  // A link without `.md` counts, as Obsidian writes it that way when it updates links.
+  private embedLineOf(path: string, line: number, targets: string[]) {
+    const lines = this.rows(path).filter(row => {
+      const link = /^!\[\[([^\]]+)\]\]$/.exec(row.title)?.[1];
+      if (!link) return false;
+      try { return targets.includes(this.normalize(path, link.endsWith('.md') ? link : link + '.md')); }
+      catch { return false; }
+    }).map(row => row.line);
+    if (lines.includes(line)) return line;
+    return lines.length === 1 ? lines[0] : null;
+  }
+
   // --- Field events -------------------------------------------------------------------------
 
   private focusField(path: string, line: number, field: Field, node: HTMLTextAreaElement) {
@@ -700,11 +843,11 @@ export class Controller {
     if (status) this.mutate(path, text => core.updateStatus(text, row.line, nextStatus(status)), field);
   });
 
-  // --- The `/` menu -------------------------------------------------------------------------
+  // --- The `/` and `#` menus -----------------------------------------------------------------
 
-  // Opens, filters or closes the menu after input in a title. Only an ASCII `/` typed at the
-  // start or after whitespace opens it, so `A/B`, URLs and paths do not, and never an IME:
-  // neither its full-width `／` nor the input events that commit a composition.
+  // Opens, filters or closes the menu after input in a title. Only an ASCII `/` or `#` typed at
+  // the start or after whitespace opens it, so `A/B`, URLs and paths do not, and never an IME:
+  // neither its full-width `／` or `＃` nor the input events that commit a composition.
   private slashInput(path: string, line: number, node: HTMLTextAreaElement, event: InputEvent | null) {
     const value = node.value, caret = node.selectionStart;
     const slash = this.slash;
@@ -713,7 +856,7 @@ export class Controller {
       // not hold. The query runs to the end of the selection; the menu is checked again when the
       // composition ends.
       const end = node.selectionEnd, query = value.slice(slash.start + 1, end);
-      if (value[slash.start] === '/' && end > slash.start && !/\s/.test(query) && query !== slash.query) {
+      if (value[slash.start] === trigger(slash) && end > slash.start && !/\s/.test(query) && query !== slash.query) {
         slash.query = query;
         slash.index = 0;
       }
@@ -721,19 +864,43 @@ export class Controller {
     }
     if (slash?.path === path && slash.line === line) {
       const query = value.slice(slash.start + 1, caret);
-      if (value[slash.start] === '/' && caret > slash.start && node.selectionEnd === caret && !/\s/.test(query)) {
+      if (value[slash.start] === trigger(slash) && caret > slash.start && node.selectionEnd === caret && !/\s/.test(query)) {
         if (query !== slash.query) { slash.query = query; slash.index = 0; }
         return;
       }
       this.slash = null;
     }
-    if (event?.inputType !== 'insertText' || event.data !== '/' || event.isComposing || this.composing) return;
-    if (value[caret - 1] === '/' && (caret === 1 || /\s/.test(value[caret - 2]))) {
-      this.slash = { path, line, start: caret - 1, query: '', step: 'commands', index: 0, files: [] };
+    if (event?.inputType !== 'insertText' || (event.data !== '/' && event.data !== '#') || event.isComposing || this.composing) return;
+    if (value[caret - 1] === event.data && (caret === 1 || /\s/.test(value[caret - 2]))) {
+      const start = caret - 1;
+      if (event.data === '/') {
+        this.slash = { path, line, start, query: '', step: 'commands', index: 0, files: [], tags: [] };
+        return;
+      }
+      // Without the `#` just typed, so that text right after it (`#|word`) is not offered as a tag.
+      const typed = core.updateTitle(this.docs.get(path)!.text, line, value.slice(0, start) + value.slice(caret)).text;
+      const loaded = [...this.docs].flatMap(([key, doc]) => core.tagsIn(key === path ? typed : doc.text));
+      this.slash = { path, line, start, query: '', step: 'tags', index: 0, files: [], tags: sortTags(loaded) };
+      this.adapter.tags?.().then(tags => {
+        const current = this.slash;
+        if (current?.step === 'tags' && current.path === path && current.line === line && current.start === start) current.tags = sortTags([...current.tags, ...tags]);
+      }).catch((error: unknown) => this.showToast(this.describe(error)));
     }
   }
 
   private slashOptions(slash: Slash) {
+    if (slash.step === 'tags') {
+      // Tags starting with the query come first, then the ones containing it, each alphabetically.
+      const query = foldKana(slash.query);
+      const folded = slash.tags.map(tag => ({ tag, folded: foldKana(tag) }));
+      const matches = [
+        ...folded.filter(({ folded }) => folded.startsWith(query)),
+        ...folded.filter(({ folded }) => !folded.startsWith(query) && folded.includes(query)),
+      ].map(({ tag }) => tag);
+      // A tag typed out in full is no suggestion on its own: the menu closes and Enter stays Enter.
+      if (matches.length === 1 && matches[0] === slash.query) return [];
+      return matches.map(tag => ({ id: tag, label: '#' + tag }));
+    }
     const query = slash.step === 'files' ? slash.query.toLowerCase() : foldKana(slash.query);
     if (slash.step === 'files') {
       return slash.files.filter(file => file !== slash.path && file.toLowerCase().includes(query)).map(file => ({ id: file, label: file }));
@@ -755,7 +922,8 @@ export class Controller {
     if (slash?.path !== path || slash.line !== line) return null;
     const options = this.slashOptions(slash);
     if (!options.length) return null;
-    return { id: this.slashId, label: slash.step === 'files' ? this.t.slash.files : this.t.slash.commands, options, index: Math.min(slash.index, options.length - 1) };
+    const label = slash.step === 'files' ? this.t.slash.files : slash.step === 'tags' ? this.t.slash.tags : this.t.slash.commands;
+    return { id: this.slashId, label, options, index: Math.min(slash.index, options.length - 1) };
   }
 
   // Returns whether the key was used by the menu.
@@ -799,7 +967,21 @@ export class Controller {
     // A tap during an IME composition commits the word first, as the touch bar does.
     if (this.composing) node.blur();
     const value = node.value, end = Math.max(start + 1, node.selectionStart);
-    if (value[start] !== '/') { this.slash = null; return; }
+    if (value[start] !== trigger(slash)) { this.slash = null; return; }
+    if (slash.step === 'tags') {
+      // `#query` becomes `#tag` and a space, unless whitespace follows already; the caret goes after it.
+      const rest = value.slice(end), tag = '#' + id + (/^\s/.test(rest) ? '' : ' ');
+      const caret = start + tag.length + (/^\s/.test(rest) ? 1 : 0);
+      // mutate does not render when the text stays the same (the tag was typed out before a space).
+      this.slash = null;
+      this.mutate(path, text => core.updateTitle(text, line, value.slice(0, start) + tag + rest), 'title');
+      const focused = this.activeElement instanceof HTMLTextAreaElement && this.activeElement.dataset.field === 'title' ? this.activeElement : node;
+      if (focused.isConnected) {
+        if (this.activeElement !== focused) focused.focus();
+        focused.setSelectionRange(caret, caret);
+      }
+      return;
+    }
     // At the end of the text, the space typed before the `/` goes too.
     const title = value.slice(end) ? value.slice(0, start) + value.slice(end) : value.slice(0, start).trimEnd();
     const strip = (text: string) => core.updateTitle(text, line, title).text;
@@ -872,24 +1054,42 @@ export class Controller {
     this.render();
   };
 
-  private shown(path: string, text: string) {
-    const tagFilters = this.tagList();
+  private query(): FilterQuery {
+    return { status: this.filter, tags: this.tagList(), text: this.textSearch.trim() };
+  }
+
+  // The lines to show, each mapped to whether the row matches the filter itself (true) or is shown
+  // only as an ancestor of a match (false). An embed matches when anything in its file matches.
+  // `chain` holds the files embedding this one, as in outlineView(), to stop at cycles.
+  private shown(path: string, text: string, chain: string[] = []): Map<number, boolean> {
+    const query = this.query(), active = filterActive(query);
     const rows = this.rows(path, text);
     const byLine = new Map(rows.map(row => [row.line, row]));
     const keptLines = new Set(this.keepFor(path));
-    const visible = new Set<number>();
+    const shown = new Map<number, boolean>();
     for (const row of rows) {
-      const words = (row.title + '\n' + row.note).split(/\s+/);
-      const matches = (this.filter === 'all' || (this.filter === 'not-done' ? row.status !== 'done' : row.status === this.filter)) && tagFilters.every(tag => words.includes('#' + tag))
-        && row.title.toLowerCase().includes(this.textSearch.trim().toLowerCase());
-      if (!keptLines.has(row.line) && !matches) continue;
-      let ancestor: KeyedRow | undefined = row;
-      while (ancestor) {
-        visible.add(ancestor.line);
-        ancestor = ancestor.parentLine === null ? undefined : byLine.get(ancestor.parentLine);
+      const matches = !active || keptLines.has(row.line)
+        || (row.kind === 'embed' ? this.embedMatches(path, row, chain) : rowMatches(row, query));
+      if (!matches) continue;
+      shown.set(row.line, true);
+      // Ancestors come before their descendants, so an ancestor already shown has its own ancestors shown too.
+      for (let ancestor = row.parentLine === null ? undefined : byLine.get(row.parentLine); ancestor && !shown.has(ancestor.line);
+        ancestor = ancestor.parentLine === null ? undefined : byLine.get(ancestor.parentLine)) {
+        shown.set(ancestor.line, false);
       }
     }
-    return visible;
+    return shown;
+  }
+
+  // Whether anything in the embedded file matches the filter. A cycle, an invalid path or a file
+  // that is not loaded has nothing to match.
+  private embedMatches(path: string, row: KeyedRow, chain: string[]) {
+    let target: string;
+    try { target = this.normalize(path, row.embed); }
+    catch { return false; }
+    const doc = this.docs.get(target);
+    if (!doc || chain.includes(target) || target === path) return false;
+    return [...this.shown(target, doc.text, [...chain, path]).values()].some(Boolean);
   }
 
   selectRow = (path: string, row: KeyedRow, event: MouseEvent) => {
@@ -949,6 +1149,29 @@ export class Controller {
     }, 'title');
   };
 
+  // Alt+Up / Alt+Down on a focused handle. This is how an embed line, which has no text field, moves
+  // from the keyboard. A selection that includes the row moves as a whole.
+  handleKeydown = (path: string, row: KeyedRow, event: KeyboardEvent) => {
+    if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+    event.preventDefault();
+    const down = event.key === 'ArrowDown';
+    const sortedSelection = () => [...this.selectedLines].sort((a, b) => a - b);
+    let line = row.line;
+    if (this.selectedPath === path && this.selectedLines.has(row.line)) {
+      const index = sortedSelection().indexOf(row.line);
+      this.moveSelection(down);
+      line = sortedSelection()[index];
+    } else {
+      this.mutate(path, text => {
+        const result = core.move(text, row.line, down ? 'down' : 'up');
+        line = result.line;
+        return result;
+      }, null);
+    }
+    // The re-render may have moved or replaced the focused handle.
+    [...this.container!.querySelectorAll<HTMLElement>('.drag-handle')].find(node => node.dataset.path === path && Number(node.dataset.line) === line)?.focus();
+  };
+
   clearSelectionAndRender = () => {
     this.clearSelection();
     this.render();
@@ -985,8 +1208,10 @@ export class Controller {
     const hasChildren = rows.some(child => child.parentLine === row.line);
     const bounds = node.getBoundingClientRect();
     const fraction = (event.clientY - bounds.top) / bounds.height;
-    const titleLeft = node.querySelector('.title-input')!.getBoundingClientRect().left;
-    if (!hasChildren && fraction >= .25 && fraction <= .75 && event.clientX >= titleLeft) {
+    // An embed line has no text field; the embed's name starts where an item's title would.
+    const titleLeft = node.querySelector('.title-input, .embed-title')!.getBoundingClientRect().left;
+    // Nothing goes under an embed line (core.reparent refuses it), so it only takes drops before and after.
+    if (row.kind !== 'embed' && !hasChildren && fraction >= .25 && fraction <= .75 && event.clientX >= titleLeft) {
       return { parentLine: row.line, beforeLine: null, indicator: 'drop-child', offset: 24 };
     }
     const position = fraction < .5 ? 'before' : 'after';
@@ -1054,6 +1279,11 @@ export class Controller {
     this.render();
   };
 
+  // Adds a tag to the search as if typed and applied; a tag already in the search is left as is.
+  filterByTag = (tag: string) => {
+    if (!this.tagList().includes(tag)) this.applySearch(this.searchValue() + ' #' + tag);
+  };
+
   reset = () => {
     this.filter = 'all';
     this.tags = '';
@@ -1116,44 +1346,65 @@ export class Controller {
     });
   }
 
-  addBookmark = (kind: 'file' | 'search') => {
+  addBookmark = () => {
     if (this.current === null) return;
     if (!Array.isArray(this.preferences.bookmarks)) {
       this.showToast(this.t.bookmarks.listUnreadable);
       return;
     }
-    const bookmark: Bookmark = {
-      id: crypto.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(36).slice(2), kind, file: this.current,
-      status: kind === 'file' ? 'all' : this.filter, tags: kind === 'file' ? [] : this.tagList(), searchText: kind === 'file' ? '' : this.textSearch.trim(),
-    };
-    if (this.preferences.bookmarks.some(saved => validBookmark(saved) && saved.kind === kind && saved.file === bookmark.file
-      && saved.status === bookmark.status && JSON.stringify(saved.tags) === JSON.stringify(bookmark.tags)
-      && (saved.searchText || '') === bookmark.searchText)) {
+    const view = this.currentView()!;
+    // One bookmark per view: the star in the search box shows and removes the bookmark of the
+    // current view, which would be ambiguous with duplicates.
+    if (this.currentViewBookmark()) {
       this.showToast(this.t.bookmarks.exists);
       return;
     }
+    const bookmark: Bookmark = {
+      id: crypto.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(36).slice(2), kind: 'view',
+      file: view.file, status: view.status, tags: view.tags, searchText: view.searchText, ...(view.zoom ? { zoom: view.zoom } : {}),
+    };
     this.preferences.bookmarks.push(bookmark);
     this.persistPreferences();
     this.render();
   };
 
-  private currentSearchBookmark() {
-    return Array.isArray(this.preferences.bookmarks) ? this.preferences.bookmarks.find(saved => validBookmark(saved)
-      && saved.kind === 'search' && saved.file === this.current && saved.status === this.filter
-      && JSON.stringify(saved.tags) === JSON.stringify(this.tagList()) && (saved.searchText || '') === this.textSearch.trim()) : undefined;
+  private currentView(): SavedView | null {
+    if (this.current === null) return null;
+    const zoom = this.zoom;
+    const zoomRow = zoom && this.docs.has(zoom.path) ? this.rows(zoom.path).find(row => row.line === zoom.line) : undefined;
+    return {
+      file: this.current, status: this.filter, tags: this.tagList(), searchText: this.textSearch.trim(),
+      zoom: zoom && zoomRow ? { path: zoom.path, line: zoom.line, title: zoomRow.title } : null,
+    };
+  }
+
+  private currentViewBookmark() {
+    const view = this.currentView();
+    return view && Array.isArray(this.preferences.bookmarks)
+      ? this.preferences.bookmarks.find(saved => validBookmark(saved) && sameView(savedView(saved), view)) : undefined;
   }
 
   private updateStar() {
-    this.searchSaved = !!this.currentSearchBookmark();
+    this.searchSaved = !!this.currentViewBookmark();
   }
 
   toggleSearchBookmark = () => {
-    const existing = this.currentSearchBookmark();
+    const existing = this.currentViewBookmark();
     if (existing) {
       this.preferences.bookmarks.splice(this.preferences.bookmarks.indexOf(existing), 1);
       this.persistPreferences();
       this.render();
-    } else this.addBookmark('search');
+    } else this.addBookmark();
+  };
+
+  // An empty name removes the custom name, so the label is derived from the view again.
+  renameBookmark = (bookmark: unknown, name: string) => {
+    if (!validBookmark(bookmark)) { this.showToast(this.t.bookmarks.invalid); return; }
+    const trimmed = name.trim();
+    if (trimmed) bookmark.name = trimmed;
+    else delete bookmark.name;
+    this.persistPreferences();
+    this.render();
   };
 
   removeBookmark = (bookmark: unknown) => {
@@ -1173,21 +1424,31 @@ export class Controller {
     try { await this.loadEmbeds(bookmark.file); }
     catch (error) { this.showToast(this.t.bookmarks.openFailed(this.describe(error))); return; }
     if (this.destroyed) return;
-    this.filter = bookmark.kind === 'file' ? 'all' : bookmark.status;
-    this.tags = bookmark.kind === 'file' ? '' : bookmark.tags.map(tag => '#' + tag).join(' ');
-    this.textSearch = bookmark.kind === 'file' ? '' : bookmark.searchText || '';
+    const view = savedView(bookmark);
+    this.filter = view.status;
+    this.tags = view.tags.map(tag => '#' + tag).join(' ');
+    this.textSearch = view.searchText;
     this.kept.clear();
-    await this.openFile(bookmark.file);
+    await this.openFile(view.file);
+    if (this.destroyed || !view.zoom || this.current !== view.file) return;
+    const zoom = view.zoom;
+    const rows = this.docs.has(zoom.path) ? this.rows(zoom.path).filter(row => row.title === zoom.title) : [];
+    const nearest = rows.sort((a, b) => Math.abs(a.line - zoom.line) - Math.abs(b.line - zoom.line)).at(0);
+    if (!nearest) { this.showToast(this.t.bookmarks.zoomMissing(zoom.title)); return; }
+    this.zoomTo(zoom.path, nearest.line);
   };
 
   private bookmarkViews(): BookmarkView[] {
     return this.preferences.bookmarks.map(bookmark => {
-      const valid = validBookmark(bookmark);
-      const filename = valid ? bookmark.file.split('/').pop()! : this.t.bookmarks.unreadableLabel;
-      const label = valid && bookmark.kind === 'search'
-        ? this.t.bookmarks.searchLabel(this.t.filter[bookmark.status], bookmark.tags.map(tag => '#' + tag).join(' '), bookmark.searchText || '', filename)
+      if (!validBookmark(bookmark)) return { bookmark, label: this.t.bookmarks.unreadableLabel, title: this.t.bookmarks.unreadableLabel, defaultLabel: '' };
+      const view = savedView(bookmark);
+      const filename = view.file.split('/').pop()!;
+      const filtered = view.status !== 'all' || view.tags.length > 0 || view.searchText !== '';
+      const base = filtered || bookmark.kind === 'search'
+        ? this.t.bookmarks.searchLabel(this.t.filter[view.status], view.tags.map(tag => '#' + tag).join(' '), view.searchText, filename)
         : filename;
-      return { bookmark, label, title: valid ? bookmark.file : label };
+      const defaultLabel = view.zoom ? this.t.bookmarks.zoomLabel(base, view.zoom.title) : base;
+      return { bookmark, label: bookmark.name ?? defaultLabel, title: view.file, defaultLabel };
     });
   }
 
@@ -1296,7 +1557,9 @@ export class Controller {
     const doc = this.docs.get(path);
     if (!doc) return { kind: 'missing' };
     const rows = this.rows(path, doc.text);
-    const visible = this.shown(path, doc.text);
+    const visible = this.shown(path, doc.text, chain);
+    const query = this.query();
+    const highlight = query.text || query.tags.length ? { text: query.text, tags: query.tags } : null;
     const byLine = new Map(rows.map(row => [row.line, row]));
     const zoom = this.zoom;
     const rootRow = zoom && zoom.path === path ? byLine.get(zoom.line) ?? null : null;
@@ -1305,7 +1568,7 @@ export class Controller {
     const itemByLine = new Map<number, ItemView>();
     for (const row of rows) {
       if (rootRow && !(row.line > rootRow.line && row.line < rootRow.end)) continue;
-      if (!visible.has(row.line) && row.kind !== 'embed') continue;
+      if (!visible.has(row.line)) continue;
       let hidden = false;
       for (let ancestor = row.parentLine === null ? undefined : byLine.get(row.parentLine); ancestor; ancestor = ancestor.parentLine === null ? undefined : byLine.get(ancestor.parentLine)) {
         if (this.collapsed.has(this.key(path, ancestor.line))) { hidden = true; break; }
@@ -1323,6 +1586,9 @@ export class Controller {
         hasChildren: rows.some(child => child.parentLine === row.line),
         showNote: row.kind !== 'embed' && (!!row.note || this.isActive(path, row.line, 'note')),
         status: this.statusView(row, false),
+        context: visible.get(row.line) === false,
+        // Context rows did not match, so any words they share with the query are not marked.
+        highlight: visible.get(row.line) ? highlight : null,
         embed: null,
         ends: [],
       };
@@ -1334,7 +1600,8 @@ export class Controller {
             item.embed.outline = this.outlineView(item.embed.target, [...chain, path]);
           } catch (error) { item.embed.error = this.describe(error); }
         }
-      } else itemByLine.set(row.line, item);
+      }
+      itemByLine.set(row.line, item);
       items.push(item);
     }
     for (const row of rows) {

@@ -5,6 +5,9 @@
 .outliner .outliner-editor { flex: 1; min-width: 0; }
 .outliner .bookmarks { flex: 0 0 180px; padding-right: 16px; border-right: 1px solid var(--background-modifier-border); }
 .outliner .bookmarks.is-collapsed { flex-basis: 24px; padding-right: 0; }
+/* 150ms, the same as the item transitions in src/ui/motion.ts. */
+.outliner .bookmarks { transition: flex-basis 150ms ease-out, padding-right 150ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .outliner .bookmarks { transition: none; } }
 .outliner .bookmarks-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .outliner .bookmarks-heading { margin: 0; font-size: 13px; font-weight: 600; }
 .outliner .search-box { display: flex; align-items: center; position: relative; }
@@ -17,6 +20,7 @@
 .outliner .bookmark-item { display: flex; align-items: center; gap: 2px; margin-bottom: 4px; }
 .outliner .bookmark-open { flex: 1; min-width: 0; border-color: transparent; text-align: left; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
 .outliner .bookmark-item .icon { flex: 0 0 22px; }
+.outliner .bookmark-name { flex: 1; min-width: 0; font-size: 12px; }
 .outliner .bookmark-empty { font-size: 11px; color: var(--text-faint); line-height: 1.6; }
 .workspace-leaf-content .markdown-outliner-container.outliner { margin: 0; max-width: none; height: 100%; overflow: auto; padding: 16px 24px; }
 .outliner button, .outliner input, .outliner select, .outliner textarea { font: inherit; }
@@ -83,8 +87,8 @@
 .outliner.is-dragging .children-end { background: var(--background-primary-alt); }
 .outliner .title-area { position: relative; flex: 1; min-width: 100px; }
 .outliner .title-area .title-input { width: 100%; }
-/* Titles and notes with inline Markdown show it rendered over a transparent textarea until they are edited. */
-.outliner :is(.title-area, .note-area).has-markup:not(.is-editing) :is(.title-input, .note-input) { position: absolute; inset: 0; opacity: 0; }
+/* Titles and notes with inline Markdown, tags or filter matches show them rendered over a transparent textarea until they are edited. */
+.outliner :is(.title-area, .note-area).has-overlay:not(.is-editing) :is(.title-input, .note-input) { position: absolute; inset: 0; opacity: 0; }
 .outliner :is(.title-area, .note-area).is-editing :is(.title-display, .note-display) { display: none; }
 /* The `/` menu hangs below the title it was typed in, over the lines that follow; about 8 rows show. */
 .outliner .zoom-heading { position: relative; }
@@ -94,7 +98,14 @@
 .outliner .title-display { position: relative; min-height: 28px; padding: 2px 0; line-height: 24px; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
 .outliner :is(.title-display, .note-display) a { color: var(--text-accent); text-decoration: underline; cursor: pointer; }
 .outliner :is(.title-display, .note-display) code { font-family: var(--font-monospace); font-size: .9em; padding: 0 3px; border-radius: 3px; background: var(--code-background, var(--background-modifier-border)); }
+/* Obsidian themes set the --tag-* variables; elsewhere a tag looks like a link. */
+.outliner :is(.title-display, .note-display) .tag { color: var(--tag-color, var(--text-accent)); background: var(--tag-background, none); border-radius: var(--tag-radius, 0); text-decoration: var(--tag-decoration, underline); cursor: pointer; }
+.outliner :is(.title-display, .note-display) .tag:hover { color: var(--tag-color-hover, var(--text-accent)); background: var(--tag-background-hover, none); text-decoration: var(--tag-decoration-hover, underline); }
 .outliner .is-done > .outline-line .title-display { color: var(--text-faint); text-decoration: line-through; }
+.outliner .title-display mark { background: var(--text-highlight-bg); color: inherit; border-radius: 2px; }
+/* An ancestor shown only for a matching descendant: the same row, dimmed until it is edited. */
+.outliner .is-context > .outline-line:not(:focus-within) { opacity: .6; }
+.outliner .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .outliner .auto-save, .outliner .selection-bar { display: flex; align-items: center; gap: 5px; }
 .outliner .auto-save input { margin: 0; }
 .outliner .selection-bar { width: 100%; flex-wrap: wrap; }
@@ -106,8 +117,13 @@
 .outliner .note-display { position: relative; color: var(--text-muted); line-height: 1.4; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
 .outliner .embedded { margin: 2px 0 8px 22px; padding: 2px 0 2px 12px; background: transparent; border: 0; border-left: 1px solid var(--background-modifier-border); border-radius: 0; }
 .outliner .embed-title { font-weight: 600; color: var(--text-accent); }
-.outliner .source-label { font-size: 11px; color: var(--text-faint); margin-bottom: 2px; }
-.outliner .embedded > .quiet { font-size: 11px; padding: 0 0 4px; }
+.outliner .embed-actions { display: flex; gap: 12px; }
+.outliner .embed-actions > .quiet { font-size: 11px; padding: 0 0 4px; }
+/* The rename field replaces the heading text in place, so it keeps the heading's font and line box. */
+.outliner .embed-title.is-renaming { display: inline-flex; align-items: baseline; min-width: 0; max-width: 100%; }
+.outliner .embed-title input.embed-rename { font: inherit; color: inherit; line-height: inherit; height: auto; min-height: 0; min-width: 2em; max-width: 100%; field-sizing: content; margin: 0 -2px; padding: 0 2px; border: 0; border-radius: 3px; background: var(--background-modifier-form-field); box-shadow: inset 0 -1px 0 var(--text-accent); }
+.outliner .embed-title input.embed-rename:focus-visible { outline: none; }
+.outliner .rename-suffix { color: var(--text-muted); }
 .outliner .notice { padding: 12px 16px; margin-top: 12px; background: rgba(var(--color-yellow-rgb), .15); color: var(--text-normal); border-radius: 8px; line-height: 1.6; }
 /* Inverted colors keep the toast distinct from the page in both light and dark themes. */
 .outliner .toast { position: fixed; right: 20px; bottom: 20px; z-index: 1000; display: flex; align-items: center; gap: 12px; max-width: min(460px, calc(100vw - 40px)); padding: 12px 16px; border-radius: 6px; background: var(--text-normal); color: var(--background-primary); box-shadow: 0 4px 18px rgba(0, 0, 0, .15); font-size: 13px; line-height: 1.5; }
