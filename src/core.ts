@@ -57,6 +57,8 @@ export interface InsertOptions {
   kind?: 'task' | 'bullet';
   status?: Status;
   child?: boolean;
+  // Insert as the previous sibling of the item instead of after it.
+  before?: boolean;
   tags: string[];
 }
 
@@ -187,11 +189,18 @@ export function insert(text: string, line: number | null, options: InsertOptions
     if (typeof tag !== 'string' || !/^#?[^\s#]+$/.test(tag)) throw new CoreError('invalidTag');
     return '#' + tag.replace(/^#/, '');
   });
+  if (options.before && (line === null || options.child)) throw new CoreError('invalidInsert');
   const doc = line === null ? scan(text) : target(text, line);
+  const content = '- ' + (kind === 'task' ? '[' + marks[options.status!] + '] ' : '') + tags.join(' ');
+  if (options.before) {
+    // Reuse the item's own indentation so the new line is its sibling even in tab-indented files.
+    doc.lines.splice(line!, 0, item(doc.lines[line!])![1] + content);
+    return result(doc, line!);
+  }
   let at = line === null ? doc.lines.length : options.child ? (doc as Targeted).row.ownEnd : (doc as Targeted).row.end;
   if (line === null && doc.lines[at - 1] === '') at--;
   const depth = line === null ? 0 : (doc as Targeted).row.depth + (options.child ? 1 : 0);
-  doc.lines.splice(at, 0, ' '.repeat(depth * 2) + '- ' + (kind === 'task' ? '[' + marks[options.status!] + '] ' : '') + tags.join(' '));
+  doc.lines.splice(at, 0, ' '.repeat(depth * 2) + content);
   return result(doc, at);
 }
 
