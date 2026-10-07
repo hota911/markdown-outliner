@@ -183,7 +183,7 @@ const en = {
     renameBusy: 'Cannot rename while saving or during a save conflict.',
     renameUnsaved: 'Could not save the unsaved input. Save it, then rename.',
     renameFailed: (detail: string) => `Could not rename the file: ${detail}`,
-    renameEmbedFailed: (name: string, detail: string) => `Renamed the file to ${name}, but could not update the embed: ${detail}`,
+    renameEmbedNotFound: (name: string) => `Renamed the file to ${name}, but could not update the link: no single embed of the old name was found. The text was left unchanged.`,
     renamed: (name: string) => `Renamed the file to ${name}. The undo history was cleared.`,
   },
 
@@ -425,7 +425,7 @@ const ja: Messages = {
     renameBusy: '保存処理中または保存競合中は名前を変更できません。',
     renameUnsaved: '未保存の入力を保存できませんでした。保存してから名前を変更してください。',
     renameFailed: detail => 'ファイル名を変更できませんでした: ' + detail,
-    renameEmbedFailed: (name, detail) => name + ' に名前を変更しましたが、埋め込みを更新できませんでした: ' + detail,
+    renameEmbedNotFound: name => name + ' に名前を変更しましたが、リンクを更新できませんでした。元の名前の埋め込みが1つに定まらないため、本文は変更していません。',
     renamed: name => name + ' に名前を変更しました。Undo の履歴は消去しました。',
   },
 

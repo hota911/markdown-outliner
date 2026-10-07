@@ -511,7 +511,7 @@ export class Controller {
     if (name === row.embed.replace(/^.*[/\\]/, '').replace(/\.md$/, '')) return;
     if (!core.usableBaseName(name)) { this.showToast(this.t.edit.renameInvalidName); return; }
     // The button is shown only when the host can rename.
-    const rename = this.adapter.rename;
+    const rename = this.adapter.rename?.bind(this.adapter);
     if (!rename) return;
     if (this.busy || this.polling) { this.showToast(this.t.edit.renameBusy); return; }
     let target: string, embed: string, newTarget: string;
@@ -547,19 +547,21 @@ export class Controller {
     const doc = this.docs.get(path)!;
     const fileName = newTarget.split('/').pop()!;
     if (containing && containing.revision !== doc.baseRevision && !doc.dirty) this.replaceText(path, doc, containing.text, containing);
-    const id = this.key(path, line);
-    const folded = this.collapsed.has(id);
-    try { core.retargetEmbed(doc.text, line, embed); }
-    catch (error) {
-      this.render();
-      this.showToast(this.t.edit.renameEmbedFailed(fileName, this.describe(error)));
-      return;
-    }
-    this.mutate(path, text => core.retargetEmbed(text, line, embed), null);
-    if (folded) this.collapsed.add(id);
     // Snapshots hold the old path, and undo cannot rename the file back.
     this.undo.length = 0;
     this.redo.length = 0;
+    // Lines may have moved since Enter, through typing or an external change, so the line is
+    // found again rather than trusted.
+    const current = this.embedLineOf(path, line, [target, newTarget]);
+    if (current === null) {
+      this.render();
+      this.showToast(this.t.edit.renameEmbedNotFound(fileName));
+      return;
+    }
+    const id = this.key(path, current);
+    const folded = this.collapsed.has(id);
+    this.mutate(path, text => core.retargetEmbed(text, current, embed), null);
+    if (folded) this.collapsed.add(id);
     this.render();
     await this.saveAll();
     this.showToast(this.t.edit.renamed(fileName));
@@ -589,6 +591,20 @@ export class Controller {
       }
     }
     if (changed) this.persistPreferences();
+  }
+
+  // The line of `path` whose `![[...]]` item resolves to one of `targets`: `line` when it still
+  // does, else the only such line. Null when there is none or more than one, so nothing is guessed.
+  // A link without `.md` counts, as Obsidian writes it that way when it updates links.
+  private embedLineOf(path: string, line: number, targets: string[]) {
+    const lines = this.rows(path).filter(row => {
+      const link = /^!\[\[([^\]]+)\]\]$/.exec(row.title)?.[1];
+      if (!link) return false;
+      try { return targets.includes(this.normalize(path, link.endsWith('.md') ? link : link + '.md')); }
+      catch { return false; }
+    }).map(row => row.line);
+    if (lines.includes(line)) return line;
+    return lines.length === 1 ? lines[0] : null;
   }
 
   // --- Field events -------------------------------------------------------------------------

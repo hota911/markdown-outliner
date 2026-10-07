@@ -94,6 +94,53 @@ describe('rename an embedded file', () => {
     expect(Object.fromEntries(env.adapter.files)).toEqual({ 'tasks.md': '- ![[work.md]]\n', 'work.md': '- [ ] job\n' });
   });
 
+  // Simulates another editor changing the embedding file while the host renames.
+  const changeDuringRename = (adapter, path, text) => {
+    const rename = adapter.rename;
+    adapter.rename = async (from, to) => {
+      await rename(from, to);
+      adapter.externalWrite(path, text);
+    };
+  };
+
+  it('updates the embed line that moved while the file was renamed', async () => {
+    const env = await setup({ 'tasks.md': '- ![[a.md]]\n- ![[work.md]]\n', 'a.md': '- [ ] a\n', 'work.md': '- [ ] job\n' });
+    await env.user.click(env.screen.getAllByRole('button', { name: '名前を変更' })[1]);
+    const input = env.screen.getByRole('textbox', { name: '埋め込み先の新しいファイル名（.md を除く）' });
+    changeDuringRename(env.adapter, 'tasks.md', '- [ ] new\n- ![[a.md]]\n- ![[work.md]]\n');
+    await env.user.type(input, '{Control>}a{/Control}jobs{Enter}');
+    await waitFor(() => expect(env.screen.getByText('jobs.md に名前を変更しました。Undo の履歴は消去しました。')).toBeTruthy());
+    expect(await env.saved('tasks.md')).toBe('- [ ] new\n- ![[a.md]]\n- ![[jobs.md]]\n');
+    expect(env.adapter.files.get('a.md')).toBe('- [ ] a\n');
+  });
+
+  it.each([
+    ['no line', '- [ ] replaced\n'],
+    ['two lines', '- [ ] new\n- ![[work.md]]\n- [ ] other\n  - ![[work.md]]\n'],
+  ])('leaves the text unchanged when %s of the changed file embed the old name', async (_, external) => {
+    const env = await setup({ 'tasks.md': '- ![[work.md]]\n', 'work.md': '- [ ] job\n' });
+    const input = await startRename(env);
+    changeDuringRename(env.adapter, 'tasks.md', external);
+    await env.user.type(input, '{Control>}a{/Control}jobs{Enter}');
+    await waitFor(() => expect(env.screen.getByText('jobs.md に名前を変更しましたが、リンクを更新できませんでした。元の名前の埋め込みが1つに定まらないため、本文は変更していません。')).toBeTruthy());
+    await flush();
+    expect(env.adapter.files.get('tasks.md')).toBe(external);
+    expect(env.adapter.files.has('jobs.md')).toBe(true);
+  });
+
+  it('shows another loaded file that still embeds the old name as missing', async () => {
+    const env = await setup({ 'tasks.md': '- ![[work.md]]\n', 'other.md': '- [ ] keep\n- ![[work.md]]\n', 'work.md': '- [ ] job\n' });
+    const files = env.screen.getByRole('combobox', { name: '開くファイル' });
+    await env.user.selectOptions(files, 'other.md');
+    await env.user.selectOptions(files, 'tasks.md');
+    await env.user.type(await startRename(env), '{Control>}a{/Control}jobs{Enter}');
+    await waitFor(() => expect(env.adapter.files.get('tasks.md')).toBe('- ![[jobs.md]]\n'));
+    await env.user.selectOptions(files, 'other.md');
+    await waitFor(() => expect(env.screen.getByText('ファイルを開けません。保存先とファイル名を確認してください。')).toBeTruthy());
+    expect(env.title('keep')).toBeTruthy();
+    expect(env.adapter.files.get('other.md')).toBe('- [ ] keep\n- ![[work.md]]\n');
+  });
+
   it('offers no rename when the host cannot rename files', async () => {
     const { screen } = await setup({ 'tasks.md': '- ![[work.md]]\n', 'work.md': '- [ ] job\n' }, { canCreate: false });
     expect(screen.queryByRole('button', { name: '名前を変更' })).toBeNull();
