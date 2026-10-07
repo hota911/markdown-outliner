@@ -16,10 +16,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: lts/*
-          # The npm cache needs a lockfile; skip caching while the project has no dependencies.
-          cache: ${{ hashFiles('package-lock.json') != '' && 'npm' || '' }}
-      - name: Install dependencies
-        if: hashFiles('package-lock.json') != ''
-        run: npm ci
+          cache: npm
+      - run: npm ci
       - run: npm test
       - run: npm run build

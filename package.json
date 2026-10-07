@@ -9,8 +9,16 @@
     "url": "https://github.com/hota911/markdown-outliner.git"
   },
   "scripts": {
-    "test": "node --test test/core.test.js test/server.test.mjs test/obsidian.test.mjs test/package-plugin.test.mjs",
+    "test": "npm run test:node && npm run test:ui",
+    "test:node": "node --test test/core.test.js test/server.test.mjs test/obsidian.test.mjs test/package-plugin.test.mjs",
+    "test:ui": "vitest run",
     "build": "node scripts/package-plugin.mjs",
     "start": "node server.mjs"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/user-event": "^14.6.7",
+    "jsdom": "^29.1.1",
+    "vitest": "^5.0.3"
   }
 }
