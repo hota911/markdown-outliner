@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - name: Check tag matches versions
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          node -e '
+            const tag = process.env.TAG;
+            const read = (f) => JSON.parse(require("fs").readFileSync(f, "utf8"));
+            const errors = [];
+            for (const f of ["manifest.json", "package.json"]) {
+              if (read(f).version !== tag) errors.push(f + " version is " + read(f).version + ", tag is " + tag);
+            }
+            if (!(tag in read("versions.json"))) errors.push("versions.json has no entry for " + tag);
+            if (errors.length) {
+              console.error(errors.join("\n"));
+              process.exit(1);
+            }
+          '
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Create GitHub Release
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$TAG" dist/main.js dist/manifest.json dist/styles.css \
+            --title "$TAG" --generate-notes
