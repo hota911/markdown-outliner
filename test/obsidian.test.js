@@ -240,7 +240,7 @@ test('Obsidian の表示言語でコマンド名・表示名・エラーを切�
   const ja = await fixture();
   assert.equal(ja.plugin.commands[0].name, 'アウトライナーを開く');
   assert.equal(ja.plugin.ribbons[0].name, 'アウトライナーを開く');
-  assert.equal(ja.view.getDisplayText(), 'Markdown アウトライナー');
+  assert.equal(ja.view.getDisplayText(), 'Markdown Outliner');
   assert.equal(ja.mounts.at(-1).options.language, 'ja');
 
   const en = await fixture({ language: 'en' });

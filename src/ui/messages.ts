@@ -411,13 +411,13 @@ const ja: Messages = {
   },
 
   web: {
-    title: 'Markdown アウトライナー',
+    title: 'Markdown Outliner',
     requestFailed: '操作に失敗しました。',
     preferencesUnreadable: 'ブックマークを読み込めません。ブラウザの保存設定を確認してください。',
   },
 
   obsidian: {
-    viewTitle: 'Markdown アウトライナー',
+    viewTitle: 'Markdown Outliner',
     openOutliner: 'アウトライナーを開く',
     vaultRelativePath: 'Vault 内の Markdown を Vault からの相対パスで指定してください。',
     fileMissing: '参照先の Markdown がありません。',
