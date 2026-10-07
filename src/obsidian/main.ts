@@ -1,6 +1,6 @@
 import { ItemView, Notice, Plugin, Scope, normalizePath, type TFile, type WorkspaceLeaf } from 'obsidian';
-import { mountOutliner } from './ui/mount.ts';
-import type { Doc, Mounted, Preferences } from './ui/types.ts';
+import { mountOutliner } from '../ui/mount.ts';
+import type { Doc, Mounted, Preferences } from '../ui/types.ts';
 
 const VIEW_TYPE = 'markdown-outliner';
 

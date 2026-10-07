@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test, vi } from 'vitest';
 import * as core from '../src/core.ts';
-import MarkdownOutlinerPlugin from '../src/main.ts';
+import MarkdownOutlinerPlugin from '../src/obsidian/main.ts';
 
 // These tests exercise the plugin boundary, not the native Obsidian application.
 // fixture() replaces these arrays per test; the mocks below push into them.
