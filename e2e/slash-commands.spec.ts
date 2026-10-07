@@ -41,6 +41,22 @@ test('Escape closes the menu and keeps the text', async ({ openOutliner, page })
   await expect(field).toBeFocused();
 });
 
+test('# lists the tags in use, and Enter inserts the chosen one', async ({ openOutliner, page }) => {
+  const outliner = await openOutliner('- [ ] Trip #travel\n- [ ] Read #reading\n- [ ] Plan\n');
+  const field = page.getByRole('textbox', { name: 'Item text' }).nth(2);
+  await field.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' #');
+  await expect(menu(page).getByRole('option')).toHaveText(['#reading', '#travel']);
+  await page.keyboard.type('tr');
+  await expect(menu(page).getByRole('option')).toHaveText(['#travel']);
+  await page.keyboard.press('Enter');
+  await expect(menu(page)).toBeHidden();
+  await page.keyboard.type('x');
+  await expect(field).toHaveValue('Plan #travel x');
+  await expect.poll(outliner.saved).toBe('- [ ] Trip #travel\n- [ ] Read #reading\n- [ ] Plan #travel x\n');
+});
+
 test.describe('embedding a file', () => {
   let workspace: string;
   const servers: Server[] = [];

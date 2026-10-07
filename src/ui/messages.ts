@@ -91,7 +91,7 @@ const en = {
 
   opening: 'Opening file…',
   noFiles: 'There are no Markdown files in this folder.',
-  help: '↑↓: move the cursor · Enter: add (at the start of the text: above) · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several · / at the start or after a space: commands',
+  help: '↑↓: move the cursor · Enter: add (at the start of the text: above) · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several · / or # at the start or after a space: commands or tags',
   closeToast: 'Close notification',
 
   bookmarks: {
@@ -151,10 +151,12 @@ const en = {
   },
 
   // The menu that `/` opens in an item's text. A command matches the typed text by its label or
-  // keywords in either language, so `/done` and `/完了` both work in both.
+  // keywords in either language, so `/done` and `/完了` both work in both. `#` opens the same menu
+  // with the tags in use.
   slash: {
     commands: 'Commands',
     files: 'File to embed',
+    tags: 'Tags',
     command: {
       todo: { label: 'Not started', keywords: 'todo open' },
       'in-progress': { label: 'In progress', keywords: 'doing wip start' },
@@ -338,7 +340,7 @@ const ja: Messages = {
 
   opening: 'ファイルを開いています…',
   noFiles: 'このフォルダには Markdown ファイルがありません。',
-  help: '↑↓: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択 · 先頭か空白の後の /: コマンド',
+  help: '↑↓: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択 · 先頭か空白の後の / と #: コマンドとタグ',
   closeToast: '通知を閉じる',
 
   bookmarks: {
@@ -399,6 +401,7 @@ const ja: Messages = {
   slash: {
     commands: 'コマンド',
     files: '埋め込むファイル',
+    tags: 'タグ',
     // The hiragana readings keep a command matching while an IME still shows the reading.
     command: {
       todo: { label: '未着手', keywords: 'みちゃくしゅ タスク たすく' },

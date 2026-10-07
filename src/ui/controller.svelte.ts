@@ -24,9 +24,10 @@ export interface Drop {
 }
 
 type SlashCommand = keyof Messages['slash']['command'];
-// The `/` menu of a title. `start` is the offset of the `/`, and the text after it up to the caret
-// is `query`. The 'files' step lists the files to embed, filtered by the same query.
-interface Slash { path: string; line: number; start: number; query: string; step: 'commands' | 'files'; index: number; files: string[] }
+// The `/` or `#` menu of a title. `start` is the offset of the `/` or `#`, and the text after it up
+// to the caret is `query`. The 'files' step lists the files to embed, filtered by the same query.
+// The 'tags' step, opened by `#`, lists the tags in use (`tags`, sorted).
+interface Slash { path: string; line: number; start: number; query: string; step: 'commands' | 'files' | 'tags'; index: number; files: string[]; tags: string[] }
 export interface SlashMenu { id: string; label: string; options: { id: string; label: string }[]; index: number }
 // Gives each outliner its own option ids; Obsidian can show several outliners in one document.
 let slashMenus = 0;
@@ -36,6 +37,9 @@ let slashMenus = 0;
 function foldKana(text: string) {
   return text.normalize('NFKC').toLowerCase().replace(/[ァ-ヶ]/g, char => String.fromCharCode(char.charCodeAt(0) - 0x60));
 }
+
+const trigger = (slash: Slash) => slash.step === 'tags' ? '#' : '/';
+const sortTags = (tags: Iterable<string>) => [...new Set(tags)].sort((a, b) => a.localeCompare(b));
 
 // The path of `target` relative to the folder of `from`, as embeds are written (see normalize).
 function relativePath(from: string, target: string) {
@@ -698,11 +702,11 @@ export class Controller {
     if (status) this.mutate(path, text => core.updateStatus(text, row.line, nextStatus(status)), field);
   });
 
-  // --- The `/` menu -------------------------------------------------------------------------
+  // --- The `/` and `#` menus -----------------------------------------------------------------
 
-  // Opens, filters or closes the menu after input in a title. Only an ASCII `/` typed at the
-  // start or after whitespace opens it, so `A/B`, URLs and paths do not, and never an IME:
-  // neither its full-width `／` nor the input events that commit a composition.
+  // Opens, filters or closes the menu after input in a title. Only an ASCII `/` or `#` typed at
+  // the start or after whitespace opens it, so `A/B`, URLs and paths do not, and never an IME:
+  // neither its full-width `／` or `＃` nor the input events that commit a composition.
   private slashInput(path: string, line: number, node: HTMLTextAreaElement, event: InputEvent | null) {
     const value = node.value, caret = node.selectionStart;
     const slash = this.slash;
@@ -711,7 +715,7 @@ export class Controller {
       // not hold. The query runs to the end of the selection; the menu is checked again when the
       // composition ends.
       const end = node.selectionEnd, query = value.slice(slash.start + 1, end);
-      if (value[slash.start] === '/' && end > slash.start && !/\s/.test(query) && query !== slash.query) {
+      if (value[slash.start] === trigger(slash) && end > slash.start && !/\s/.test(query) && query !== slash.query) {
         slash.query = query;
         slash.index = 0;
       }
@@ -719,19 +723,43 @@ export class Controller {
     }
     if (slash?.path === path && slash.line === line) {
       const query = value.slice(slash.start + 1, caret);
-      if (value[slash.start] === '/' && caret > slash.start && node.selectionEnd === caret && !/\s/.test(query)) {
+      if (value[slash.start] === trigger(slash) && caret > slash.start && node.selectionEnd === caret && !/\s/.test(query)) {
         if (query !== slash.query) { slash.query = query; slash.index = 0; }
         return;
       }
       this.slash = null;
     }
-    if (event?.inputType !== 'insertText' || event.data !== '/' || event.isComposing || this.composing) return;
-    if (value[caret - 1] === '/' && (caret === 1 || /\s/.test(value[caret - 2]))) {
-      this.slash = { path, line, start: caret - 1, query: '', step: 'commands', index: 0, files: [] };
+    if (event?.inputType !== 'insertText' || (event.data !== '/' && event.data !== '#') || event.isComposing || this.composing) return;
+    if (value[caret - 1] === event.data && (caret === 1 || /\s/.test(value[caret - 2]))) {
+      const start = caret - 1;
+      if (event.data === '/') {
+        this.slash = { path, line, start, query: '', step: 'commands', index: 0, files: [], tags: [] };
+        return;
+      }
+      // Without the `#` just typed, so that text right after it (`#|word`) is not offered as a tag.
+      const typed = core.updateTitle(this.docs.get(path)!.text, line, value.slice(0, start) + value.slice(caret)).text;
+      const loaded = [...this.docs].flatMap(([key, doc]) => core.tagsIn(key === path ? typed : doc.text));
+      this.slash = { path, line, start, query: '', step: 'tags', index: 0, files: [], tags: sortTags(loaded) };
+      this.adapter.tags?.().then(tags => {
+        const current = this.slash;
+        if (current?.step === 'tags' && current.path === path && current.line === line && current.start === start) current.tags = sortTags([...current.tags, ...tags]);
+      }).catch((error: unknown) => this.showToast(this.describe(error)));
     }
   }
 
   private slashOptions(slash: Slash) {
+    if (slash.step === 'tags') {
+      // Tags starting with the query come first, then the ones containing it, each alphabetically.
+      const query = foldKana(slash.query);
+      const folded = slash.tags.map(tag => ({ tag, folded: foldKana(tag) }));
+      const matches = [
+        ...folded.filter(({ folded }) => folded.startsWith(query)),
+        ...folded.filter(({ folded }) => !folded.startsWith(query) && folded.includes(query)),
+      ].map(({ tag }) => tag);
+      // A tag typed out in full is no suggestion on its own: the menu closes and Enter stays Enter.
+      if (matches.length === 1 && matches[0] === slash.query) return [];
+      return matches.map(tag => ({ id: tag, label: '#' + tag }));
+    }
     const query = slash.step === 'files' ? slash.query.toLowerCase() : foldKana(slash.query);
     if (slash.step === 'files') {
       return slash.files.filter(file => file !== slash.path && file.toLowerCase().includes(query)).map(file => ({ id: file, label: file }));
@@ -753,7 +781,8 @@ export class Controller {
     if (slash?.path !== path || slash.line !== line) return null;
     const options = this.slashOptions(slash);
     if (!options.length) return null;
-    return { id: this.slashId, label: slash.step === 'files' ? this.t.slash.files : this.t.slash.commands, options, index: Math.min(slash.index, options.length - 1) };
+    const label = slash.step === 'files' ? this.t.slash.files : slash.step === 'tags' ? this.t.slash.tags : this.t.slash.commands;
+    return { id: this.slashId, label, options, index: Math.min(slash.index, options.length - 1) };
   }
 
   // Returns whether the key was used by the menu.
@@ -797,7 +826,21 @@ export class Controller {
     // A tap during an IME composition commits the word first, as the touch bar does.
     if (this.composing) node.blur();
     const value = node.value, end = Math.max(start + 1, node.selectionStart);
-    if (value[start] !== '/') { this.slash = null; return; }
+    if (value[start] !== trigger(slash)) { this.slash = null; return; }
+    if (slash.step === 'tags') {
+      // `#query` becomes `#tag` and a space, unless whitespace follows already; the caret goes after it.
+      const rest = value.slice(end), tag = '#' + id + (/^\s/.test(rest) ? '' : ' ');
+      const caret = start + tag.length + (/^\s/.test(rest) ? 1 : 0);
+      // mutate does not render when the text stays the same (the tag was typed out before a space).
+      this.slash = null;
+      this.mutate(path, text => core.updateTitle(text, line, value.slice(0, start) + tag + rest), 'title');
+      const focused = this.activeElement instanceof HTMLTextAreaElement && this.activeElement.dataset.field === 'title' ? this.activeElement : node;
+      if (focused.isConnected) {
+        if (this.activeElement !== focused) focused.focus();
+        focused.setSelectionRange(caret, caret);
+      }
+      return;
+    }
     // At the end of the text, the space typed before the `/` goes too.
     const title = value.slice(end) ? value.slice(0, start) + value.slice(end) : value.slice(0, start).trimEnd();
     const strip = (text: string) => core.updateTitle(text, line, title).text;
