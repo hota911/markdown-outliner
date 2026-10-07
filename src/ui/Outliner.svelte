@@ -1,8 +1,7 @@
 <script lang="ts">
   import Bookmarks from './Bookmarks.svelte';
   import Outline from './Outline.svelte';
-  import type { Status } from '../core.ts';
-  import { filters, statusIcons, statuses, syncValue, type Controller } from './controller.svelte.ts';
+  import { filterIcons, filters, statuses, syncValue, type Controller } from './controller.svelte.ts';
   import type { StatusFilter } from './types.ts';
 
   let { ctrl }: { ctrl: Controller } = $props();
@@ -52,8 +51,8 @@
         </select>
         <select aria-label={ctrl.t.toolbar.filter} value={view.filter} onchange={event => ctrl.setFilter(event.currentTarget.value as StatusFilter)}>
           {#each filters as value (value)}
-            <!-- A native option can only hold text, so a status shows the same glyph as the item's status button. -->
-            <option {value}>{value in statusIcons ? statusIcons[value as Status] + ' ' : ''}{ctrl.t.filter[value]}</option>
+            <!-- A native option can only hold text, so the icon is a glyph; the name leaves it out for screen readers. -->
+            <option {value} aria-label={ctrl.t.filter[value]}>{filterIcons[value] ? filterIcons[value] + ' ' : ''}{ctrl.t.filter[value]}</option>
           {/each}
         </select>
         <div class="search-box">
