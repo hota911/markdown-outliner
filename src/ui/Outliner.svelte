@@ -122,6 +122,8 @@
     <main class="outline">
       {#if view.outline}
         <Outline {ctrl} outline={view.outline} />
+      {:else if view.noFiles}
+        <div class="empty">{ctrl.t.noFiles}</div>
       {:else}
         <div class="empty">{ctrl.t.opening}</div>
       {/if}
