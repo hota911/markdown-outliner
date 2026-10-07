@@ -5,8 +5,8 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 import svelteConfig from './svelte.config.js';
 
-// Code that runs in Node (web server, build scripts, configs, tests), not in the plugin.
-const nodeFiles = ['server.mjs', 'scripts/**', 'test/**', '*.config.{js,mjs,ts}'];
+// Code that runs in Node (web server, build scripts, configs, tests, Playwright tests), not in the plugin.
+const nodeFiles = ['server.mjs', 'scripts/**', 'test/**', 'e2e/**', '*.config.{js,mjs,ts}'];
 
 // obsidianmd scopes its type-checked rules (typescript-eslint recommendedTypeChecked,
 // no-unsanitized, the obsidianmd rules and the eslint-comments restrictions) to TypeScript

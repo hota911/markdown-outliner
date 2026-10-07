@@ -52,16 +52,19 @@ The UI is written in Svelte 5 and TypeScript and built with Vite. Open developme
 npm ci              # install the development tools
 npm run dev         # Vite dev server with hot reload and the file API on http://127.0.0.1:5173/
 npm run lint        # ESLint with eslint-plugin-obsidianmd and eslint-plugin-svelte
-npm run typecheck   # svelte-check over src/ and the Vite configs
+npm run typecheck   # svelte-check over src/, e2e/ and the Vite and Playwright configs
 npm test            # run test:node and test:ui
 npm run test:node   # core, row key, server and packaging tests with node --test
 npm run test:ui     # screen tests (test/ui/) and Obsidian adapter tests with Vitest and jsdom
+npm run test:e2e    # build the web app, then run the drag and drop tests (e2e/) in Chromium with Playwright
 npm run build       # write dist/web/ and the plugin files dist/main.js, manifest.json, styles.css
 ```
 
 `npm run dev` edits `samples/` by default; set `OUTLINER_WORKSPACE` to a folder or a single Markdown file to edit something else.
 
-The screen tests drive the rendered DOM with keyboard and pointer events against an in-memory file adapter, and check the saved Markdown. CI runs lint, typecheck, `npm test` and `npm run build` on pull requests and on pushes to `main`.
+The screen tests drive the rendered DOM with keyboard and pointer events against an in-memory file adapter, and check the saved Markdown. jsdom has no layout or drag and drop, so dragging is tested with Playwright instead: each test in `e2e/` writes a Markdown file to a temporary folder, starts `server.mjs` on it, drags with the mouse in Chromium, and checks the file on disk. `npm test` does not include these tests because they need a browser. Before the first run, download Chromium with `npx playwright install chromium`.
+
+CI runs lint, typecheck, `npm test`, `npm run test:e2e` and `npm run build` on pull requests and on pushes to `main`.
 
 Source layout:
 
@@ -74,6 +77,7 @@ Source layout:
 - `vite.config.ts`: the plugin build (a single CommonJS `main.js`).
 - `vite.web.config.ts`: the web app build and dev server.
 - `scripts/package-plugin.mjs`: builds the plugin and copies `manifest.json` and `styles.css` into `dist/`.
+- `e2e/`: Playwright tests in Chromium (drag and drop); `playwright.config.ts` configures them.
 
 The plugin build bundles Svelte and the shared code into `main.js`, so the released `main.js` only requires `obsidian`.
 
