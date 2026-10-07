@@ -24,7 +24,7 @@ export default defineConfig({
     copyPublicDir: false,
     sourcemap: false,
     lib: {
-      entry: 'src/main.ts',
+      entry: 'src/obsidian/main.ts',
       formats: ['cjs'],
       fileName: () => 'main.js',
     },

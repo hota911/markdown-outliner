@@ -67,7 +67,7 @@ Source layout:
 
 - `src/core.ts`: Markdown parsing and editing operations, shared by both versions.
 - `src/ui/`: the outliner UI, shared by both versions. `controller.svelte.ts` holds the editing state and operations, the `.svelte` files render it, and `mount.ts` mounts it into an element.
-- `src/main.ts`: the Obsidian plugin entry point.
+- `src/obsidian/`: the Obsidian plugin entry point (`main.ts`).
 - `src/web/`: the standalone web page.
 - `src/styles.css`: styles for both versions.
 - `server.mjs`: the local web server and file API, also mounted by the dev server.
