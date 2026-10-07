@@ -1,7 +1,6 @@
-'use strict';
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const core = require('../src/core.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as core from '../src/core.ts';
 
 test('編集中の項目は条件から外れても祖先とともに残る', () => {
   const text = '- [ ] parent\n  - [x] editing #old\n  - [ ] matching #new\n';
@@ -103,10 +102,6 @@ test('タブによる階層と末尾への追加を扱う', () => {
 test('空行を挟む兄弟の移動とインデントで原文の空行を保持する', () => {
   assert.deepEqual(core.move('- A\n\n- B\n', 0, 'down'), { text: '- B\n\n- A\n', line: 2 });
   assert.equal(core.indent('- A\n\n- B\n', 2).text, '- A\n\n  - B\n');
-});
-
-test('ブラウザー向けの共通 API も公開する', () => {
-  assert.equal(globalThis.OutlinerCore, core);
 });
 
 test('前との結合は片方のノートと子を保持する', () => {
