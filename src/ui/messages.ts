@@ -399,16 +399,17 @@ const ja: Messages = {
   slash: {
     commands: 'コマンド',
     files: '埋め込むファイル',
+    // The hiragana readings keep a command matching while an IME still shows the reading.
     command: {
-      todo: { label: '未着手', keywords: 'みちゃくしゅ タスク' },
-      'in-progress': { label: '進行中', keywords: 'しんこうちゅう 着手' },
-      done: { label: '完了', keywords: 'かんりょう 済み' },
-      task: { label: 'タスクにする', keywords: 'たすく チェック' },
+      todo: { label: '未着手', keywords: 'みちゃくしゅ タスク たすく' },
+      'in-progress': { label: '進行中', keywords: 'しんこうちゅう 着手 ちゃくしゅ' },
+      done: { label: '完了', keywords: 'かんりょう 済み すみ' },
+      task: { label: 'タスクにする', keywords: 'たすく チェック ちぇっく' },
       bullet: { label: '箇条書きにする', keywords: 'かじょうがき' },
-      note: { label: 'ノート', keywords: 'のーと メモ' },
-      zoom: { label: 'ズーム', keywords: 'ずーむ 開く' },
-      extract: { label: 'ファイルにする', keywords: 'ふぁいる 切り出す' },
-      embed: { label: '既存のファイルを埋め込む', keywords: 'うめこみ ふぁいる' },
+      note: { label: 'ノート', keywords: 'のーと メモ めも' },
+      zoom: { label: 'ズーム', keywords: 'ずーむ 開く ひらく' },
+      extract: { label: 'ファイルにする', keywords: 'ふぁいる 切り出す きりだす' },
+      embed: { label: '既存のファイルを埋め込む', keywords: 'うめこみ うめこむ ふぁいる' },
     },
   },
 

@@ -31,6 +31,12 @@ export interface SlashMenu { id: string; label: string; options: { id: string; l
 // Gives each outliner its own option ids; Obsidian can show several outliners in one document.
 let slashMenus = 0;
 
+// Folds text for matching commands: full-width and half-width forms (NFKC), case, and katakana to
+// hiragana, so `ノート`, `のーと` and `ﾉｰﾄ` match each other.
+function foldKana(text: string) {
+  return text.normalize('NFKC').toLowerCase().replace(/[ァ-ヶ]/g, char => String.fromCharCode(char.charCodeAt(0) - 0x60));
+}
+
 // The path of `target` relative to the folder of `from`, as embeds are written (see normalize).
 function relativePath(from: string, target: string) {
   const folder = from.split('/').slice(0, -1), parts = target.split('/');
@@ -533,7 +539,13 @@ export class Controller {
     return {
       onfocus: (event: FocusEvent) => this.focusField(path, row().line, field, event.currentTarget as HTMLTextAreaElement),
       oncompositionstart: () => { this.composing = true; },
-      oncompositionend: () => { this.composing = false; this.scheduleSave(); },
+      oncompositionend: (event: CompositionEvent) => {
+        this.composing = false;
+        // Some browsers send no input event after the composition ends; check the menu against
+        // the committed text here.
+        if (field === 'title') this.slashInput(path, row().line, event.currentTarget as HTMLTextAreaElement, null);
+        this.scheduleSave();
+      },
       oninput: (event: Event) => this.inputField(path, row().line, field, event.currentTarget as HTMLTextAreaElement, event as InputEvent),
       onblur: () => this.blurField(),
       onkeydown: (event: KeyboardEvent) => this.keydownField(path, row(), field, event.currentTarget as HTMLTextAreaElement, event),
@@ -694,6 +706,17 @@ export class Controller {
   private slashInput(path: string, line: number, node: HTMLTextAreaElement, event: InputEvent | null) {
     const value = node.value, caret = node.selectionStart;
     const slash = this.slash;
+    if (slash?.path === path && slash.line === line && (this.composing || event?.isComposing)) {
+      // While an IME converts, the clause being converted is selected, so the caret rules below do
+      // not hold. The query runs to the end of the selection; the menu is checked again when the
+      // composition ends.
+      const end = node.selectionEnd, query = value.slice(slash.start + 1, end);
+      if (value[slash.start] === '/' && end > slash.start && !/\s/.test(query) && query !== slash.query) {
+        slash.query = query;
+        slash.index = 0;
+      }
+      return;
+    }
     if (slash?.path === path && slash.line === line) {
       const query = value.slice(slash.start + 1, caret);
       if (value[slash.start] === '/' && caret > slash.start && node.selectionEnd === caret && !/\s/.test(query)) {
@@ -709,7 +732,7 @@ export class Controller {
   }
 
   private slashOptions(slash: Slash) {
-    const query = slash.query.toLowerCase();
+    const query = slash.step === 'files' ? slash.query.toLowerCase() : foldKana(slash.query);
     if (slash.step === 'files') {
       return slash.files.filter(file => file !== slash.path && file.toLowerCase().includes(query)).map(file => ({ id: file, label: file }));
     }
@@ -720,7 +743,7 @@ export class Controller {
     const commands = (Object.keys(this.t.slash.command) as SlashCommand[]).filter(command =>
       !(command === 'task' && row.kind === 'task' || command === 'bullet' && row.kind !== 'task' || command === 'zoom' && zoomed));
     return commands
-      .filter(command => [messages.en, messages.ja].some(({ slash }) => (slash.command[command].label + ' ' + slash.command[command].keywords).toLowerCase().includes(query)))
+      .filter(command => [messages.en, messages.ja].some(({ slash }) => foldKana(slash.command[command].label + ' ' + slash.command[command].keywords).includes(query)))
       .map(command => ({ id: command, label: this.t.slash.command[command].label }));
   }
 

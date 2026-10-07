@@ -41,6 +41,80 @@ describe('opening the / menu', () => {
   });
 });
 
+describe('typing a command with an IME', () => {
+  // Sets the text as an IME does while composing: the reading, then the converted clause selected.
+  const compose = (node, value, start, end = start) => {
+    node.value = value;
+    node.setSelectionRange(start, end);
+    fireEvent.input(node, { inputType: 'insertCompositionText', data: value.slice(value.indexOf('/') + 1), isComposing: true });
+  };
+
+  it('shows a command for its reading in hiragana while composing', async () => {
+    const { user, screen, title } = await setup({ 'tasks.md': '- [ ] Plan\n' });
+    await user.type(title('Plan'), ' /');
+    const node = title('Plan /');
+    fireEvent.compositionStart(node);
+    compose(node, 'Plan /かんりょう', 11);
+    await waitFor(() => expect(options(screen)).toEqual(['完了']));
+  });
+
+  it('keeps the menu open while the clause is converted, and Enter runs the command after the commit', async () => {
+    const { user, screen, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] Plan\n' });
+    await user.type(title('Plan'), ' /');
+    const node = title('Plan /');
+    fireEvent.compositionStart(node);
+    compose(node, 'Plan /かんりょう', 11);
+    // Space converts the reading, and the browser selects the converted clause.
+    compose(node, 'Plan /完了', 6, 8);
+    await waitFor(() => expect(options(screen)).toEqual(['完了']));
+    // The Enter that commits the composition does not run the command.
+    fireEvent.keyDown(node, { key: 'Enter', keyCode: 229, isComposing: true });
+    node.setSelectionRange(8, 8);
+    fireEvent.compositionEnd(node, { data: '完了' });
+    expect(titleValues()).toEqual(['Plan /完了']);
+    await waitFor(() => expect(options(screen)).toEqual(['完了']));
+    expect(optionNodes(screen)[0].getAttribute('aria-selected')).toBe('true');
+    await user.keyboard('{Enter}');
+    expect(menu(screen)).toBeNull();
+    expect(await saved()).toBe('- [x] Plan\n');
+  });
+
+  it('keeps the menu open from `/のーと` to the converted `/ノート`, and Enter opens the note', async () => {
+    const { user, screen, title } = await setup({ 'tasks.md': '- [ ] \n' });
+    await user.type(title(''), '/');
+    const node = title('/');
+    fireEvent.compositionStart(node);
+    compose(node, '/のーと', 4);
+    await waitFor(() => expect(options(screen)).toEqual(['ノート']));
+    compose(node, '/ノート', 1, 4);
+    await waitFor(() => expect(options(screen)).toEqual(['ノート']));
+    node.setSelectionRange(4, 4);
+    fireEvent.compositionEnd(node, { data: 'ノート' });
+    await waitFor(() => expect(options(screen)).toEqual(['ノート']));
+    await user.keyboard('{Enter}');
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: '項目のノート' }));
+  });
+
+  it('matches katakana, hiragana and half-width forms of a command alike', async () => {
+    const { user, screen, title } = await setup({ 'tasks.md': '- [ ] \n' });
+    await user.type(title(''), '/ﾉｰﾄ');
+    expect(options(screen)).toEqual(['ノート']);
+    await user.keyboard('{Backspace>3/}カンリョウ');
+    expect(options(screen)).toEqual(['完了']);
+  });
+
+  it('closes the menu when the committed text has a space', async () => {
+    const { user, screen, title } = await setup({ 'tasks.md': '- [ ] Plan\n' });
+    await user.type(title('Plan'), ' /');
+    const node = title('Plan /');
+    fireEvent.compositionStart(node);
+    compose(node, 'Plan /完了　', 9);
+    expect(menu(screen)).toBeTruthy();
+    fireEvent.compositionEnd(node);
+    await waitFor(() => expect(menu(screen)).toBeNull());
+  });
+});
+
 describe('using the / menu', () => {
   it('filters by the English and Japanese labels and keywords', async () => {
     const { user, screen, title } = await setup({ 'tasks.md': '- [ ] \n' });
