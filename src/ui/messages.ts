@@ -217,6 +217,8 @@ const en = {
   obsidian: {
     viewTitle: 'Markdown Outliner',
     openOutliner: 'Open outliner',
+    openAsOutline: 'Open as outline',
+    openAsMarkdown: 'Open as Markdown',
     vaultRelativePath: 'Specify a Markdown file in the vault by its path relative to the vault.',
     fileMissing: 'The Markdown file does not exist.',
     externalChange: 'The file changed outside the outliner. Copy your input, then reload.',
@@ -419,6 +421,8 @@ const ja: Messages = {
   obsidian: {
     viewTitle: 'Markdown Outliner',
     openOutliner: 'アウトライナーを開く',
+    openAsOutline: 'アウトラインで開く',
+    openAsMarkdown: 'Markdown で開く',
     vaultRelativePath: 'Vault 内の Markdown を Vault からの相対パスで指定してください。',
     fileMissing: '参照先の Markdown がありません。',
     externalChange: '外部で変更されています。入力をコピーしてから読み直してください。',

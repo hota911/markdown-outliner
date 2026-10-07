@@ -13,6 +13,7 @@
     "dev": "vite --config vite.web.config.ts",
     "build": "npm run build:web && npm run build:plugin",
     "build:plugin": "node scripts/package-plugin.mjs",
+    "dev:plugin": "node scripts/dev-plugin.mjs",
     "build:web": "vite build --config vite.web.config.ts",
     "test": "npm run test:node && npm run test:ui",
     "test:node": "node --test test/core.test.mjs test/keys.test.mjs test/server.test.mjs test/package-plugin.test.mjs test/version-bump.test.mjs",
@@ -24,6 +25,9 @@
     "version": "node scripts/version-bump.mjs && git add manifest.json versions.json",
     "prestart": "npm run build:web",
     "start": "node server.mjs"
+  },
+  "overrides": {
+    "moment": "^2.31.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -13,7 +13,9 @@ test('packaged plugin loads with only the Obsidian external module', async () =>
   const commands = [];
   const views = [];
   class Plugin {
+    app = { workspace: { on: () => ({}) }, vault: { on: () => ({}) } };
     async loadData() { return null; }
+    registerEvent() {}
     registerView(type) { views.push(type); }
     addCommand(command) { commands.push(command); }
     addRibbonIcon() {}
@@ -24,11 +26,11 @@ test('packaged plugin loads with only the Obsidian external module', async () =>
     require: name => {
       assert.equal(name, 'obsidian');
       // An Obsidian older than 1.8.7, which has no getLanguage().
-      return { Plugin, ItemView: class {}, Notice: class {}, Scope: class {}, normalizePath: value => value, requireApiVersion: () => false };
+      return { Plugin, ItemView: class {}, FileView: class {}, MarkdownView: class {}, TFile: class {}, Notice: class {}, Scope: class {}, normalizePath: value => value, requireApiVersion: () => false };
     }
   });
   await new module.exports().onload();
-  assert.deepEqual(views, ['markdown-outliner']);
+  assert.deepEqual(views, ['markdown-outliner', 'markdown-outliner-file']);
   assert.equal(commands[0].id, 'open-outliner');
   assert.equal(commands[0].name, 'Open outliner');
   assert.equal(commands[0].hotkeys, undefined);

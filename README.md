@@ -32,6 +32,8 @@ Headings, code blocks, and other non-list content are preserved but not shown.
 
 Open the outliner from the ribbon icon or the command "Open outliner" ("アウトライナーを開く" in Japanese). The plugin edits any `.md` file in the vault. Unsaved input is kept in memory while the plugin is enabled; save before quitting Obsidian or disabling the plugin. The plugin has been used on desktop; mobile has not been tested.
 
+Experimental: a single file can also open as an outline in its own tab. Choose "Open as outline" ("アウトラインで開く") from a `.md` file's menu, or run the command of the same name to switch the active Markdown editor to the outline. From a tab's own menu it switches that tab; from the file explorer or a link's menu it opens a new tab. The tab is titled with the file name, works with back and forward navigation, and is restored when Obsidian restarts. "Open as Markdown" in the tab's menu switches it back to the regular editor. The file picker in the toolbar still lists the whole vault, so it can show another file inside the same tab.
+
 ## Web version
 
 Requires Node.js 24 or later.
@@ -51,6 +53,7 @@ The UI is written in Svelte 5 and TypeScript and built with Vite. Open developme
 ```sh
 npm ci              # install the development tools
 npm run dev         # Vite dev server with hot reload and the file API on http://127.0.0.1:5173/
+npm run dev:plugin  # watch mode: rebuild the Obsidian plugin into $OBSIDIAN_VAULT/.obsidian/plugins/markdown-outliner/
 npm run lint        # ESLint with eslint-plugin-obsidianmd and eslint-plugin-svelte
 npm run typecheck   # svelte-check over src/, e2e/ and the Vite and Playwright configs
 npm test            # run test:node and test:ui
@@ -61,6 +64,8 @@ npm run build       # write dist/web/ and the plugin files dist/main.js, manifes
 ```
 
 `npm run dev` edits `samples/` by default; set `OUTLINER_WORKSPACE` to a folder or a single Markdown file to edit something else.
+
+`npm run dev:plugin` loads the in-progress build into Obsidian. Set `OBSIDIAN_VAULT` to the path of a vault (a folder with `.obsidian/`); the script exits with a message if it is unset or the folder is not a vault. It rebuilds `main.js` on every source change and copies `manifest.json` and `styles.css` next to it. Obsidian does not notice the new files by itself: install the [Hot Reload](https://github.com/pjeby/hot-reload) community plugin and add an empty `.hotreload` file to the plugin folder so it reloads on change, or toggle Markdown Outliner off and on in Obsidian's community plugin settings after each build.
 
 The screen tests drive the rendered DOM with keyboard and pointer events against an in-memory file adapter, and check the saved Markdown. jsdom has no layout or drag and drop, so dragging is tested with Playwright instead: each test in `e2e/` writes a Markdown file to a temporary folder, starts `server.mjs` on it, drags with the mouse in Chromium, and checks the file on disk. `npm test` does not include these tests because they need a browser. Before the first run, download Chromium with `npx playwright install chromium`.
 
