@@ -58,6 +58,18 @@ export const syncValue = (value: () => string) => (node: HTMLInputElement | HTML
   if (node.value !== next) node.value = next;
 };
 
+// Blank lines at the end of a note cannot be kept in the Markdown: they would separate the note
+// from what follows rather than belong to it. They are left out of the file, and the textarea
+// being typed in keeps them, so Enter at the end of a note starts a new line.
+export const noteText = (value: string) => value.replace(/(?:\n[ \t]*)+$/, '');
+
+// syncValue for a note textarea; the focused one keeps the blank lines typed at its end.
+export const syncNote = (value: () => string) => (node: HTMLTextAreaElement) => {
+  const next = value();
+  if (node === node.ownerDocument.activeElement && noteText(node.value) === next) return;
+  if (node.value !== next) node.value = next;
+};
+
 export interface ItemView {
   key: string;
   path: string;
@@ -407,7 +419,7 @@ export class Controller {
   private inputEdit(path: string, line: number, field: Field, value: string) {
     const doc = this.docs.get(path)!;
     let result: core.EditResult;
-    try { result = field === 'note' ? core.updateNote(doc.text, line, value) : core.updateTitle(doc.text, line, value); }
+    try { result = field === 'note' ? core.updateNote(doc.text, line, noteText(value)) : core.updateTitle(doc.text, line, value); }
     catch (error) {
       this.message = this.describe(error);
       this.notice = this.message;
@@ -530,7 +542,14 @@ export class Controller {
         this.scheduleSave();
       },
       oninput: (event: Event) => this.inputField(path, row().line, field, event.currentTarget as HTMLTextAreaElement, event as InputEvent),
-      onblur: () => this.blurField(),
+      onblur: (event: FocusEvent) => {
+        // The blank lines kept at the end of a note while it was typed in are not in the file.
+        if (field === 'note') {
+          const node = event.currentTarget as HTMLTextAreaElement;
+          node.value = noteText(node.value);
+        }
+        this.blurField();
+      },
       onkeydown: (event: KeyboardEvent) => this.keydownField(path, row(), field, event.currentTarget as HTMLTextAreaElement, event),
     };
   }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import Item from './Item.svelte';
   import SlashMenu from './SlashMenu.svelte';
-  import { syncValue, type Controller, type OutlineView } from './controller.svelte.ts';
+  import { syncNote, syncValue, type Controller, type OutlineView } from './controller.svelte.ts';
 
   let { ctrl, outline }: { ctrl: Controller; outline: OutlineView } = $props();
 
@@ -62,7 +62,7 @@
       {#if zoom.showNote}
         <textarea
           class="note-input zoom-note"
-          {@attach syncValue(() => zoom.row.note)}
+          {@attach syncNote(() => zoom.row.note)}
           rows={Math.max(1, Math.min(8, zoom.row.note.split('\n').length))}
           aria-label={ctrl.t.outline.zoomNote}
           data-path={path}

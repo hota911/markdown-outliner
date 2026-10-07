@@ -3,7 +3,7 @@
   import Outline from './Outline.svelte';
   import SlashMenu from './SlashMenu.svelte';
   import type { Controller, Drop, ItemView } from './controller.svelte.ts';
-  import { syncValue } from './controller.svelte.ts';
+  import { syncNote, syncValue } from './controller.svelte.ts';
   import { parseInline } from './inline.ts';
 
   let { ctrl, item }: { ctrl: Controller; item: ItemView } = $props();
@@ -36,7 +36,15 @@
     if ((event.target as Element).closest('a') || !field) return;
     const caret = document.caretPositionFromPoint?.(event.clientX, event.clientY);
     const leaf = caret?.offsetNode.nodeType === Node.TEXT_NODE ? caret.offsetNode.parentElement?.closest<HTMLElement>('[data-start]') : null;
-    const offset = caret && leaf ? Number(leaf.dataset.start) + caret.offset : field.value.length;
+    let offset = caret && leaf ? Number(leaf.dataset.start) + caret.offset : field.value.length;
+    if (caret && leaf && caret.offset === leaf.textContent.length) {
+      // At the end of the last text of a line, the caret also goes past the closing markers
+      // (`**`, a backtick), so Enter or typing at the end of the line stays outside the markup.
+      const leaves = [...(event.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-start]')];
+      const next = leaves[leaves.indexOf(leaf) + 1];
+      if (!next) offset = field.value.length;
+      else if (next.textContent.startsWith('\n')) offset = Number(next.dataset.start);
+    }
     field.focus();
     field.setSelectionRange(offset, offset);
   }
@@ -102,7 +110,7 @@
           aria-activedescendant={slashMenu ? slashMenu.id + '-' + slashMenu.index : undefined}
           {...titleEvents}
           onfocus={event => { titleEvents.onfocus(event); editing = true; }}
-          onblur={event => { editing = false; shownTitle = event.currentTarget.value; titleEvents.onblur(); }}
+          onblur={event => { editing = false; shownTitle = event.currentTarget.value; titleEvents.onblur(event); }}
         ></textarea>
         {#if slashMenu}
           <SlashMenu {ctrl} menu={slashMenu} />
@@ -128,7 +136,7 @@
         <textarea
           bind:this={noteNode}
           class="note-input"
-          {@attach syncValue(() => item.row.note)}
+          {@attach syncNote(() => item.row.note)}
           placeholder={ctrl.t.item.notePlaceholder}
           rows={Math.max(1, Math.min(8, item.row.note.split('\n').length))}
           aria-label={ctrl.t.item.noteLabel}
@@ -137,7 +145,7 @@
           data-field="note"
           {...noteEvents}
           onfocus={event => { noteEvents.onfocus(event); noteEditing = true; }}
-          onblur={event => { noteEditing = false; shownNote = event.currentTarget.value; noteEvents.onblur(); }}
+          onblur={event => { noteEditing = false; noteEvents.onblur(event); shownNote = event.currentTarget.value; }}
         ></textarea>
         {#if noteDisplay !== null}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
