@@ -149,6 +149,19 @@ const en = {
     childrenEnd: (title: string) => `End of the children of ${title}`,
   },
 
+  // The bar shown above the soft keyboard on touch screens, for the keys a soft keyboard lacks.
+  touchBar: {
+    label: 'Edit the item',
+    indent: 'Indent (Tab)',
+    outdent: 'Outdent (Shift+Tab)',
+    moveUp: 'Move up (Alt+↑)',
+    moveDown: 'Move down (Alt+↓)',
+    status: 'Change the task status',
+    note: 'Switch between text and note (Shift+Enter)',
+    undo: 'Undo the last change',
+    redo: 'Redo the undone change',
+  },
+
   edit: {
     embedRelativePath: 'Use a relative path inside the folder for the embedded file.',
     embedOutsideFolder: 'The embedded file is outside the folder.',
@@ -361,6 +374,18 @@ const ja: Messages = {
     extractTitle: '項目を子とノートごと新しいファイルへ移して埋め込みにする',
     extract: 'ファイルにする',
     childrenEnd: title => title + ' の子項目の末尾',
+  },
+
+  touchBar: {
+    label: '項目の編集',
+    indent: '字下げ（Tab）',
+    outdent: '字下げを戻す（Shift+Tab）',
+    moveUp: '上へ移動（Alt+↑）',
+    moveDown: '下へ移動（Alt+↓）',
+    status: 'タスクの状態を切り替える',
+    note: '本文とノートを切り替える（Shift+Enter）',
+    undo: '直前の変更を元に戻す',
+    redo: '元に戻した変更をやり直す',
   },
 
   edit: {

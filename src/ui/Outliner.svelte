@@ -17,6 +17,21 @@
     }
   }
 
+  const touchCommands = $derived([
+    { icon: '⇤', label: ctrl.t.touchBar.outdent, run: () => ctrl.indentActive(true) },
+    { icon: '⇥', label: ctrl.t.touchBar.indent, run: () => ctrl.indentActive(false) },
+    { icon: '↑', label: ctrl.t.touchBar.moveUp, run: () => ctrl.moveActive('up') },
+    { icon: '↓', label: ctrl.t.touchBar.moveDown, run: () => ctrl.moveActive('down') },
+    { icon: '◐', label: ctrl.t.touchBar.status, run: ctrl.cycleActiveStatus },
+    { icon: '¶', label: ctrl.t.touchBar.note, run: ctrl.toggleActiveNote },
+    { icon: '↶', label: ctrl.t.touchBar.undo, run: () => ctrl.historyFromTouchBar(true) },
+    { icon: '↷', label: ctrl.t.touchBar.redo, run: () => ctrl.historyFromTouchBar(false) },
+  ]);
+
+  function keepFocus(event: Event) {
+    event.preventDefault();
+  }
+
   function copyConflict(path: string, event: MouseEvent & { currentTarget: HTMLButtonElement }) {
     ctrl.copyConflict(path, event.currentTarget.parentElement!.querySelector<HTMLTextAreaElement>('.local-copy')!);
   }
@@ -111,6 +126,14 @@
         <div class="empty">{ctrl.t.opening}</div>
       {/if}
     </main>
+    <!-- Shown by styles.css only on touch screens while an item field has focus. Pressing a button must
+         not take the focus from the field, or the soft keyboard would close, so the bar is not focusable. -->
+    <!-- svelte-ignore a11y_interactive_supports_focus -->
+    <div class="touch-bar" role="toolbar" aria-label={ctrl.t.touchBar.label} onpointerdown={keepFocus} onmousedown={keepFocus}>
+      {#each touchCommands as command (command.label)}
+        <button type="button" tabindex="-1" title={command.label} aria-label={command.label} onclick={command.run}>{command.icon}</button>
+      {/each}
+    </div>
     <footer class="help">{ctrl.t.help}</footer>
   </div>
 </div>

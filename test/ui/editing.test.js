@@ -87,6 +87,17 @@ describe('keyboard structure editing', () => {
     expect(adapter.files.get('tasks.md')).toBe('- [ ] a\n');
   });
 
+  // Soft keyboards keep the word being typed in composition; the touch bar commits it first.
+  it('the touch bar indents an item whose title is in IME composition, and the title keeps the focus', async () => {
+    const { user, screen, title, saved } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n' });
+    const node = title('b');
+    await user.click(node);
+    fireEvent.compositionStart(node);
+    await user.click(screen.getByRole('button', { name: '字下げ（Tab）' }));
+    expect(document.activeElement).toBe(title('b'));
+    expect(await saved()).toBe('- [ ] a\n  - [ ] b\n');
+  });
+
   it('Tab indents and Shift+Tab outdents', async () => {
     const { user, title, saved } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n' });
     await user.click(title('b'));
