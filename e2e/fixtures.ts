@@ -8,15 +8,21 @@ import { createOutlinerServer } from '../server.mjs';
 
 export { expect };
 
-export interface Outliner {
-  /** The Markdown file on disk, as the server saved it. */
-  saved: () => Promise<string>;
+/** Reads and drags the items of the outliner on a page. Shared with the Obsidian tests (obsidian-e2e/). */
+export interface OutlineItems {
   /** Item titles in screen order. */
   titles: () => Promise<string[]>;
   /** The ⠿ handle of the item with this title. */
   handle: (title: string) => Promise<Locator>;
+  /** The line of the item with this title. */
+  line: (title: string) => Promise<Locator>;
   /** Drags the item with this title by its handle and drops it on the line of `target`. */
   drag: (title: string, target: string, at: DropPoint) => Promise<void>;
+}
+
+export interface Outliner extends OutlineItems {
+  /** The Markdown file on disk, as the server saved it. */
+  saved: () => Promise<string>;
 }
 
 /**
@@ -45,6 +51,28 @@ async function box(locator: Locator) {
   return result;
 }
 
+// The item labels are English, so the page must show the English UI.
+export function outlineItems(page: Page): OutlineItems {
+  const handle = async (title: string) => (await itemLine(page, title)).line.getByTitle('Select, or drag to move');
+  return {
+    titles: () => page.getByRole('textbox', { name: itemText }).evaluateAll(nodes => nodes.map(node => (node as HTMLTextAreaElement).value)),
+    handle,
+    line: async title => (await itemLine(page, title)).line,
+    drag: async (title, target, at) => {
+      const source = await box(await handle(title));
+      const { field, line } = await itemLine(page, target);
+      const lineBox = await box(line);
+      const titleLeft = (await box(field)).x;
+      const y = lineBox.y + lineBox.height * { before: 0.1, after: 0.9, child: 0.5 }[at.edge];
+      const x = titleLeft + 8 - (at.outdent ?? 0) * 24;
+      await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(x, y, { steps: 10 });
+      await page.mouse.up();
+    },
+  };
+}
+
 export const test = base.extend<{ openOutliner: (markdown: string) => Promise<Outliner> }>({
   openOutliner: async ({ page }, use) => {
     const workspace = await mkdtemp(path.join(tmpdir(), 'markdown-outliner-e2e-'));
@@ -58,25 +86,7 @@ export const test = base.extend<{ openOutliner: (markdown: string) => Promise<Ou
       // server.mjs accepts only this exact Host header, not localhost.
       await page.goto(`http://127.0.0.1:${(server.address() as AddressInfo).port}/`);
       await expect(page.getByRole('textbox', { name: itemText }).first()).toBeVisible();
-
-      const handle = async (title: string) => (await itemLine(page, title)).line.getByTitle('Select, or drag to move');
-      return {
-        saved: () => readFile(file, 'utf8'),
-        titles: () => page.getByRole('textbox', { name: itemText }).evaluateAll(nodes => nodes.map(node => (node as HTMLTextAreaElement).value)),
-        handle,
-        drag: async (title, target, at) => {
-          const source = await box(await handle(title));
-          const { field, line } = await itemLine(page, target);
-          const lineBox = await box(line);
-          const titleLeft = (await box(field)).x;
-          const y = lineBox.y + lineBox.height * { before: 0.1, after: 0.9, child: 0.5 }[at.edge];
-          const x = titleLeft + 8 - (at.outdent ?? 0) * 24;
-          await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
-          await page.mouse.down();
-          await page.mouse.move(x, y, { steps: 10 });
-          await page.mouse.up();
-        },
-      };
+      return { saved: () => readFile(file, 'utf8'), ...outlineItems(page) };
     });
     for (const server of servers) await new Promise(resolve => server.close(resolve));
     await rm(workspace, { recursive: true });
