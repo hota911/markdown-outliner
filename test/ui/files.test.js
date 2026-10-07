@@ -1,0 +1,110 @@
+import { describe, expect, it } from 'vitest';
+import { waitFor } from '@testing-library/dom';
+import { flush, setup } from './harness.js';
+
+describe('extract to file', () => {
+  it('moves the item with its children into a new file and embeds it', async () => {
+    const { user, screen, row, adapter } = await setup({
+      'notes/tasks.md': '- [ ] Plan trip #travel\n  - [ ] book hotel\n- [ ] other\n',
+      'notes/Plan trip.md': '- [ ] existing\n',
+    }, { initialFile: 'notes/tasks.md' });
+    await user.click(row('Plan trip #travel').getByRole('button', { name: 'ファイルにする' }));
+    await waitFor(() => expect(screen.getByText('Plan trip 2.md を作成しました。Undo の履歴は消去しました。')).toBeTruthy());
+    expect(adapter.files.get('notes/Plan trip 2.md')).toBe('- [ ] Plan trip #travel\n  - [ ] book hotel\n');
+    expect(adapter.files.get('notes/tasks.md')).toBe('- ![[Plan trip 2.md]]\n- [ ] other\n');
+    expect(screen.getByText('ファイル: Plan trip 2.md')).toBeTruthy();
+  });
+
+  it('explains that a new file cannot be made when the adapter cannot create files', async () => {
+    const { user, screen, row, adapter } = await setup({ 'tasks.md': '- [ ] a\n' }, { canCreate: false });
+    await user.click(row('a').getByRole('button', { name: 'ファイルにする' }));
+    expect(screen.getByText('ファイルを指定して開いたときは新しいファイルを作れません。')).toBeTruthy();
+    expect([...adapter.files.keys()]).toEqual(['tasks.md']);
+  });
+});
+
+describe('embeds', () => {
+  it('edits an embedded file in place and saves it to that file', async () => {
+    const { user, title, saved, adapter } = await setup({
+      'tasks.md': '- ![[sub/work.md]]\n',
+      'sub/work.md': '- [ ] embedded\n',
+    });
+    await user.type(title('embedded'), ' task');
+    expect(await saved('sub/work.md')).toBe('- [ ] embedded task\n');
+    expect(adapter.files.get('tasks.md')).toBe('- ![[sub/work.md]]\n');
+  });
+
+  it('shows a notice for a circular embed', async () => {
+    const { screen } = await setup({ 'tasks.md': '- ![[tasks.md]]\n' });
+    expect(screen.getByText('このファイルはすでに埋め込まれています。循環する埋め込みは表示できません。')).toBeTruthy();
+  });
+});
+
+describe('undo and redo', () => {
+  it('undoes and redoes a structural edit with the toolbar buttons', async () => {
+    const { user, screen, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] a\n' });
+    await user.click(title('a'));
+    await user.keyboard('{Enter}b');
+    expect(titleValues()).toEqual(['a', 'b']);
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(titleValues()).toEqual(['a', '']);
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(titleValues()).toEqual(['a']);
+    await user.click(screen.getByRole('button', { name: 'Redo' }));
+    expect(titleValues()).toEqual(['a', '']);
+    expect(await saved()).toBe('- [ ] a\n- [ ] \n');
+  });
+
+  it('Ctrl+Z undoes and Ctrl+Shift+Z redoes', async () => {
+    const { user, title, titleValues } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n' });
+    await user.click(title('b'));
+    await user.keyboard('{Tab}');
+    await user.keyboard('{Control>}z{/Control}');
+    expect(titleValues()).toEqual(['a', 'b']);
+    expect(title('b').closest('.outline-item').style.getPropertyValue('--depth')).toBe('0');
+    // Undo re-renders without restoring focus, so the shortcut needs focus inside the outliner again.
+    await user.click(title('a'));
+    await user.keyboard('{Control>}{Shift>}z{/Shift}{/Control}');
+    expect(title('b').closest('.outline-item').style.getPropertyValue('--depth')).toBe('1');
+  });
+});
+
+describe('external changes and conflicts', () => {
+  it('keeps the input and shows a conflict when the file changed before saving', async () => {
+    const { user, screen, title, adapter } = await setup({ 'tasks.md': '- [ ] a\n' });
+    await user.type(title('a'), 'b');
+    adapter.externalWrite('tasks.md', '- [ ] changed elsewhere\n');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(screen.getByText('tasks.md に外部の変更があります。入力内容を残しています。必要ならコピーしてから外部の内容を開いてください。')).toBeTruthy());
+    expect(screen.getByRole('textbox', { name: 'tasks.md の保存前の入力内容' }).value).toBe('- [ ] ab\n');
+    expect(screen.getByText(/保存競合 1 ファイル/)).toBeTruthy();
+    expect(adapter.files.get('tasks.md')).toBe('- [ ] changed elsewhere\n');
+  });
+
+  it('"外部の内容を開く" switches to the external content, and Undo brings the input back', async () => {
+    const { user, screen, title, titleValues, adapter } = await setup({ 'tasks.md': '- [ ] a\n' });
+    await user.type(title('a'), 'b');
+    adapter.externalWrite('tasks.md', '- [ ] changed elsewhere\n');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(await screen.findByRole('button', { name: '外部の内容を開く' }));
+    await waitFor(() => expect(titleValues()).toEqual(['changed elsewhere']));
+    expect(screen.queryByRole('textbox', { name: 'tasks.md の保存前の入力内容' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(titleValues()).toEqual(['ab']);
+  });
+
+  it('shows an external change to an unedited file after leaving the field', async () => {
+    const { user, title, titleValues, adapter } = await setup({ 'tasks.md': '- [ ] a\n' });
+    await user.click(title('a'));
+    adapter.externalWrite('tasks.md', '- [ ] from agent\n');
+    title('a').blur();
+    await flush();
+    expect(titleValues()).toEqual(['from agent']);
+  });
+
+  it('picks up external changes periodically', async () => {
+    const { titleValues, adapter } = await setup({ 'tasks.md': '- [ ] a\n' });
+    adapter.externalWrite('tasks.md', '- [ ] polled\n');
+    await waitFor(() => expect(titleValues()).toEqual(['polled']), { timeout: 4000 });
+  });
+});

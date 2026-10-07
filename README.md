@@ -45,9 +45,14 @@ Then open `http://127.0.0.1:<port>/` (default port 4317). Without arguments the 
 ## Development
 
 ```sh
-npm test        # run all tests with node --test
+npm ci          # install the test tools (Vitest, jsdom, Testing Library)
+npm test        # run test:node and test:ui
+npm run test:node  # core, server, Obsidian adapter and packaging tests with node --test
+npm run test:ui    # screen tests of the shared UI with Vitest and jsdom (test/ui/)
 npm run build   # write main.js, manifest.json, styles.css to dist/
 ```
+
+The screen tests drive the rendered DOM with keyboard and pointer events against an in-memory file adapter, and check the saved Markdown. They pin the current UI behaviour so that a rewrite of `src/ui.js` can be checked against them. CI runs `npm test` and `npm run build` on pull requests and on pushes to `main`.
 
 Source layout:
 
