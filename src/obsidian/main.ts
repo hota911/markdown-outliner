@@ -18,7 +18,8 @@ function bindCompleteShortcut(view: ItemView, mounted: () => Mounted | null) {
 }
 
 // Mounts the outliner into the view with an adapter over the whole vault, so embeds in any
-// folder can be read and saved. `initialFile` is the file shown first.
+// folder can be read and saved. `initialFile` is the file shown first; without it the outliner
+// reopens the last file shown, or else the first file of the vault.
 function mountInView(view: ItemView, plugin: MarkdownOutlinerPlugin, drafts: Map<string, Doc>, initialFile?: string): Mounted {
   const vault = view.app.vault;
   const t = plugin.t.obsidian;

@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - External changes were never shown while a field kept its focus across a switch to another browser tab or window, and the status still said the file was saved. The status now says that a change is waiting, and the change is shown when you leave the field or return to the tab or window, with the cursor kept on the same item.
 - Item titles wrapped after a few characters and the view scrolled horizontally in narrow panes such as an Obsidian tab, because hidden row buttons reserved space on every line. The buttons now float over the line on hover and appear below the line while you edit its title. Hidden buttons can no longer be clicked by accident.
 - The bar for selected items (Not started / In progress / ...) wraps instead of overflowing at narrow widths.
+- The outliner always opened `tasks.md` first, and listed it in the file picker even when the folder or vault had no such file. It now reopens the file shown last, or the first Markdown file in the list if that file is gone, and shows a message when there are no Markdown files. A file opened explicitly, such as an "Open as outline" tab or a single file given to the web server, still opens directly.
 
 ## [0.1.2] - 2026-10-07
 

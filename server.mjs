@@ -33,7 +33,8 @@ export async function createOutlinerApi(workspace) {
     throw new Error('Specify a Markdown file or a folder.');
   }
   const root = selectedFile ? path.dirname(selectedFile) : selected;
-  const initialFile = selectedFile ? path.basename(selectedFile) : 'tasks.md';
+  // Only a single selected file is opened first; for a folder the page picks the file.
+  const initialFile = selectedFile ? path.basename(selectedFile) : undefined;
   const token = randomBytes(24).toString('hex');
   const busy = new Set();
   const config = { token, initialFile, canCreate: !selectedFile, preferencesKey: 'markdown-outliner:' + revisionOf(selected) };

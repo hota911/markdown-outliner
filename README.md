@@ -30,7 +30,7 @@ Headings, code blocks, and other non-list content are preserved but not shown.
 2. Put them in `<vault>/.obsidian/plugins/markdown-outliner/`.
 3. Reload Obsidian and enable "Markdown Outliner" in Settings > Community plugins.
 
-Open the outliner from the ribbon icon or the command "Open outliner" ("アウトライナーを開く" in Japanese). The plugin edits any `.md` file in the vault. Unsaved input is kept in memory while the plugin is enabled; save before quitting Obsidian or disabling the plugin. The plugin has been used on desktop; on phones see [Touch screens](#touch-screens).
+Open the outliner from the ribbon icon or the command "Open outliner" ("アウトライナーを開く" in Japanese). The plugin edits any `.md` file in the vault, and opens the file shown last, or the first Markdown file of the vault. Unsaved input is kept in memory while the plugin is enabled; save before quitting Obsidian or disabling the plugin. The plugin has been used on desktop; on phones see [Touch screens](#touch-screens).
 
 Experimental: a single file can also open as an outline in its own tab. Choose "Open as outline" ("アウトラインで開く") from a `.md` file's menu, or run the command of the same name to switch the active Markdown editor to the outline. From a tab's own menu it switches that tab; from the file explorer or a link's menu it opens a new tab. The tab is titled with the file name, works with back and forward navigation, and is restored when Obsidian restarts. "Open as Markdown" in the tab's menu switches it back to the regular editor. The file picker in the toolbar still lists the whole vault, so it can show another file inside the same tab.
 
@@ -56,7 +56,7 @@ npm run build:web
 node server.mjs [folder-or-file] [port]
 ```
 
-Then open `http://127.0.0.1:<port>/` (default port 4317). Without arguments the server edits the bundled `samples/` folder in place, so copy it first if you want to keep the originals. Passing a single `.md` file restricts the server to that file. The server only listens on 127.0.0.1, serves the built app from `dist/web/`, and bookmarks are stored in the browser's local storage. `npm start` builds the web app and runs the server with the defaults.
+Then open `http://127.0.0.1:<port>/` (default port 4317). Without arguments the server edits the bundled `samples/` folder in place, so copy it first if you want to keep the originals. Passing a single `.md` file restricts the server to that file. For a folder, the page opens the file shown last, or the first Markdown file of the folder. The server only listens on 127.0.0.1, serves the built app from `dist/web/`, and bookmarks and the file shown last are stored in the browser's local storage. `npm start` builds the web app and runs the server with the defaults.
 
 ## Development
 
