@@ -21,6 +21,24 @@
     ctrl.dragOver(item.path, event.currentTarget as HTMLElement, event, destination);
   }
 
+  // Inline rename of the embedded file: only the base name is edited; the folder and .md stay.
+  let renaming = $state(false);
+  const baseName = (embed: string) => embed.replace(/^.*[/\\]/, '').replace(/\.md$/, '');
+  const focusAll = (node: HTMLInputElement) => { node.focus(); node.select(); };
+
+  function renameKey(event: KeyboardEvent) {
+    // Keeps outline shortcuts from acting on the item while the name is typed.
+    event.stopPropagation();
+    // keyCode 229 is the only IME signal some browsers give for the key that ends composition.
+    if (event.isComposing || event.keyCode === 229) return;
+    if (event.key === 'Escape') { event.preventDefault(); renaming = false; return; }
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const value = (event.currentTarget as HTMLInputElement).value;
+    renaming = false;
+    void ctrl.renameEmbed(item.path, item.row.line, value);
+  }
+
   function displayClick(event: MouseEvent) {
     if ((event.target as Element).closest('a') || !titleNode) return;
     titleNode.focus();
@@ -41,7 +59,26 @@
           <div class="notice">{item.embed.error}</div>
         {:else}
           {@const target = item.embed.target!}
-          <button type="button" class="quiet" title={ctrl.t.outline.openEmbeddedTitle} onclick={() => ctrl.openFile(target)}>{ctrl.t.outline.openEmbedded}</button>
+          {#if renaming}
+            <div class="rename-embed">
+              <input
+                class="rename-input"
+                aria-label={ctrl.t.outline.renameLabel}
+                value={baseName(item.row.embed!)}
+                {@attach focusAll}
+                onkeydown={renameKey}
+                onblur={() => { renaming = false; }}
+              /><span class="rename-suffix">.md</span>
+              <span class="rename-hint">{ctrl.t.outline.renameHint}</span>
+            </div>
+          {:else}
+            <div class="embed-actions">
+              <button type="button" class="quiet" title={ctrl.t.outline.openEmbeddedTitle} onclick={() => ctrl.openFile(target)}>{ctrl.t.outline.openEmbedded}</button>
+              {#if ctrl.canRename && item.embed.outline?.kind === 'outline'}
+                <button type="button" class="quiet" title={ctrl.t.outline.renameTitle} onclick={() => { renaming = true; }}>{ctrl.t.outline.rename}</button>
+              {/if}
+            </div>
+          {/if}
           <Outline {ctrl} outline={item.embed.outline!} />
         {/if}
       </div>

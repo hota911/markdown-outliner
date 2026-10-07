@@ -6,7 +6,8 @@ import { mountOutliner } from '../../src/ui/mount.ts';
 
 // In-memory stand-in for the web server / Obsidian vault adapters.
 // Revisions are counters so that any external write, even with equal text, is detected.
-export function memoryAdapter(initial, { canCreate = true } = {}) {
+// `rewriteLinks` mimics Obsidian's link update on rename, which writes the link without `.md`.
+export function memoryAdapter(initial, { canCreate = true, rewriteLinks = false } = {}) {
   const files = new Map(Object.entries(initial));
   const revisions = new Map([...files.keys()].map(path => [path, 1]));
   const saves = [];
@@ -37,6 +38,20 @@ export function memoryAdapter(initial, { canCreate = true } = {}) {
       files.set(path, text);
       return { revision: bump(path) };
     };
+    adapter.rename = async (path, newPath) => {
+      if (!files.has(path)) throw new Error('ファイルがありません: ' + path);
+      if (files.has(newPath)) throw new Error('すでにあります: ' + newPath);
+      files.set(newPath, files.get(path));
+      revisions.set(newPath, revisions.get(path));
+      files.delete(path);
+      revisions.delete(path);
+      if (!rewriteLinks) return;
+      const name = file => file.split('/').pop();
+      for (const [file, text] of files) {
+        const next = text.split('![[' + name(path) + ']]').join('![[' + name(newPath).replace(/\.md$/, '') + ']]');
+        if (next !== text) { files.set(file, next); bump(file); }
+      }
+    };
   }
   return adapter;
 }
@@ -52,9 +67,9 @@ afterEach(() => {
 // Mounts the UI on an in-memory vault and waits until the initial file is shown.
 // Existing tests are written against the Japanese UI, so Japanese is the default here.
 // `initialFile: null` mounts without an initial file, as the Obsidian view and a folder server do.
-export async function setup(initial, { initialFile = 'tasks.md', canCreate, language = 'ja', preferences = { bookmarks: [] }, savePreferences } = {}) {
+export async function setup(initial, { initialFile = 'tasks.md', canCreate, rewriteLinks, language = 'ja', preferences = { bookmarks: [] }, savePreferences } = {}) {
   const t = messages[language];
-  const adapter = memoryAdapter(initial, { canCreate });
+  const adapter = memoryAdapter(initial, { canCreate, rewriteLinks });
   const container = document.createElement('div');
   document.body.append(container);
   const app = mountOutliner(container, { adapter, initialFile: initialFile ?? undefined, language, preferences, savePreferences });

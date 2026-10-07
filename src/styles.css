@@ -97,7 +97,12 @@
 .outliner .embedded { margin: 2px 0 8px 22px; padding: 2px 0 2px 12px; background: transparent; border: 0; border-left: 1px solid var(--background-modifier-border); border-radius: 0; }
 .outliner .embed-title { font-weight: 600; color: var(--text-accent); }
 .outliner .source-label { font-size: 11px; color: var(--text-faint); margin-bottom: 2px; }
-.outliner .embedded > .quiet { font-size: 11px; padding: 0 0 4px; }
+.outliner .embed-actions { display: flex; gap: 12px; }
+.outliner .embed-actions > .quiet { font-size: 11px; padding: 0 0 4px; }
+.outliner .rename-embed { display: flex; align-items: center; gap: 2px; padding: 0 0 4px; font-size: 12px; }
+.outliner .rename-input { font-size: 12px; padding: 1px 4px; height: auto; min-width: 12em; }
+.outliner .rename-suffix { color: var(--text-muted); }
+.outliner .rename-hint { margin-left: 8px; font-size: 11px; color: var(--text-faint); }
 .outliner .notice { padding: 12px 16px; margin-top: 12px; background: rgba(var(--color-yellow-rgb), .15); color: var(--text-normal); border-radius: 8px; line-height: 1.6; }
 /* Inverted colors keep the toast distinct from the page in both light and dark themes. */
 .outliner .toast { position: fixed; right: 20px; bottom: 20px; z-index: 1000; display: flex; align-items: center; gap: 12px; max-width: min(460px, calc(100vw - 40px)); padding: 12px 16px; border-radius: 6px; background: var(--text-normal); color: var(--background-primary); box-shadow: 0 4px 18px rgba(0, 0, 0, .15); font-size: 13px; line-height: 1.5; }

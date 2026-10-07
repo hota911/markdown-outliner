@@ -11,6 +11,7 @@ The user interface is available in English and Japanese. The Obsidian plugin fol
 - Change hierarchy with Tab / Shift+Tab, move items with Alt+Up/Down or drag and drop, and select several siblings to move or update them together.
 - Zoom into an item, collapse items and embeds, and bookmark files and searches.
 - Item-level embeds such as `- ![[work.md]]` are edited in place and saved back to the embedded file. Embeds are resolved relative to the embedding file's folder.
+- Rename an embedded file from its embed header. The web version updates only that embed line, not other links to the file; Obsidian updates links as its settings say.
 - Undo / Redo, auto-save about 0.8 seconds after the last edit, and conflict handling: if a file changed on disk while you were editing it, changes to different lines are merged automatically (this clears the undo history). If both sides changed the same line, your input is kept and the differing lines are shown so you can choose which version to use there.
 - External changes are picked up every few seconds. While a field has focus, the status says that a change is waiting, and the change is shown when you leave the field or come back to the tab or window, with the cursor kept on the same item.
 

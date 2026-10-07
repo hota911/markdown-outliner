@@ -17,7 +17,7 @@ export type ServerErrorCode =
   | 'notMarkdown' | 'selectedFileOnly' | 'fileMissing' | 'outsideWorkspace' | 'fileTooLarge' | 'invalidContent'
   | 'saveBusy' | 'externalChange' | 'externalChangeBeforeSave' | 'saveRace' | 'createInSingleFile' | 'folderMissing'
   | 'createOutsideFolder' | 'fileExists' | 'badToken' | 'badOrigin' | 'contentTooLarge' | 'notFound' | 'hostRejected'
-  | 'internal';
+  | 'invalidName' | 'renameOtherFolder' | 'renameInSingleFile' | 'renameSymlink' | 'internal';
 
 const enStatus: Record<Status, string> = { todo: 'Not started', 'in-progress': 'In progress', done: 'Done' };
 const jaStatus: Record<Status, string> = { todo: '未着手', 'in-progress': '進行中', done: '完了' };
@@ -118,6 +118,10 @@ const en = {
     missing: 'Cannot open the file. Check its location and name.',
     openEmbeddedTitle: 'Open the embedded file directly',
     openEmbedded: 'Open this file',
+    renameTitle: 'Rename the embedded file',
+    rename: 'Rename',
+    renameLabel: 'New name of the embedded file, without .md',
+    renameHint: 'Enter: rename · Esc: cancel',
     zoomTitlePlaceholder: 'Enter a title',
     zoomTitle: 'Title of the zoomed item',
     zoomNoteTitle: 'Edit the note of the zoomed item',
@@ -175,6 +179,12 @@ const en = {
     untitledFile: 'Task',
     saveFailed: (detail: string) => `Could not save: ${detail}`,
     reloadKeptInput: 'Unsaved input is kept. Save, then reload.',
+    renameInvalidName: 'A file name cannot be empty, start with ".", or contain \\ / : * ? " < > | # ^ [ ].',
+    renameBusy: 'Cannot rename while saving or during a save conflict.',
+    renameUnsaved: 'Could not save the unsaved input. Save it, then rename.',
+    renameFailed: (detail: string) => `Could not rename the file: ${detail}`,
+    renameEmbedFailed: (name: string, detail: string) => `Renamed the file to ${name}, but could not update the embed: ${detail}`,
+    renamed: (name: string) => `Renamed the file to ${name}. The undo history was cleared.`,
   },
 
   core: {
@@ -207,6 +217,7 @@ const en = {
     invalidFileName: 'Invalid file name.',
     extractEmbed: 'An embed line cannot be moved to a file.',
     invalidFilter: 'Invalid status filter.',
+    notEmbed: 'There is no embed on that line.',
   } satisfies Record<CoreErrorCode, string>,
 
   server: {
@@ -229,6 +240,10 @@ const en = {
     contentTooLarge: 'The content to save is too large.',
     notFound: 'The requested page does not exist.',
     hostRejected: 'This connection is not allowed.',
+    invalidName: 'A file name cannot be empty, start with ".", or contain \\ / : * ? " < > | # ^ [ ].',
+    renameOtherFolder: 'Only the file name can be changed, not its folder.',
+    renameInSingleFile: 'Cannot rename files when a single file was opened.',
+    renameSymlink: 'Cannot rename a symbolic link.',
     internal: 'The file operation failed. Keep your input and try again.',
   } satisfies Record<ServerErrorCode, string>,
 
@@ -346,6 +361,10 @@ const ja: Messages = {
     missing: 'ファイルを開けません。保存先とファイル名を確認してください。',
     openEmbeddedTitle: '埋め込み先のファイルを直接開く',
     openEmbedded: 'このファイルを開く',
+    renameTitle: '埋め込み先のファイル名を変更',
+    rename: '名前を変更',
+    renameLabel: '埋め込み先の新しいファイル名（.md を除く）',
+    renameHint: 'Enter: 変更 · Esc: 取り消し',
     zoomTitlePlaceholder: 'タイトルを入力',
     zoomTitle: 'ズーム対象のタイトル',
     zoomNoteTitle: 'ズーム対象のノートを編集',
@@ -402,6 +421,12 @@ const ja: Messages = {
     untitledFile: 'タスク',
     saveFailed: detail => '保存できませんでした: ' + detail,
     reloadKeptInput: '未保存の入力を保持しています。保存後に再読込してください。',
+    renameInvalidName: 'ファイル名は空にできず、先頭の「.」と \\ / : * ? " < > | # ^ [ ] は使えません。',
+    renameBusy: '保存処理中または保存競合中は名前を変更できません。',
+    renameUnsaved: '未保存の入力を保存できませんでした。保存してから名前を変更してください。',
+    renameFailed: detail => 'ファイル名を変更できませんでした: ' + detail,
+    renameEmbedFailed: (name, detail) => name + ' に名前を変更しましたが、埋め込みを更新できませんでした: ' + detail,
+    renamed: name => name + ' に名前を変更しました。Undo の履歴は消去しました。',
   },
 
   core: {
@@ -434,6 +459,7 @@ const ja: Messages = {
     invalidFileName: 'ファイル名が不正です',
     extractEmbed: '埋め込みの行はファイルにできません',
     invalidFilter: 'フィルター状態が不正です',
+    notEmbed: '指定行に埋め込みがありません',
   },
 
   server: {
@@ -456,6 +482,10 @@ const ja: Messages = {
     contentTooLarge: '保存内容が大きすぎます。',
     notFound: '指定した画面がありません。',
     hostRejected: 'この接続は許可されていません。',
+    invalidName: 'ファイル名は空にできず、先頭の「.」と \\ / : * ? " < > | # ^ [ ] は使えません。',
+    renameOtherFolder: 'ファイル名だけを変更でき、フォルダーは変更できません。',
+    renameInSingleFile: 'ファイルを指定して開いたときはファイル名を変更できません。',
+    renameSymlink: 'シンボリックリンクの名前は変更できません。',
     internal: 'ファイル操作に失敗しました。入力を保持してやり直してください。',
   },
 
