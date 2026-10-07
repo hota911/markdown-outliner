@@ -7,7 +7,7 @@ The user interface is available in English and Japanese. The Obsidian plugin fol
 ## Features
 
 - Edit `- [ ]` / `- [/]` / `- [x]` tasks and plain bullets as an outline, with notes indented under each item.
-- Filter by status, tags, and title text, and keep adding tasks, children, and notes while a filter is active. New tasks get the current status and tags.
+- Filter by status, tags, and title text, and keep adding tasks, children, and notes while a filter is active. New tasks get the current status and tags. `#tags` in item text are shown like links; click one to add it to the filter (while editing the text, ⌘-click, or Ctrl-click on Windows and Linux).
 - Change hierarchy with Tab / Shift+Tab, move items with Alt+Up/Down or drag and drop, and select several siblings to move or update them together.
 - Zoom into an item, collapse items and embeds, and bookmark files and searches.
 - Type `/` at the start of an item's text or after a space to open a command menu: set the status, turn a task into a bullet or back, open the note, zoom in, move the item to a file, or embed an existing file. The text after `/` filters the commands by their English or Japanese name; Up/Down pick one, Enter, Tab or a click runs it and removes the `/` text, and Escape closes the menu and keeps the text. A `/` inside a word (`A/B`, URLs), a full-width `／`, a `/` typed with an IME, and notes do not open the menu. For "Embed existing file", the menu lists the other Markdown files to pick from; an empty item becomes the embed, otherwise the embed is added below the item. One Undo restores the item with the `/` text.

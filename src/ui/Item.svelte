@@ -2,7 +2,7 @@
   import Outline from './Outline.svelte';
   import SlashMenu from './SlashMenu.svelte';
   import type { Controller, Drop, ItemView } from './controller.svelte.ts';
-  import { linkParts, syncValue } from './controller.svelte.ts';
+  import { linkParts, syncValue, tagAt } from './controller.svelte.ts';
   import { grow } from './motion.ts';
 
   let { ctrl, item }: { ctrl: Controller; item: ItemView } = $props();
@@ -10,7 +10,7 @@
   let editing = $state(false);
   // The links follow the textarea when it loses focus, before the next render updates the row.
   let shownTitle = $derived(item.row.title);
-  const display = $derived(linkParts(shownTitle) ?? [{ text: shownTitle }]);
+  const display = $derived(linkParts(shownTitle) ?? [{ text: shownTitle, start: 0 }]);
   let titleNode: HTMLTextAreaElement | undefined = $state();
 
   const titleEvents = $derived(ctrl.fieldEvents(item.path, () => item.row, 'title'));
@@ -24,10 +24,37 @@
     ctrl.dragOver(item.path, event.currentTarget as HTMLElement, event, destination);
   }
 
+  // ⌘/Ctrl-click on a #tag adds it to the search. A plain click keeps placing the caret.
+  function filterTag(event: MouseEvent, text: string, offset: number) {
+    const tag = event.metaKey || event.ctrlKey ? tagAt(text, offset) : null;
+    if (tag === null) return false;
+    event.preventDefault();
+    ctrl.filterByTag(tag);
+    return true;
+  }
+
+  function titleClick(event: MouseEvent & { currentTarget: HTMLTextAreaElement }) {
+    // The click has already put the caret where the pointer is.
+    const node = event.currentTarget;
+    if (node.selectionStart === node.selectionEnd && filterTag(event, node.value, node.selectionStart)) node.blur();
+  }
+
+  // The rendered text covers the textarea while it is not edited: a tag adds itself to the search,
+  // and other text starts editing with the caret where it was clicked.
   function displayClick(event: MouseEvent) {
-    if ((event.target as Element).closest('a') || !titleNode) return;
+    const target = event.target as Element;
+    if (target.closest('a') || !titleNode) return;
+    const tag = target.closest<HTMLElement>('[data-tag]');
+    if (tag) {
+      ctrl.filterByTag(tag.dataset.tag!);
+      return;
+    }
+    // Engines without caretPositionFromPoint (Safari before 18.4) put the caret at the end.
+    const clicked = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+    const part = clicked?.offsetNode.parentElement?.closest<HTMLElement>('[data-start]');
+    const position = clicked && part ? Number(part.dataset.start) + clicked.offset : titleNode.value.length;
     titleNode.focus();
-    titleNode.setSelectionRange(titleNode.value.length, titleNode.value.length);
+    titleNode.setSelectionRange(position, position);
   }
 </script>
 
@@ -90,6 +117,7 @@
           aria-controls={slashMenu?.id}
           aria-activedescendant={slashMenu ? slashMenu.id + '-' + slashMenu.index : undefined}
           {...titleEvents}
+          onclick={titleClick}
           onfocus={event => { titleEvents.onfocus(event); editing = true; }}
           onblur={event => { editing = false; shownTitle = event.currentTarget.value; titleEvents.onblur(); }}
         ></textarea>
@@ -100,7 +128,7 @@
           <!-- The textarea stays the keyboard target; clicking the rendered text only forwards focus. -->
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
           <div class="title-display" onclick={displayClick}>
-            {#each display as part, index (index)}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else}{part.text}{/if}{/each}
+            {#each display as part, index (index)}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else if part.tag}<span class="tag" data-tag={part.tag}>{part.text}</span>{:else}<span data-start={part.start}>{part.text}</span>{/if}{/each}
           </div>
         {/if}
       </div>

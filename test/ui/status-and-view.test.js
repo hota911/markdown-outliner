@@ -123,6 +123,56 @@ describe('filtering', () => {
     expect(titleValues()).toEqual(['done top']);
   });
 
+  it('shows #tags like links; clicking one filters by it once, clicking other text edits', async () => {
+    const { user, screen, title, titleValues } = await setup({ 'tasks.md': text });
+    const display = title('open child #work').closest('.title-area').querySelector('.title-display');
+    const tag = within(display).getByText('#work');
+    expect(tag.classList.contains('tag')).toBe(true);
+
+    await user.click(tag);
+    expect(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }).value).toBe('#work');
+    expect(titleValues()).toEqual(['parent', 'open child #work']);
+    await user.click(within(title('open child #work').closest('.title-area')).getByText('#work'));
+    expect(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }).value).toBe('#work');
+
+    await user.click(within(title('open child #work').closest('.title-area')).getByText('open child'));
+    expect(document.activeElement).toBe(title('open child #work'));
+    expect(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }).value).toBe('#work');
+  });
+
+  // While a title is edited the textarea is on top, so ⌘/Ctrl-click finds the tag at the caret.
+  // jsdom does not place the caret from the pointer, so the tests put it where the click lands.
+  async function clickAt(node, offset, modifiers) {
+    node.focus();
+    node.setSelectionRange(offset, offset);
+    fireEvent.click(node, modifiers);
+    await flush();
+  }
+
+  it('⌘/Ctrl-click on a #tag adds it to the search once and filters right away', async () => {
+    const { user, screen, title, titleValues } = await setup({ 'tasks.md': text });
+    const search = () => screen.getByRole('searchbox', { name: '語句・タグで絞り込み' });
+    await user.type(search(), 'child{Enter}');
+    expect(titleValues()).toEqual(['parent', 'finished child', 'open child #work']);
+
+    await clickAt(title('open child #work'), 'open child #wo'.length, { metaKey: true });
+    expect(search().value).toBe('child #work');
+    expect(titleValues()).toEqual(['parent', 'open child #work']);
+
+    await clickAt(title('open child #work'), 'open child '.length, { ctrlKey: true });
+    expect(search().value).toBe('child #work');
+    expect(titleValues()).toEqual(['parent', 'open child #work']);
+  });
+
+  it('a plain click on a #tag, or ⌘-click on another word, only edits', async () => {
+    const { screen, title, titleValues } = await setup({ 'tasks.md': text });
+    await clickAt(title('doing #home'), 'doing #ho'.length, {});
+    await clickAt(title('doing #home'), 'do'.length, { metaKey: true });
+    expect(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }).value).toBe('');
+    expect(titleValues()).toEqual(['parent', 'finished child', 'open child #work', 'doing #home', 'done top']);
+    expect(document.activeElement).toBe(title('doing #home'));
+  });
+
   it('reset shows everything again', async () => {
     const { user, screen, titleValues } = await setup({ 'tasks.md': text });
     await user.type(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }), 'nothing-matches{Enter}');

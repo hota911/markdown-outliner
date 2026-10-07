@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tag suggestions: typing `#` at the start of an item's text or after a space opens the same menu with the tags in use, filtered by what follows the `#`. In Obsidian these are the tags of the whole vault; in the web version, the tags in the files the outliner has read. Choosing one inserts the tag and a space.
 - At 600px wide or narrower, the bookmarks stack above the outline instead of sitting beside it.
 - Short animations (150ms): a new item, and the children shown by expanding an item or an embedded file, slide open; the bookmarks sidebar changes its width smoothly when collapsed or expanded. Opening a file or zooming does not animate the items, the new item has the focus at once, and with the system's reduced-motion setting nothing animates.
+- `#tags` in an item's text are shown like links (in Obsidian, with the theme's tag colors). Clicking or tapping a tag adds it to the search box filter, which applies right away; a tag already in the filter is not added again. Clicking elsewhere in the text starts editing with the caret where you clicked. While the text is being edited, ⌘-click (Ctrl-click on Windows and Linux) on a tag does the same.
 
 ### Changed
 

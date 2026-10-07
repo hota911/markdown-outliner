@@ -58,18 +58,37 @@ const nextStatus = (status: Status | null) => statuses[(statuses.indexOf(status!
 
 // Only http(s) targets become anchors; any other Markdown link stays plain text.
 const markdownLink = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/;
-export interface LinkPart { text: string; href?: string }
+// A tag is a whole whitespace-separated word, the same rule the search box uses.
+// The leading space is captured rather than looked behind for, which iOS before 16.4 lacks.
+const tagWord = /(^|\s)(#[^#\s]+)(?=\s|$)/g;
+// `start` is the offset of the part in the title, so a click on the rendered text can put the caret there.
+export interface LinkPart { text: string; start: number; href?: string; tag?: string }
+
+// The title split into http(s) links, #tags and plain text; null when it has neither links nor tags.
 export function linkParts(title: string): LinkPart[] | null {
-  if (!markdownLink.test(title)) return null;
+  const links = [...title.matchAll(new RegExp(markdownLink, 'g'))]
+    .map(match => ({ start: match.index, end: match.index + match[0].length, part: { text: match[1], start: match.index, href: match[2] } }));
+  const tags = [...title.matchAll(tagWord)]
+    .map(match => ({ start: match.index + match[1].length, end: match.index + match[0].length, tag: match[2] }))
+    .map(({ start, end, tag }) => ({ start, end, part: { text: tag, start, tag: tag.slice(1) } }))
+    .filter(tag => !links.some(link => tag.start < link.end && link.start < tag.end));
+  if (!links.length && !tags.length) return null;
   const parts: LinkPart[] = [];
-  let rest = title, match;
-  while ((match = markdownLink.exec(rest))) {
-    if (match.index) parts.push({ text: rest.slice(0, match.index) });
-    parts.push({ text: match[1], href: match[2] });
-    rest = rest.slice(match.index + match[0].length);
+  let offset = 0;
+  for (const token of [...links, ...tags].sort((a, b) => a.start - b.start)) {
+    if (token.start > offset) parts.push({ text: title.slice(offset, token.start), start: offset });
+    parts.push(token.part);
+    offset = token.end;
   }
-  if (rest) parts.push({ text: rest });
+  if (offset < title.length) parts.push({ text: title.slice(offset), start: offset });
   return parts;
+}
+
+// The tag (without `#`) of the whitespace-separated word around `offset`, or null when that word
+// is not a tag. A word counts as a tag exactly when the search box would treat it as one.
+export function tagAt(text: string, offset: number): string | null {
+  const word = text.slice(0, offset).match(/\S*$/)![0] + text.slice(offset).match(/^\S*/)![0];
+  return /^#[^#\s]+$/.test(word) ? word.slice(1) : null;
 }
 
 // Attachment that writes the model value into an input on every render. A `value` attribute
@@ -1095,6 +1114,11 @@ export class Controller {
     this.kept.clear();
     this.active = null;
     this.render();
+  };
+
+  // Adds a tag to the search as if typed and applied; a tag already in the search is left as is.
+  filterByTag = (tag: string) => {
+    if (!this.tagList().includes(tag)) this.applySearch(this.searchValue() + ' #' + tag);
   };
 
   reset = () => {
