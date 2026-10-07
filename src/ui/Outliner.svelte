@@ -10,6 +10,7 @@
   const starLabel = $derived(ctrl.searchSaved ? '検索のブックマークを解除' : '検索をブックマーク');
 
   function searchKeydown(event: KeyboardEvent & { currentTarget: HTMLInputElement }) {
+    // keyCode 229 is the only IME signal some browsers give for the key that ends composition.
     if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
       event.preventDefault();
       ctrl.applySearch(event.currentTarget.value);

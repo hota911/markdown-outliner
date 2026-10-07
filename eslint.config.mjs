@@ -8,9 +8,23 @@ import svelteConfig from './svelte.config.js';
 // Code that runs in Node (web server, build scripts, configs, tests), not in the plugin.
 const nodeFiles = ['server.mjs', 'scripts/**', 'test/**', '*.config.{js,mjs,ts}'];
 
+// obsidianmd scopes its type-checked rules (typescript-eslint recommendedTypeChecked,
+// no-unsanitized, the obsidianmd rules and the eslint-comments restrictions) to TypeScript
+// file extensions, so `<script lang="ts">` in components would get none of them. Reapply
+// those blocks to .svelte files. The block that sets the TypeScript parser is skipped:
+// svelte-eslint-parser stays the outer parser and delegates the script to tseslint.parser.
+const svelteFiles = ['**/*.svelte'];
+const obsidianTypeScriptConfigs = obsidianmd.configs.recommended
+  .filter(config => config.files?.some(pattern => typeof pattern === 'string' && pattern.startsWith('**/*.{ts,')))
+  .filter(config => !config.languageOptions?.parser)
+  .map(config => ({ ...config, files: svelteFiles }));
+
 export default defineConfig([
   globalIgnores(['dist/', 'node_modules/', 'package-lock.json']),
   ...obsidianmd.configs.recommended,
+  // Turns off the core rules that TypeScript already checks, as obsidianmd does for .ts files.
+  { ...tseslint.configs.eslintRecommended, files: svelteFiles },
+  ...obsidianTypeScriptConfigs,
   // The Svelte rules need a JavaScript AST, so they must not run on the JSON files.
   ...svelte.configs.recommended.map(config => ({ files: ['**/*.{js,mjs,ts,svelte}'], ...config })),
   {

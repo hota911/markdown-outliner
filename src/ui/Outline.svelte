@@ -29,7 +29,7 @@
   <button type="button" class="quiet" title="埋め込み先のファイルを直接開く" onclick={() => ctrl.openFile(path)}>このファイルを開く</button>
 {:else if outline.kind === 'missing'}
   <div class="notice">ファイルを開けません。保存先とファイル名を確認してください。</div>
-{:else}
+{:else if outline.kind === 'outline'}
   {#if outline.zoom}
     {@const zoom = outline.zoom}
     {@const path = outline.path}
