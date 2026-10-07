@@ -28,6 +28,27 @@ test.describe('#tags in item text', () => {
     await expect(search(page)).toHaveValue('');
   });
 
+  test('with filter matches highlighted, a click edits with the caret where it was clicked and a tag still filters', async ({ openOutliner, page }) => {
+    const outliner = await openOutliner('- [ ] buy milkshake #home\n- [ ] other #work\n');
+    await search(page).fill('milk');
+    await search(page).press('Enter');
+    await expect(page.locator('.title-display mark')).toHaveText(['milk']);
+
+    // Inside the mark, and in the plain text after it, the caret lands at the clicked offset.
+    await page.locator('.title-display mark').click({ position: { x: 1, y: 8 } });
+    await page.keyboard.type('X');
+    await expect.poll(outliner.saved).toBe('- [ ] buy Xmilkshake #home\n- [ ] other #work\n');
+    // Leaving the title shows the rendered text again.
+    await search(page).click();
+    await page.locator('.title-display').getByText('shake').click({ position: { x: 1, y: 8 } });
+    await page.keyboard.type('Y');
+    await expect.poll(outliner.saved).toBe('- [ ] buy XmilkYshake #home\n- [ ] other #work\n');
+
+    await search(page).click();
+    await page.locator('.title-display .tag', { hasText: '#home' }).click();
+    await expect(search(page)).toHaveValue('milk #home');
+  });
+
   test('a tag next to a link works too', async ({ openOutliner, page }) => {
     const outliner = await openOutliner('- [ ] see [docs](https://example.com) #work\n- [ ] other #home\n');
     await page.locator('.title-display .tag', { hasText: '#work' }).click();
