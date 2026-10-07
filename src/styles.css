@@ -17,6 +17,7 @@
 .outliner .bookmark-item { display: flex; align-items: center; gap: 2px; margin-bottom: 4px; }
 .outliner .bookmark-open { flex: 1; min-width: 0; border-color: transparent; text-align: left; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
 .outliner .bookmark-item .icon { flex: 0 0 22px; }
+.outliner .bookmark-name { flex: 1; min-width: 0; font-size: 12px; }
 .outliner .bookmark-empty { font-size: 11px; color: var(--text-faint); line-height: 1.6; }
 .workspace-leaf-content .markdown-outliner-container.outliner { margin: 0; max-width: none; height: 100%; overflow: auto; padding: 16px 24px; }
 .outliner button, .outliner input, .outliner select, .outliner textarea { font: inherit; }

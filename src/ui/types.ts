@@ -27,13 +27,26 @@ export interface Doc {
 
 export type StatusFilter = 'all' | 'not-done' | Status;
 
+// The zoomed item, found again by its title: line numbers shift when the file is edited elsewhere.
+// `line` only picks the nearest item when several have the same title.
+export interface BookmarkZoom {
+  path: string;
+  line: number;
+  title: string;
+}
+
+// New bookmarks are 'view'. 'file' (file only, filters reset) and 'search' were written by 0.1.x
+// and are still read as they are.
 export interface Bookmark {
   id: string;
-  kind: 'file' | 'search';
+  kind: 'file' | 'search' | 'view';
   file: string;
   status: StatusFilter;
   tags: string[];
   searchText?: string;
+  zoom?: BookmarkZoom;
+  // Set when the user renamed the bookmark; otherwise the label is derived from the view.
+  name?: string;
 }
 
 // Loaded from user-editable storage, so bookmarks are validated before use.

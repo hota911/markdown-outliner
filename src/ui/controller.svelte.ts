@@ -4,7 +4,7 @@ import type { Status } from '../core.ts';
 import { merge3, type Side } from '../three-way-merge.ts';
 import { RowKeys, type KeyedRow } from './keys.ts';
 import { errorText, messages, type Messages } from './messages.ts';
-import type { Adapter, Bookmark, Doc, MountOptions, Preferences, Revision, StatusFilter } from './types.ts';
+import type { Adapter, Bookmark, BookmarkZoom, Doc, MountOptions, Preferences, Revision, StatusFilter } from './types.ts';
 
 export type Field = 'title' | 'note';
 type RowKind = 'task' | 'bullet';
@@ -80,7 +80,8 @@ export type OutlineView =
   | { kind: 'missing' }
   | { kind: 'outline'; path: string; zoom: ZoomView | null; items: ItemView[]; addKind: RowKind; appendLine: number | null; appendChild: boolean };
 
-export interface BookmarkView { bookmark: unknown; label: string; title: string }
+// `defaultLabel` is the label derived from the view, shown while renaming; empty for an unreadable bookmark.
+export interface BookmarkView { bookmark: unknown; label: string; title: string; defaultLabel: string }
 
 export interface View {
   fileList: string[];
@@ -103,12 +104,27 @@ export interface View {
 
 function validBookmark(bookmark: unknown): bookmark is Bookmark {
   const value = bookmark as Bookmark | null;
-  return !!value && typeof value.id === 'string' && ['file', 'search'].includes(value.kind)
+  const zoom = value?.zoom;
+  return !!value && typeof value.id === 'string' && ['file', 'search', 'view'].includes(value.kind)
     && typeof value.file === 'string' && value.file.length > 0
-    && ['all', ...statuses].includes(value.status)
+    && filters.includes(value.status)
     && Array.isArray(value.tags) && value.tags.every(tag => typeof tag === 'string')
-    && (value.searchText === undefined || typeof value.searchText === 'string');
+    && (value.searchText === undefined || typeof value.searchText === 'string')
+    && (zoom === undefined || !!zoom && typeof zoom.path === 'string' && Number.isInteger(zoom.line) && typeof zoom.title === 'string')
+    && (value.name === undefined || typeof value.name === 'string');
 }
+
+// What a bookmark restores. A 'file' bookmark of 0.1.x shows the file without filters.
+interface SavedView { file: string; status: StatusFilter; tags: string[]; searchText: string; zoom: BookmarkZoom | null }
+
+const savedView = (bookmark: Bookmark): SavedView => bookmark.kind === 'file'
+  ? { file: bookmark.file, status: 'all', tags: [], searchText: '', zoom: null }
+  : { file: bookmark.file, status: bookmark.status, tags: bookmark.tags, searchText: bookmark.searchText || '', zoom: bookmark.zoom ?? null };
+
+// The zoomed item is compared by title, the same way openBookmark() finds it again.
+const sameView = (a: SavedView, b: SavedView) => a.file === b.file && a.status === b.status
+  && JSON.stringify(a.tags) === JSON.stringify(b.tags) && a.searchText === b.searchText
+  && (a.zoom === null ? b.zoom === null : b.zoom !== null && a.zoom.path === b.zoom.path && a.zoom.title === b.zoom.title);
 
 // Saves of one file per save request, when external changes keep merging cleanly in between.
 const SAVE_ATTEMPTS = 3;
@@ -933,44 +949,65 @@ export class Controller {
     });
   }
 
-  addBookmark = (kind: 'file' | 'search') => {
+  addBookmark = () => {
     if (this.current === null) return;
     if (!Array.isArray(this.preferences.bookmarks)) {
       this.showToast(this.t.bookmarks.listUnreadable);
       return;
     }
-    const bookmark: Bookmark = {
-      id: crypto.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(36).slice(2), kind, file: this.current,
-      status: kind === 'file' ? 'all' : this.filter, tags: kind === 'file' ? [] : this.tagList(), searchText: kind === 'file' ? '' : this.textSearch.trim(),
-    };
-    if (this.preferences.bookmarks.some(saved => validBookmark(saved) && saved.kind === kind && saved.file === bookmark.file
-      && saved.status === bookmark.status && JSON.stringify(saved.tags) === JSON.stringify(bookmark.tags)
-      && (saved.searchText || '') === bookmark.searchText)) {
+    const view = this.currentView()!;
+    // One bookmark per view: the star in the search box shows and removes the bookmark of the
+    // current view, which would be ambiguous with duplicates.
+    if (this.currentViewBookmark()) {
       this.showToast(this.t.bookmarks.exists);
       return;
     }
+    const bookmark: Bookmark = {
+      id: crypto.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(36).slice(2), kind: 'view',
+      file: view.file, status: view.status, tags: view.tags, searchText: view.searchText, ...(view.zoom ? { zoom: view.zoom } : {}),
+    };
     this.preferences.bookmarks.push(bookmark);
     this.persistPreferences();
     this.render();
   };
 
-  private currentSearchBookmark() {
-    return Array.isArray(this.preferences.bookmarks) ? this.preferences.bookmarks.find(saved => validBookmark(saved)
-      && saved.kind === 'search' && saved.file === this.current && saved.status === this.filter
-      && JSON.stringify(saved.tags) === JSON.stringify(this.tagList()) && (saved.searchText || '') === this.textSearch.trim()) : undefined;
+  private currentView(): SavedView | null {
+    if (this.current === null) return null;
+    const zoom = this.zoom;
+    const zoomRow = zoom && this.docs.has(zoom.path) ? this.rows(zoom.path).find(row => row.line === zoom.line) : undefined;
+    return {
+      file: this.current, status: this.filter, tags: this.tagList(), searchText: this.textSearch.trim(),
+      zoom: zoom && zoomRow ? { path: zoom.path, line: zoom.line, title: zoomRow.title } : null,
+    };
+  }
+
+  private currentViewBookmark() {
+    const view = this.currentView();
+    return view && Array.isArray(this.preferences.bookmarks)
+      ? this.preferences.bookmarks.find(saved => validBookmark(saved) && sameView(savedView(saved), view)) : undefined;
   }
 
   private updateStar() {
-    this.searchSaved = !!this.currentSearchBookmark();
+    this.searchSaved = !!this.currentViewBookmark();
   }
 
   toggleSearchBookmark = () => {
-    const existing = this.currentSearchBookmark();
+    const existing = this.currentViewBookmark();
     if (existing) {
       this.preferences.bookmarks.splice(this.preferences.bookmarks.indexOf(existing), 1);
       this.persistPreferences();
       this.render();
-    } else this.addBookmark('search');
+    } else this.addBookmark();
+  };
+
+  // An empty name removes the custom name, so the label is derived from the view again.
+  renameBookmark = (bookmark: unknown, name: string) => {
+    if (!validBookmark(bookmark)) { this.showToast(this.t.bookmarks.invalid); return; }
+    const trimmed = name.trim();
+    if (trimmed) bookmark.name = trimmed;
+    else delete bookmark.name;
+    this.persistPreferences();
+    this.render();
   };
 
   removeBookmark = (bookmark: unknown) => {
@@ -990,21 +1027,31 @@ export class Controller {
     try { await this.loadEmbeds(bookmark.file); }
     catch (error) { this.showToast(this.t.bookmarks.openFailed(this.describe(error))); return; }
     if (this.destroyed) return;
-    this.filter = bookmark.kind === 'file' ? 'all' : bookmark.status;
-    this.tags = bookmark.kind === 'file' ? '' : bookmark.tags.map(tag => '#' + tag).join(' ');
-    this.textSearch = bookmark.kind === 'file' ? '' : bookmark.searchText || '';
+    const view = savedView(bookmark);
+    this.filter = view.status;
+    this.tags = view.tags.map(tag => '#' + tag).join(' ');
+    this.textSearch = view.searchText;
     this.kept.clear();
-    await this.openFile(bookmark.file);
+    await this.openFile(view.file);
+    if (this.destroyed || !view.zoom || this.current !== view.file) return;
+    const zoom = view.zoom;
+    const rows = this.docs.has(zoom.path) ? this.rows(zoom.path).filter(row => row.title === zoom.title) : [];
+    const nearest = rows.sort((a, b) => Math.abs(a.line - zoom.line) - Math.abs(b.line - zoom.line)).at(0);
+    if (!nearest) { this.showToast(this.t.bookmarks.zoomMissing(zoom.title)); return; }
+    this.zoomTo(zoom.path, nearest.line);
   };
 
   private bookmarkViews(): BookmarkView[] {
     return this.preferences.bookmarks.map(bookmark => {
-      const valid = validBookmark(bookmark);
-      const filename = valid ? bookmark.file.split('/').pop()! : this.t.bookmarks.unreadableLabel;
-      const label = valid && bookmark.kind === 'search'
-        ? this.t.bookmarks.searchLabel(this.t.filter[bookmark.status], bookmark.tags.map(tag => '#' + tag).join(' '), bookmark.searchText || '', filename)
+      if (!validBookmark(bookmark)) return { bookmark, label: this.t.bookmarks.unreadableLabel, title: this.t.bookmarks.unreadableLabel, defaultLabel: '' };
+      const view = savedView(bookmark);
+      const filename = view.file.split('/').pop()!;
+      const filtered = view.status !== 'all' || view.tags.length > 0 || view.searchText !== '';
+      const base = filtered || bookmark.kind === 'search'
+        ? this.t.bookmarks.searchLabel(this.t.filter[view.status], view.tags.map(tag => '#' + tag).join(' '), view.searchText, filename)
         : filename;
-      return { bookmark, label, title: valid ? bookmark.file : label };
+      const defaultLabel = view.zoom ? this.t.bookmarks.zoomLabel(base, view.zoom.title) : base;
+      return { bookmark, label: bookmark.name ?? defaultLabel, title: view.file, defaultLabel };
     });
   }
 
