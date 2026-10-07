@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Experimental: open a single Markdown file as an outline in its own tab with "Open as outline" in a `.md` file's menu or the command of the same name. The tab is titled with the file name, works with back and forward navigation, and is restored when Obsidian restarts. "Open as Markdown" in the tab's menu switches back to the regular editor. Renaming the open file keeps unsaved input.
 - Touch screen support, in the web version and the Obsidian plugin alike. While an item's text or note has focus, a bar at the bottom of the outliner offers outdent, indent, move up and down, change status, switch between text and note, undo, and redo. Buttons and lines are larger, the row buttons appear only on the item being edited, and tapping the drag handle selects the item. Not yet tested on a real Android or iOS device or in the Obsidian mobile app.
 - At 600px wide or narrower, the bookmarks stack above the outline instead of sitting beside it.
-- ⌘-click (Ctrl-click on Windows and Linux) a `#tag` in an item's text to add it to the search box filter, which applies right away. A tag already in the filter is not added again, and a plain click still places the caret for editing. Touch screens have no way to do this yet.
+- `#tags` in an item's text are shown like links (in Obsidian, with the theme's tag colors). Clicking or tapping a tag adds it to the search box filter, which applies right away; a tag already in the filter is not added again. Clicking elsewhere in the text starts editing with the caret where you clicked. While the text is being edited, ⌘-click (Ctrl-click on Windows and Linux) on a tag does the same.
 
 ### Changed
 

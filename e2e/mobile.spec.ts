@@ -12,7 +12,8 @@ const rect = (locator: Locator) => locator.evaluate(node => node.getBoundingClie
 async function tapTitle(page: Page, title: string) {
   const fields = page.getByRole('textbox', { name: 'Item text' });
   const index = (await fields.evaluateAll(nodes => nodes.map(node => (node as HTMLTextAreaElement).value))).indexOf(title);
-  await fields.nth(index).tap();
+  // A title with #tags is shown as text over the field until it is edited; tap its start, not a tag.
+  await fields.nth(index).locator('..').tap({ position: { x: 2, y: 8 } });
   await expect(focusedField(page)).toHaveValue(title);
 }
 

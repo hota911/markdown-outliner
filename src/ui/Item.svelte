@@ -8,7 +8,7 @@
   let editing = $state(false);
   // The links follow the textarea when it loses focus, before the next render updates the row.
   let shownTitle = $derived(item.row.title);
-  const display = $derived(linkParts(shownTitle) ?? [{ text: shownTitle }]);
+  const display = $derived(linkParts(shownTitle) ?? [{ text: shownTitle, start: 0 }]);
   let titleNode: HTMLTextAreaElement | undefined = $state();
 
   const titleEvents = $derived(ctrl.fieldEvents(item.path, () => item.row, 'title'));
@@ -36,14 +36,22 @@
     if (node.selectionStart === node.selectionEnd && filterTag(event, node.value, node.selectionStart)) node.blur();
   }
 
+  // The rendered text covers the textarea while it is not edited: a tag adds itself to the search,
+  // and other text starts editing with the caret where it was clicked.
   function displayClick(event: MouseEvent) {
-    if ((event.target as Element).closest('a') || !titleNode) return;
-    // The rendered text with links covers the textarea, so the clicked offset comes from the text node.
-    // Engines without caretPositionFromPoint (Safari before 18.4) just start editing.
-    const clicked = (event.metaKey || event.ctrlKey) ? document.caretPositionFromPoint?.(event.clientX, event.clientY) : null;
-    if (clicked && clicked.offsetNode.nodeType === Node.TEXT_NODE && filterTag(event, clicked.offsetNode.textContent!, clicked.offset)) return;
+    const target = event.target as Element;
+    if (target.closest('a') || !titleNode) return;
+    const tag = target.closest<HTMLElement>('[data-tag]');
+    if (tag) {
+      ctrl.filterByTag(tag.dataset.tag!);
+      return;
+    }
+    // Engines without caretPositionFromPoint (Safari before 18.4) put the caret at the end.
+    const clicked = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+    const part = clicked?.offsetNode.parentElement?.closest<HTMLElement>('[data-start]');
+    const position = clicked && part ? Number(part.dataset.start) + clicked.offset : titleNode.value.length;
     titleNode.focus();
-    titleNode.setSelectionRange(titleNode.value.length, titleNode.value.length);
+    titleNode.setSelectionRange(position, position);
   }
 </script>
 
@@ -112,7 +120,7 @@
           <!-- The textarea stays the keyboard target; clicking the rendered text only forwards focus. -->
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
           <div class="title-display" onclick={displayClick}>
-            {#each display as part, index (index)}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else}{part.text}{/if}{/each}
+            {#each display as part, index (index)}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else if part.tag}<span class="tag" data-tag={part.tag}>{part.text}</span>{:else}<span data-start={part.start}>{part.text}</span>{/if}{/each}
           </div>
         {/if}
       </div>

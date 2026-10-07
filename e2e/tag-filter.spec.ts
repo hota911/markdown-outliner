@@ -1,34 +1,50 @@
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 
 const search = (page: Page) => page.getByRole('searchbox', { name: 'Filter by words or tags' });
+const fields = (page: Page) => page.getByRole('textbox', { name: 'Item text' });
 
-// Every title starts with its tag, so a point a few pixels into the text is on the tag.
-async function clickTag(target: Locator, modifiers: 'ControlOrMeta'[] = ['ControlOrMeta']) {
-  await target.click({ position: { x: 12, y: 12 }, modifiers });
-}
+test.describe('#tags in item text', () => {
+  test('are shown like links, and a click adds the tag to the search once and filters', async ({ openOutliner, page }) => {
+    const outliner = await openOutliner('- [ ] chores #home\n- [ ] report #work\n- [ ] both #home #work\n');
+    const tag = page.locator('.title-display .tag', { hasText: '#home' }).first();
+    await expect(tag).toHaveCSS('text-decoration-line', 'underline');
+    await expect(tag).toHaveCSS('cursor', 'pointer');
 
-test.describe('⌘/Ctrl-click on a #tag', () => {
-  test('adds the tag to the search once and filters; a plain click edits', async ({ openOutliner, page }) => {
-    const outliner = await openOutliner('- [ ] #home chores\n- [ ] #work report\n- [ ] #home #work both\n');
-    const field = page.getByRole('textbox', { name: 'Item text' }).first();
-
-    await clickTag(field, []);
-    await expect(field).toBeFocused();
-    await expect(search(page)).toHaveValue('');
-
-    await clickTag(field);
+    await tag.click();
     await expect(search(page)).toHaveValue('#home');
-    await expect.poll(outliner.titles).toEqual(['#home chores', '#home #work both']);
+    await expect.poll(outliner.titles).toEqual(['chores #home', 'both #home #work']);
 
-    await clickTag(page.getByRole('textbox', { name: 'Item text' }).first());
+    await page.locator('.title-display .tag', { hasText: '#home' }).first().click();
     await expect(search(page)).toHaveValue('#home');
   });
 
-  test('works on a title shown with links', async ({ openOutliner, page }) => {
-    const outliner = await openOutliner('- [ ] #work see [docs](https://example.com)\n- [ ] #home other\n');
-    await clickTag(page.locator('.title-display'));
+  test('a click on other text edits with the caret where it was clicked', async ({ openOutliner, page }) => {
+    const outliner = await openOutliner('- [ ] chores #home\n');
+    await page.locator('.title-display').getByText('chores').click({ position: { x: 1, y: 8 } });
+    await expect(fields(page).first()).toBeFocused();
+    await page.keyboard.type('X');
+    await expect.poll(outliner.saved).toBe('- [ ] Xchores #home\n');
+    await expect(search(page)).toHaveValue('');
+  });
+
+  test('a tag next to a link works too', async ({ openOutliner, page }) => {
+    const outliner = await openOutliner('- [ ] see [docs](https://example.com) #work\n- [ ] other #home\n');
+    await page.locator('.title-display .tag', { hasText: '#work' }).click();
     await expect(search(page)).toHaveValue('#work');
-    await expect.poll(outliner.titles).toEqual(['#work see [docs](https://example.com)']);
+    await expect.poll(outliner.titles).toEqual(['see [docs](https://example.com) #work']);
+  });
+
+  test('while editing, ⌘/Ctrl-click on a tag filters and a plain click places the caret', async ({ openOutliner, page }) => {
+    const outliner = await openOutliner('- [ ] #home chores\n- [ ] #work report\n');
+    const field = fields(page).first();
+    // Clicking the text starts editing; the textarea is then on top. Its tag starts the title.
+    await page.locator('.title-display').first().getByText('chores').click();
+    await expect(field).toBeFocused();
+    await field.click({ position: { x: 12, y: 12 } });
+    await expect(search(page)).toHaveValue('');
+    await field.click({ position: { x: 12, y: 12 }, modifiers: ['ControlOrMeta'] });
+    await expect(search(page)).toHaveValue('#home');
+    await expect.poll(outliner.titles).toEqual(['#home chores']);
   });
 });

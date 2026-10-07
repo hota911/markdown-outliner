@@ -87,6 +87,9 @@
 .outliner .title-area.is-editing .title-display { display: none; }
 .outliner .title-display { position: relative; min-height: 28px; padding: 2px 0; line-height: 24px; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
 .outliner .title-display a { color: var(--text-accent); text-decoration: underline; cursor: pointer; }
+/* Obsidian themes set the --tag-* variables; elsewhere a tag looks like a link. */
+.outliner .title-display .tag { color: var(--tag-color, var(--text-accent)); background: var(--tag-background, none); border-radius: var(--tag-radius, 0); text-decoration: var(--tag-decoration, underline); cursor: pointer; }
+.outliner .title-display .tag:hover { color: var(--tag-color-hover, var(--text-accent)); background: var(--tag-background-hover, none); text-decoration: var(--tag-decoration-hover, underline); }
 .outliner .is-done > .outline-line .title-display { color: var(--text-faint); text-decoration: line-through; }
 .outliner .auto-save, .outliner .selection-bar { display: flex; align-items: center; gap: 5px; }
 .outliner .auto-save input { margin: 0; }

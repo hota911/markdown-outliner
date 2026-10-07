@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fireEvent } from '@testing-library/dom';
+import { fireEvent, within } from '@testing-library/dom';
 import { flush, setup } from './harness.js';
 
 describe('status button', () => {
@@ -112,6 +112,24 @@ describe('filtering', () => {
     expect(titleValues()).toEqual(['done top']);
   });
 
+  it('shows #tags like links; clicking one filters by it once, clicking other text edits', async () => {
+    const { user, screen, title, titleValues } = await setup({ 'tasks.md': text });
+    const display = title('open child #work').closest('.title-area').querySelector('.title-display');
+    const tag = within(display).getByText('#work');
+    expect(tag.classList.contains('tag')).toBe(true);
+
+    await user.click(tag);
+    expect(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }).value).toBe('#work');
+    expect(titleValues()).toEqual(['parent', 'open child #work']);
+    await user.click(within(title('open child #work').closest('.title-area')).getByText('#work'));
+    expect(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }).value).toBe('#work');
+
+    await user.click(within(title('open child #work').closest('.title-area')).getByText('open child'));
+    expect(document.activeElement).toBe(title('open child #work'));
+    expect(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }).value).toBe('#work');
+  });
+
+  // While a title is edited the textarea is on top, so ⌘/Ctrl-click finds the tag at the caret.
   // jsdom does not place the caret from the pointer, so the tests put it where the click lands.
   async function clickAt(node, offset, modifiers) {
     node.focus();

@@ -91,7 +91,7 @@ const en = {
 
   opening: 'Opening file…',
   noFiles: 'There are no Markdown files in this folder.',
-  help: '↑↓: move the cursor · Enter: add (at the start of the text: above) · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several · ⌘/Ctrl-click a #tag: add it to the filter',
+  help: '↑↓: move the cursor · Enter: add (at the start of the text: above) · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several · click a #tag: add it to the filter (while editing: ⌘/Ctrl-click)',
   closeToast: 'Close notification',
 
   bookmarks: {
@@ -320,7 +320,7 @@ const ja: Messages = {
 
   opening: 'ファイルを開いています…',
   noFiles: 'このフォルダには Markdown ファイルがありません。',
-  help: '↑↓: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択 · #タグを⌘/Ctrlクリック: 絞り込みに追加',
+  help: '↑↓: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択 · #タグをクリック: 絞り込みに追加（編集中は⌘/Ctrlクリック）',
   closeToast: '通知を閉じる',
 
   bookmarks: {
