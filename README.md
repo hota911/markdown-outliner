@@ -7,9 +7,11 @@ The user interface is available in English and Japanese. The Obsidian plugin fol
 ## Features
 
 - Edit `- [ ]` / `- [/]` / `- [x]` tasks and plain bullets as an outline, with notes indented under each item.
-- Filter by status, tags, and title text, and keep adding tasks, children, and notes while a filter is active. New tasks get the current status and tags.
+- Filter by status, tags, and title text, and keep adding tasks, children, and notes while a filter is active. New tasks get the current status and tags. `#tags` in item text are shown like links; click one to add it to the filter (while editing the text, ⌘-click, or Ctrl-click on Windows and Linux).
 - Change hierarchy with Tab / Shift+Tab, move items with Alt+Up/Down or drag and drop, and select several siblings to move or update them together.
-- Zoom into an item, collapse items and embeds, and bookmark files and searches.
+- Zoom into an item, collapse items and embeds, and bookmark the current view (file, filters and zoom) under a name of your choice.
+- Type `/` at the start of an item's text or after a space to open a command menu: set the status, turn a task into a bullet or back, open the note, zoom in, move the item to a file, or embed an existing file. The text after `/` filters the commands by their English or Japanese name; Up/Down pick one, Enter, Tab or a click runs it and removes the `/` text, and Escape closes the menu and keeps the text. A `/` inside a word (`A/B`, URLs), a full-width `／`, a `/` typed with an IME, and notes do not open the menu. For "Embed existing file", the menu lists the other Markdown files to pick from; an empty item becomes the embed, otherwise the embed is added below the item. One Undo restores the item with the `/` text.
+- Type `#` the same way to pick a tag already in use. In Obsidian the menu lists the tags of the whole vault (from Obsidian's metadata cache, including frontmatter tags) plus those in the files the outliner has read; in the web version it lists the `#tags` in the files the outliner has read since it was opened (the files shown and their embeds), not every file in the folder. The text after `#` filters the tags, ignoring case and katakana/hiragana and full-/half-width differences; tags starting with it come first. Enter, Tab or a click replaces `#text` with the tag and a space. Without a match the menu closes, so a new tag is typed as usual.
 - Item-level embeds such as `- ![[work.md]]` are edited in place and saved back to the embedded file. Embeds are resolved relative to the embedding file's folder.
 - Undo / Redo, auto-save about 0.8 seconds after the last edit, and conflict handling: if a file changed on disk while you were editing it, changes to different lines are merged automatically (this clears the undo history). If both sides changed the same line, your input is kept and the differing lines are shown so you can choose which version to use there.
 - External changes are picked up every few seconds. While a field has focus, the status says that a change is waiting, and the change is shown when you leave the field or come back to the tab or window, with the cursor kept on the same item.
@@ -42,6 +44,7 @@ Other differences on touch screens:
 
 - The buttons of an item (add a child, zoom, move to a file) appear under the item that is being edited, not on the item under the finger. The note and move buttons are in the bar instead.
 - Tapping the ⠿ handle selects the item. Dragging by touch is not supported; use the bar's move buttons, or select items and use the selection bar.
+- The `/` command menu works with a tap on a command; its rows are 36px high.
 - Buttons are at least 36px high, the keyboard shortcut help is hidden, and on screens 600px wide or narrower the bookmarks are shown above the outline.
 
 The touch layout is tested in Chromium emulating a Pixel 7 (`e2e/mobile.spec.ts`). It has not been checked on a real Android or iOS device or in the Obsidian mobile app.
