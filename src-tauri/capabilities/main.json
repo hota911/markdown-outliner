@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "The file commands of the outliner page. The folder dialog is opened from Rust, so the page needs no dialog permission.",
+  "windows": ["main"],
+  "permissions": [
+    "allow-list",
+    "allow-read",
+    "allow-save",
+    "allow-create",
+    "allow-load-preferences",
+    "allow-save-preferences"
+  ]
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Source of the app icons; regenerate them with `cargo tauri icon src-tauri/icons/icon.svg -o src-tauri/icons`. -->
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="#315e4c"/>
+  <g fill="none" stroke="#fff" stroke-width="56" stroke-linecap="round">
+    <path d="M256 304h512M384 512h384M384 720h384"/>
+    <path d="M256 384v336h64M256 512h64" stroke-width="40"/>
+  </g>
+</svg>

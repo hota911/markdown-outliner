@@ -46,6 +46,27 @@ node server.mjs [folder-or-file] [port]
 
 Then open `http://127.0.0.1:<port>/` (default port 4317). Without arguments the server edits the bundled `samples/` folder in place, so copy it first if you want to keep the originals. Passing a single `.md` file restricts the server to that file. The server only listens on 127.0.0.1, serves the built app from `dist/web/`, and bookmarks are stored in the browser's local storage. `npm start` builds the web app and runs the server with the defaults.
 
+## Desktop app (Tauri prototype)
+
+A macOS app built with [Tauri 2](https://v2.tauri.app/): the same UI in the system web view, with the file access of `server.mjs` ported to Rust (`src-tauri/`). It is a prototype and an alternative to the Swift app in PR #26. It requires Rust and the Tauri CLI (`cargo install tauri-cli --version "^2"`), plus the Xcode Command Line Tools on macOS.
+
+```sh
+npm ci
+npm run build:tauri   # writes src-tauri/target/release/bundle/macos/Markdown Outliner.app
+npm run tauri:dev     # runs the app with the Vite dev server and hot reload
+npm run test:tauri    # the Rust tests (cargo test)
+```
+
+On first launch the app asks for a folder; File > Open Folder… (Cmd+O) switches to another one. The window title is the folder name. The app edits the `.md` files in that folder with the same checks and error codes as `server.mjs`: paths that leave the folder, including through symbolic links, are rejected, files over 2 MB are refused, and a save is rejected when the file changed since it was read, so the outliner merges the change as in the web version. It remembers the last folder as a plain path in `~/Library/Application Support/io.github.hota911.markdown-outliner/last-folder`, and the bookmarks of each folder in `preferences/` next to it. Setting `OUTLINER_WORKSPACE` to a folder opens that folder for one launch without remembering it.
+
+The page can call only the app's six file and preference commands (`src-tauri/capabilities/main.json`); it has no general file system or shell access. Debug builds (`npm run tauri:dev`, `cargo tauri build --debug`) also read `OUTLINER_DEBUG_SCRIPT` and `OUTLINER_DEBUG_THEME`, described in `src-tauri/src/debug.rs`, to check the app without UI automation; release builds leave that code out.
+
+Limits:
+
+- The app is signed ad hoc, not notarized, and there is no DMG. macOS blocks it when it is copied to another Mac until it is allowed in System Settings > Privacy & Security.
+- It opens folders only; the single-file mode of `server.mjs` is not ported.
+- It has been built and run on macOS only. Tauri 2 can also build for Windows, Linux, iOS and Android, but those targets need their own setup (for Android, the Android NDK) and have not been tried.
+
 ## Development
 
 The UI is written in Svelte 5 and TypeScript and built with Vite. Open development tasks are listed in [TODO.md](TODO.md).
@@ -72,7 +93,7 @@ The screen tests drive the rendered DOM with keyboard and pointer events against
 
 `npm run test:obsidian` tests the built plugin inside the Obsidian desktop app on macOS. It uses `/Applications/Obsidian.app`, or the app bundle set in `OBSIDIAN_APP`, and skips its tests when neither exists. Each test starts a separate Obsidian process with a new temporary profile (`--user-data-dir`) and a temporary vault copied from `samples/`, then deletes both, so it never reads or changes your Obsidian settings, vaults, or a running Obsidian. Playwright attaches to the window over the DevTools protocol. The tests check that the plugin loads without console errors; that the ribbon icon and the commands open the outliner and the per-file outline view; that edits, status changes and drag and drop are saved to the file; that "Open as Markdown" switches back and the outline tab is restored after a restart; that the text follows the light and dark themes; and that the labels are Japanese when Obsidian's language is Japanese. The test vault turns off native menus so Playwright can click Obsidian's menus. These tests open Obsidian windows on your screen and are not run in CI, `npm test`, or `npm run test:e2e`.
 
-CI runs lint, typecheck, `npm test`, `npm run test:e2e` and `npm run build` on pull requests and on pushes to `main`.
+CI runs lint, typecheck, `npm test`, `npm run test:e2e` and `npm run build` on pull requests and on pushes to `main`. A separate workflow (`.github/workflows/tauri.yml`) runs the Rust tests of the desktop app on macOS only when `src-tauri/` or `package.json` changes; it is not a required check, because a macOS runner and a cold Tauri build take several minutes.
 
 Source layout:
 
@@ -80,10 +101,13 @@ Source layout:
 - `src/ui/`: the outliner UI, shared by both versions. `controller.svelte.ts` holds the editing state and operations, the `.svelte` files render it, and `mount.ts` mounts it into an element.
 - `src/obsidian/`: the Obsidian plugin entry point (`main.ts`).
 - `src/web/`: the standalone web page.
+- `src/tauri/`: the page of the desktop app; `adapter.ts` calls the Rust commands.
+- `src-tauri/`: the desktop app. `src/workspace.rs` is the file access ported from `server.mjs`, with its tests; `src/lib.rs` has the commands, the folder dialog, the menu and the window.
 - `src/styles.css`: styles for both versions. Colors and fonts use Obsidian's theme variables, so the plugin follows the Obsidian theme; `src/web/theme.css` defines them for the web page in light and dark sets that follow the system setting.
 - `server.mjs`: the local web server and file API, also mounted by the dev server.
 - `vite.config.ts`: the plugin build (a single CommonJS `main.js`).
 - `vite.web.config.ts`: the web app build and dev server.
+- `vite.tauri.config.ts`: the desktop app's page build and dev server.
 - `scripts/package-plugin.mjs`: builds the plugin and copies `manifest.json` and `styles.css` into `dist/`.
 - `e2e/`: Playwright tests in Chromium (drag and drop); `playwright.config.ts` configures them.
 - `obsidian-e2e/`: Playwright tests of the plugin in the Obsidian desktop app, with their own `playwright.config.ts`; `fixtures.ts` starts Obsidian and has helpers to open a file, run a command by id, and read a vault file.
