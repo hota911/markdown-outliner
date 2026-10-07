@@ -1,6 +1,7 @@
 import { afterEach, expect } from 'vitest';
 import { waitFor, within } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
+import { messages } from '../../src/ui/messages.ts';
 import { mountOutliner } from '../../src/ui/mount.ts';
 
 // In-memory stand-in for the web server / Obsidian vault adapters.
@@ -49,14 +50,16 @@ afterEach(() => {
 });
 
 // Mounts the UI on an in-memory vault and waits until the initial file is shown.
-export async function setup(initial, { initialFile = 'tasks.md', canCreate, preferences = { bookmarks: [] }, savePreferences } = {}) {
+// Existing tests are written against the Japanese UI, so Japanese is the default here.
+export async function setup(initial, { initialFile = 'tasks.md', canCreate, language = 'ja', preferences = { bookmarks: [] }, savePreferences } = {}) {
+  const t = messages[language];
   const adapter = memoryAdapter(initial, { canCreate });
   const container = document.createElement('div');
   document.body.append(container);
-  const app = mountOutliner(container, { adapter, initialFile, preferences, savePreferences });
+  const app = mountOutliner(container, { adapter, initialFile, language, preferences, savePreferences });
   mounted.push({ app, container });
   const screen = within(container);
-  await waitFor(() => expect(screen.queryByText('ファイルを開いています…')).toBeNull());
+  await waitFor(() => expect(screen.queryByText(t.opening)).toBeNull());
   const user = userEvent.setup();
   return {
     adapter,
@@ -64,14 +67,14 @@ export async function setup(initial, { initialFile = 'tasks.md', canCreate, pref
     container,
     screen,
     user,
-    titles: () => screen.queryAllByRole('textbox', { name: '項目の内容' }),
-    titleValues: () => screen.queryAllByRole('textbox', { name: '項目の内容' }).map(node => node.value),
-    title: value => screen.getAllByRole('textbox', { name: '項目の内容' }).find(node => node.value === value),
-    row: value => within(screen.getAllByRole('textbox', { name: '項目の内容' }).find(node => node.value === value).closest('.outline-item')),
+    titles: () => screen.queryAllByRole('textbox', { name: t.item.title }),
+    titleValues: () => screen.queryAllByRole('textbox', { name: t.item.title }).map(node => node.value),
+    title: value => screen.getAllByRole('textbox', { name: t.item.title }).find(node => node.value === value),
+    row: value => within(screen.getAllByRole('textbox', { name: t.item.title }).find(node => node.value === value).closest('.outline-item')),
     // Saves through the toolbar button and returns the file content on "disk".
     async saved(path = initialFile) {
-      await user.click(screen.getByRole('button', { name: '保存' }));
-      await waitFor(() => expect(container.querySelector('.save-state').textContent).toBe('保存済み'));
+      await user.click(screen.getByRole('button', { name: t.toolbar.save }));
+      await waitFor(() => expect(container.querySelector('.save-state').textContent).toBe(t.saveState.saved));
       return adapter.files.get(path);
     },
   };

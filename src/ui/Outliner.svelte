@@ -7,7 +7,7 @@
   let { ctrl }: { ctrl: Controller } = $props();
 
   const view = $derived(ctrl.view());
-  const starLabel = $derived(ctrl.searchSaved ? '検索のブックマークを解除' : '検索をブックマーク');
+  const starLabel = $derived(ctrl.searchSaved ? ctrl.t.toolbar.removeSearchBookmark : ctrl.t.toolbar.bookmarkSearch);
 
   function searchKeydown(event: KeyboardEvent & { currentTarget: HTMLInputElement }) {
     // keyCode 229 is the only IME signal some browsers give for the key that ends composition.
@@ -29,14 +29,14 @@
       <div class="app-name">Markdown Outliner</div>
       <span class="save-state" class:dirty={ctrl.saveState.dirty}>{ctrl.saveState.text}</span>
       <div class="toolbar">
-        <select class="file-select" aria-label="開くファイル" value={view.current} onchange={event => ctrl.openFile(event.currentTarget.value)}>
+        <select class="file-select" aria-label={ctrl.t.toolbar.fileSelect} value={view.current} onchange={event => ctrl.openFile(event.currentTarget.value)}>
           {#each view.fileList as path (path)}
             <option value={path}>{path}</option>
           {/each}
         </select>
-        <select aria-label="表示する状態" value={view.filter} onchange={event => ctrl.setFilter(event.currentTarget.value as StatusFilter)}>
-          {#each filters as [value, label] (value)}
-            <option {value}>{label}</option>
+        <select aria-label={ctrl.t.toolbar.filter} value={view.filter} onchange={event => ctrl.setFilter(event.currentTarget.value as StatusFilter)}>
+          {#each filters as value (value)}
+            <option {value}>{ctrl.t.filter[value]}</option>
           {/each}
         </select>
         <div class="search-box">
@@ -44,38 +44,38 @@
             class="title-search"
             type="search"
             {@attach syncValue(() => view.searchValue)}
-            placeholder="語句・#タグで絞り込み"
-            aria-label="語句・タグで絞り込み"
+            placeholder={ctrl.t.toolbar.searchPlaceholder}
+            aria-label={ctrl.t.toolbar.search}
             oninput={event => ctrl.searchInput(event.currentTarget.value)}
             onkeydown={searchKeydown}
           />
           <button type="button" class="search-star" title={starLabel} aria-label={starLabel} aria-pressed={ctrl.searchSaved} onclick={ctrl.toggleSearchBookmark}>{ctrl.searchSaved ? '★' : '☆'}</button>
         </div>
         {#if view.canOpenSource}
-          <button type="button" title="表示中の元ファイルを通常エディタで開く" onclick={ctrl.openSource}>Markdown で開く</button>
+          <button type="button" title={ctrl.t.toolbar.openSourceTitle} onclick={ctrl.openSource}>{ctrl.t.toolbar.openSource}</button>
         {/if}
-        <button type="button" title="検索・タグ・状態の絞り込みをリセット" onclick={ctrl.reset}>リセット</button>
-        <button type="button" title="変更したファイルを保存" onclick={() => ctrl.saveAll()}>保存</button>
-        <button type="button" title="変更があるファイルは保存するか入力を保持します" onclick={ctrl.reload}>再読込</button>
-        <button type="button" title="元に戻す" onclick={() => ctrl.history(true)}>Undo</button>
-        <button type="button" title="やり直す" onclick={() => ctrl.history(false)}>Redo</button>
-        <label class="auto-save"><input type="checkbox" checked={view.autoSave} aria-label="自動保存" onchange={event => ctrl.setAutoSave(event.currentTarget.checked)} />自動保存</label>
+        <button type="button" title={ctrl.t.toolbar.resetTitle} onclick={ctrl.reset}>{ctrl.t.toolbar.reset}</button>
+        <button type="button" title={ctrl.t.toolbar.saveTitle} onclick={() => ctrl.saveAll()}>{ctrl.t.toolbar.save}</button>
+        <button type="button" title={ctrl.t.toolbar.reloadTitle} onclick={ctrl.reload}>{ctrl.t.toolbar.reload}</button>
+        <button type="button" title={ctrl.t.toolbar.undoTitle} onclick={() => ctrl.history(true)}>{ctrl.t.toolbar.undo}</button>
+        <button type="button" title={ctrl.t.toolbar.redoTitle} onclick={() => ctrl.history(false)}>{ctrl.t.toolbar.redo}</button>
+        <label class="auto-save"><input type="checkbox" checked={view.autoSave} aria-label={ctrl.t.toolbar.autoSave} onchange={event => ctrl.setAutoSave(event.currentTarget.checked)} />{ctrl.t.toolbar.autoSave}</label>
         {#if view.selectionCount}
           <div class="selection-bar">
-            <span>{view.selectionCount} 項目を選択</span>
-            <button type="button" title="選択した項目をまとめて上へ移動" onclick={() => ctrl.moveSelection(false)}>↑</button>
-            <button type="button" title="選択した項目をまとめて下へ移動" onclick={() => ctrl.moveSelection(true)}>↓</button>
-            {#each statuses as [status, label] (status)}
-              <button type="button" title={'選択したタスクを' + label + 'にする'} onclick={() => ctrl.setSelectionStatus(status)}>{label}</button>
+            <span>{ctrl.t.toolbar.selected(view.selectionCount)}</span>
+            <button type="button" title={ctrl.t.toolbar.moveSelectionUp} onclick={() => ctrl.moveSelection(false)}>↑</button>
+            <button type="button" title={ctrl.t.toolbar.moveSelectionDown} onclick={() => ctrl.moveSelection(true)}>↓</button>
+            {#each statuses as status (status)}
+              <button type="button" title={ctrl.t.selectionStatus(status)} onclick={() => ctrl.setSelectionStatus(status)}>{ctrl.t.status[status]}</button>
             {/each}
-            <button type="button" title="選択した項目を解除" onclick={ctrl.clearSelectionAndRender}>選択解除</button>
+            <button type="button" title={ctrl.t.toolbar.clearSelectionTitle} onclick={ctrl.clearSelectionAndRender}>{ctrl.t.toolbar.clearSelection}</button>
           </div>
         {/if}
       </div>
     </header>
     {#if view.zoomPath !== null}
       <div class="zoom-bar">
-        <button type="button" class="quiet" title="ズームを解除" onclick={ctrl.zoomOut}>← 全体に戻る</button>
+        <button type="button" class="quiet" title={ctrl.t.toolbar.zoomOutTitle} onclick={ctrl.zoomOut}>{ctrl.t.toolbar.zoomOut}</button>
         <span>{view.zoomPath}</span>
       </div>
     {/if}
@@ -85,10 +85,10 @@
       {/if}
       {#each view.conflicts as conflict (conflict.path)}
         <div class="conflict">
-          <p>{conflict.path} に外部の変更があります。入力内容を残しています。必要ならコピーしてから外部の内容を開いてください。</p>
-          <textarea class="local-copy" readonly value={conflict.text} aria-label={conflict.path + ' の保存前の入力内容'}></textarea>
-          <button type="button" title="入力内容を選択してコピー" onclick={event => copyConflict(conflict.path, event)}>入力内容をコピー</button>
-          <button type="button" title="入力内容を履歴に残して外部の内容へ切り替える" onclick={() => ctrl.openExternal(conflict.path)}>外部の内容を開く</button>
+          <p>{ctrl.t.conflict.message(conflict.path)}</p>
+          <textarea class="local-copy" readonly value={conflict.text} aria-label={ctrl.t.conflict.copyLabel(conflict.path)}></textarea>
+          <button type="button" title={ctrl.t.conflict.copyTitle} onclick={event => copyConflict(conflict.path, event)}>{ctrl.t.conflict.copy}</button>
+          <button type="button" title={ctrl.t.conflict.openExternalTitle} onclick={() => ctrl.openExternal(conflict.path)}>{ctrl.t.conflict.openExternal}</button>
         </div>
       {/each}
     </div>
@@ -96,15 +96,15 @@
       {#if view.outline}
         <Outline {ctrl} outline={view.outline} />
       {:else}
-        <div class="empty">ファイルを開いています…</div>
+        <div class="empty">{ctrl.t.opening}</div>
       {/if}
     </main>
-    <footer class="help">↑↓: カーソル移動 · Enter: 追加 · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択</footer>
+    <footer class="help">{ctrl.t.help}</footer>
   </div>
 </div>
 {#if ctrl.toast}
   <div class="toast">
     <span role="status">{ctrl.toast}</span>
-    <button type="button" class="icon" title="通知を閉じる" onclick={ctrl.clearToast}>×</button>
+    <button type="button" class="icon" title={ctrl.t.closeToast} onclick={ctrl.clearToast}>×</button>
   </div>
 {/if}

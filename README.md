@@ -2,7 +2,7 @@
 
 An outliner for Markdown task lists. It runs as an Obsidian plugin and as a small local web app, and both share the same editing core. Files stay plain Markdown, so they can be edited side by side with Git, other editors, and coding agents.
 
-The user interface is currently in Japanese.
+The user interface is available in English and Japanese. The Obsidian plugin follows Obsidian's display language (Obsidian 1.8.7 or later; older versions use English), and the web version follows the browser language. Any other language falls back to English.
 
 ## Features
 
@@ -30,7 +30,7 @@ Headings, code blocks, and other non-list content are preserved but not shown.
 2. Put them in `<vault>/.obsidian/plugins/markdown-outliner/`.
 3. Reload Obsidian and enable "Markdown Outliner" in Settings > Community plugins.
 
-Open the outliner from the ribbon icon or the command "アウトライナーを開く" (open outliner). The plugin edits any `.md` file in the vault. Unsaved input is kept in memory while the plugin is enabled; save before quitting Obsidian or disabling the plugin. The plugin has been used on desktop; mobile has not been tested.
+Open the outliner from the ribbon icon or the command "Open outliner" ("アウトライナーを開く" in Japanese). The plugin edits any `.md` file in the vault. Unsaved input is kept in memory while the plugin is enabled; save before quitting Obsidian or disabling the plugin. The plugin has been used on desktop; mobile has not been tested.
 
 ## Web version
 

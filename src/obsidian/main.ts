@@ -1,4 +1,5 @@
-import { ItemView, Notice, Plugin, Scope, normalizePath, type TFile, type WorkspaceLeaf } from 'obsidian';
+import { ItemView, Notice, Plugin, Scope, getLanguage, normalizePath, requireApiVersion, type TFile, type WorkspaceLeaf } from 'obsidian';
+import { languageOf, messages, type Language, type Messages } from '../ui/messages.ts';
 import { mountOutliner } from '../ui/mount.ts';
 import type { Doc, Mounted, Preferences } from '../ui/types.ts';
 
@@ -20,28 +21,30 @@ class OutlinerView extends ItemView {
   }
 
   getViewType() { return VIEW_TYPE; }
-  getDisplayText() { return 'Markdown アウトライナー'; }
+  getDisplayText() { return this.plugin.t.obsidian.viewTitle; }
   getIcon() { return 'list-tree'; }
 
   async onOpen() {
     this.mounted?.destroy();
     const vault = this.app.vault;
+    const t = this.plugin.t.obsidian;
     // Paths are relative to the vault root; the UI resolves embeds against the embedding file's folder.
     const vaultPath = (relative: string) => {
       if (typeof relative !== 'string' || !relative.endsWith('.md') || relative.startsWith('/') || relative.includes('\\') || relative.split('/').includes('..')) {
-        throw new Error('Vault 内の Markdown を Vault からの相対パスで指定してください。');
+        throw new Error(t.vaultRelativePath);
       }
       return normalizePath(relative);
     };
     const resolve = (relative: string): TFile => {
       const file = vault.getFileByPath(vaultPath(relative));
-      if (!file || file.extension !== 'md') throw new Error('参照先の Markdown がありません。');
+      if (!file || file.extension !== 'md') throw new Error(t.fileMissing);
       return file;
     };
     this.contentEl.empty();
     this.contentEl.addClass('markdown-outliner-container');
     this.mounted = mountOutliner(this.contentEl, {
       drafts: this.plugin.drafts,
+      language: this.plugin.language,
       preferences: this.plugin.preferences,
       savePreferences: value => this.plugin.saveData(value),
       adapter: {
@@ -53,21 +56,21 @@ class OutlinerView extends ItemView {
         openSource: async relative => {
           const file = resolve(relative);
           if (this.plugin.drafts.get(relative)?.dirty) {
-            new Notice('通常エディタには保存済みの内容を開きます。アウトライナーの入力は未保存です。');
+            new Notice(t.openSourceUnsaved);
           }
           await this.app.workspace.getLeaf('tab').openFile(file);
         },
         save: async (relative, text, revision) => {
           const file = resolve(relative);
           await vault.process(file, current => {
-            if (current !== revision) throw new Error('外部で変更されています。入力をコピーしてから読み直してください。');
+            if (current !== revision) throw new Error(t.externalChange);
             return text;
           });
           return { revision: text };
         },
         create: async (relative, text) => {
           const path = vaultPath(relative);
-          if (vault.getFileByPath(path) || vault.getFolderByPath(path)) throw new Error('同じ名前のファイルがすでにあります。');
+          if (vault.getFileByPath(path) || vault.getFolderByPath(path)) throw new Error(t.fileExists);
           await vault.create(path, text);
           return { revision: text };
         },
@@ -81,7 +84,7 @@ class OutlinerView extends ItemView {
     this.mounted.destroy();
     this.mounted = null;
     if ([...this.plugin.drafts.values()].some(doc => doc.dirty)) {
-      new Notice('未保存の入力を保持しています。アウトライナーを開き直して保存してください。Obsidian の終了前に保存が必要です。');
+      new Notice(this.plugin.t.obsidian.closedWithUnsaved);
     }
   }
 }
@@ -89,14 +92,19 @@ class OutlinerView extends ItemView {
 export default class MarkdownOutlinerPlugin extends Plugin {
   drafts = new Map<string, Doc>();
   preferences: Preferences = { bookmarks: [] };
+  language: Language = 'en';
+  t: Messages = messages.en;
 
   async onload() {
+    // getLanguage() is newer than minAppVersion; older Obsidian falls back to English, the default.
+    this.language = languageOf(requireApiVersion('1.8.7') ? getLanguage() : 'en');
+    this.t = messages[this.language];
     this.drafts = new Map();
     this.preferences = (await this.loadData() as Preferences | null) || { bookmarks: [] };
     this.registerView(VIEW_TYPE, leaf => new OutlinerView(leaf, this));
     // No default hotkey; users can assign one in Settings > Hotkeys.
-    this.addCommand({ id: 'open-outliner', name: 'アウトライナーを開く', callback: () => this.openView() });
-    this.addRibbonIcon('list-tree', 'アウトライナーを開く', () => this.openView());
+    this.addCommand({ id: 'open-outliner', name: this.t.obsidian.openOutliner, callback: () => this.openView() });
+    this.addRibbonIcon('list-tree', this.t.obsidian.openOutliner, () => this.openView());
   }
 
   // No onunload: Obsidian closes views of a registered type itself, so leaves are not detached here.

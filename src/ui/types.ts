@@ -1,4 +1,5 @@
 import type { Status } from '../core.ts';
+import type { Language } from './messages.ts';
 
 // Web uses content hashes, Obsidian uses the text itself, tests use counters.
 export type Revision = string | number;
@@ -41,6 +42,8 @@ export interface MountOptions {
   // Obsidian keeps drafts on the plugin so unsaved input survives closing the view.
   drafts?: Map<string, Doc>;
   initialFile?: string;
+  // Display language, chosen by the host: Obsidian's language or the browser's.
+  language: Language;
   preferences?: Preferences;
   savePreferences?: (value: Preferences) => Promise<void>;
 }

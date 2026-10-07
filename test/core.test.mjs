@@ -50,9 +50,9 @@ test('状態を指定せず箇条書きを兄弟の子とノートの後へ追�
 });
 
 test('追加する種類とタスクの状態とタグを検証する', () => {
-  assert.throws(() => core.insert('- parent\n', 0, { kind: 'ordered', child: false, status: 'todo', tags: [] }), /追加条件/);
-  assert.throws(() => core.insert('- parent\n', 0, { kind: 'task', child: false, status: 'unknown', tags: [] }), /追加条件/);
-  assert.throws(() => core.insert('- parent\n', 0, { kind: 'bullet', child: false, tags: ['two words'] }), /タグ/);
+  assert.throws(() => core.insert('- parent\n', 0, { kind: 'ordered', child: false, status: 'todo', tags: [] }), { code: 'invalidInsert' });
+  assert.throws(() => core.insert('- parent\n', 0, { kind: 'task', child: false, status: 'unknown', tags: [] }), { code: 'invalidInsert' });
+  assert.throws(() => core.insert('- parent\n', 0, { kind: 'bullet', child: false, tags: ['two words'] }), { code: 'invalidTag' });
   assert.deepEqual(core.insert('- parent\n', 0, { kind: 'task', child: false, status: 'in-progress', tags: ['work'] }), {
     text: '- parent\n- [/] #work\n', line: 1
   });
@@ -122,17 +122,17 @@ test('階層の異なる前の項目との結合でノートと子の所属を�
 });
 
 test('両方にノートまたは子がある結合は拒否する', () => {
-  assert.throws(() => core.merge('- [ ] first\n  first note\n- [ ] second\n  second note\n', 0, 'next'), /両方/);
-  assert.throws(() => core.merge('- [ ] parent\n  - [ ] child\n    child note\n', 1, 'previous'), /両方/);
-  assert.throws(() => core.merge('- [ ] parent\n  - [ ] child\n    - [ ] grandchild\n', 0, 'next'), /両方/);
+  assert.throws(() => core.merge('- [ ] first\n  first note\n- [ ] second\n  second note\n', 0, 'next'), { code: 'mergeBothHaveContent' });
+  assert.throws(() => core.merge('- [ ] parent\n  - [ ] child\n    child note\n', 1, 'previous'), { code: 'mergeBothHaveContent' });
+  assert.throws(() => core.merge('- [ ] parent\n  - [ ] child\n    - [ ] grandchild\n', 0, 'next'), { code: 'mergeBothHaveContent' });
   assert.deepEqual(core.merge('- [ ] first\n- [ ] second\n', 0, 'next'), { text: '- [ ] firstsecond\n', line: 0, column: 5 });
 });
 
 test('先頭・末尾は変更せず、埋め込みと本文の境界をまたぐ結合は拒否する', () => {
   assert.deepEqual(core.merge('- [ ] only\n', 0, 'previous'), { text: '- [ ] only\n', line: 0, column: 0 });
   assert.deepEqual(core.merge('- [ ] only\n', 0, 'next'), { text: '- [ ] only\n', line: 0, column: 4 });
-  assert.throws(() => core.merge('- [ ] first\n- ![[work.md]]\n', 0, 'next'), /埋め込み/);
-  assert.throws(() => core.merge('- [ ] first\n# Heading\n- [ ] second\n', 0, 'next'), /本文/);
+  assert.throws(() => core.merge('- [ ] first\n- ![[work.md]]\n', 0, 'next'), { code: 'mergeAcrossEmbed' });
+  assert.throws(() => core.merge('- [ ] first\n# Heading\n- [ ] second\n', 0, 'next'), { code: 'mergeAcrossText' });
 });
 
 test('離れた選択を原順で子とノートごと対象の後へ移す', () => {
@@ -169,19 +169,19 @@ test('対象が選択または選択の子なら変更しない', () => {
 
 test('親の異なる選択と対象、存在しない行、不正な条件を拒否する', () => {
   const text = '- A\n  - child\n- B\n  - other\n';
-  assert.throws(() => core.reorder(text, [1, 3], 2), /同じ親/);
-  assert.throws(() => core.reorder(text, [1], 3), /同じ親/);
-  assert.throws(() => core.reorder(text, [99], 0), /指定行/);
-  assert.throws(() => core.reorder(text, [0], 99), /指定行/);
-  assert.throws(() => core.reorder(text, [], 0), /条件/);
-  assert.throws(() => core.reorder(text, [0], 2, 'middle'), /条件/);
+  assert.throws(() => core.reorder(text, [1, 3], 2), { code: 'reorderSiblingsOnly' });
+  assert.throws(() => core.reorder(text, [1], 3), { code: 'reorderSiblingsOnly' });
+  assert.throws(() => core.reorder(text, [99], 0), { code: 'noEditableItem' });
+  assert.throws(() => core.reorder(text, [0], 99), { code: 'noEditableItem' });
+  assert.throws(() => core.reorder(text, [], 0), { code: 'invalidReorder' });
+  assert.throws(() => core.reorder(text, [0], 2, 'middle'), { code: 'invalidReorder' });
 });
 
 test('本文や埋め込みをまたぐ並び替えを拒否する', () => {
-  assert.throws(() => core.reorder('- A\n# Heading\n- B\n', [0], 2, 'after'), /本文/);
-  assert.throws(() => core.reorder('- A\n- ![[work.md]]\n- B\n', [0], 2, 'after'), /埋め込み/);
-  assert.throws(() => core.reorder('- A\n- ![[work.md]]\n', [0], 1), /埋め込み/);
-  assert.throws(() => core.reorder('- A\n  - ![[work.md]]\n- B\n', [0], 2, 'after'), /埋め込み/);
+  assert.throws(() => core.reorder('- A\n# Heading\n- B\n', [0], 2, 'after'), { code: 'reorderAcrossText' });
+  assert.throws(() => core.reorder('- A\n- ![[work.md]]\n- B\n', [0], 2, 'after'), { code: 'reorderAcrossEmbed' });
+  assert.throws(() => core.reorder('- A\n- ![[work.md]]\n', [0], 1), { code: 'reorderAcrossEmbed' });
+  assert.throws(() => core.reorder('- A\n  - ![[work.md]]\n- B\n', [0], 2, 'after'), { code: 'reorderAcrossEmbed' });
 });
 
 test('複数選択を原順で対象の最後の子へ移しノートと子を保持する', () => {
@@ -224,31 +224,31 @@ test('同じ親へ移すと選択した子だけが最後に並ぶ', () => {
 
 test('自分自身や子孫を対象にした循環と異なる親の選択を拒否する', () => {
   const text = '- A\n  - child\n    - grandchild\n- B\n  - other\n';
-  assert.throws(() => core.reparent(text, [0], 0), /自分自身/);
-  assert.throws(() => core.reparent(text, [0], 2), /子孫/);
-  assert.throws(() => core.reparent(text, [0, 3], 3), /自分自身/);
-  assert.throws(() => core.reparent(text, [1, 4], 3), /同じ親/);
-  assert.throws(() => core.reparent(text, [0, 1], 3), /同じ親/);
+  assert.throws(() => core.reparent(text, [0], 0), { code: 'reparentIntoSelf' });
+  assert.throws(() => core.reparent(text, [0], 2), { code: 'reparentIntoSelf' });
+  assert.throws(() => core.reparent(text, [0, 3], 3), { code: 'reparentIntoSelf' });
+  assert.throws(() => core.reparent(text, [1, 4], 3), { code: 'reparentSiblingsOnly' });
+  assert.throws(() => core.reparent(text, [0, 1], 3), { code: 'reparentSiblingsOnly' });
 });
 
 test('本文や埋め込みの境界をまたぐ子への移動を拒否する', () => {
-  assert.throws(() => core.reparent('- A\n# Heading\n- target\n', [0], 2), /本文/);
-  assert.throws(() => core.reparent('- target\n```md\n- code\n```\n- A\n', [4], 0), /本文/);
-  assert.throws(() => core.reparent('- A\n- ![[work.md]]\n- target\n', [0], 2), /埋め込み/);
-  assert.throws(() => core.reparent('- A\n- ![[work.md]]\n', [0], 1), /埋め込み/);
-  assert.throws(() => core.reparent('- ![[work.md]]\n- target\n', [0], 1), /埋め込み/);
-  assert.throws(() => core.reparent('- A\n  - ![[work.md]]\n- target\n', [0], 2), /埋め込み/);
-  assert.throws(() => core.reparent('- A\n- target\n  - ![[work.md]]\n', [0], 1), /埋め込み/);
-  assert.throws(() => core.reparent('- ![[work.md]]\n  - A\n  - target\n', [1], 2), /埋め込み/);
+  assert.throws(() => core.reparent('- A\n# Heading\n- target\n', [0], 2), { code: 'reparentAcrossText' });
+  assert.throws(() => core.reparent('- target\n```md\n- code\n```\n- A\n', [4], 0), { code: 'reparentAcrossText' });
+  assert.throws(() => core.reparent('- A\n- ![[work.md]]\n- target\n', [0], 2), { code: 'reparentAcrossEmbed' });
+  assert.throws(() => core.reparent('- A\n- ![[work.md]]\n', [0], 1), { code: 'reparentAcrossEmbed' });
+  assert.throws(() => core.reparent('- ![[work.md]]\n- target\n', [0], 1), { code: 'reparentAcrossEmbed' });
+  assert.throws(() => core.reparent('- A\n  - ![[work.md]]\n- target\n', [0], 2), { code: 'reparentAcrossEmbed' });
+  assert.throws(() => core.reparent('- A\n- target\n  - ![[work.md]]\n', [0], 1), { code: 'reparentAcrossEmbed' });
+  assert.throws(() => core.reparent('- ![[work.md]]\n  - A\n  - target\n', [1], 2), { code: 'reparentAcrossEmbed' });
 });
 
 test('子への移動で存在しない行や不正な選択を拒否する', () => {
   const text = '- A\n- target\n';
-  assert.throws(() => core.reparent(text, [], 1), /条件/);
-  assert.throws(() => core.reparent(text, null, 1), /条件/);
-  assert.throws(() => core.reparent(text, [99], 1), /指定行/);
-  assert.throws(() => core.reparent(text, [0, '0'], 1), /指定行/);
-  assert.throws(() => core.reparent(text, [0], 99), /指定行/);
+  assert.throws(() => core.reparent(text, [], 1), { code: 'invalidReparent' });
+  assert.throws(() => core.reparent(text, null, 1), { code: 'invalidReparent' });
+  assert.throws(() => core.reparent(text, [99], 1), { code: 'noEditableItem' });
+  assert.throws(() => core.reparent(text, [0, '0'], 1), { code: 'noEditableItem' });
+  assert.throws(() => core.reparent(text, [0], 99), { code: 'noEditableItem' });
 });
 
 test('既存の子の間へ選択を原順で挿入し子とノートを保つ', () => {
@@ -277,19 +277,19 @@ test('同じ親の前後にある選択を指定した子の前へ束ねる', ()
 
 test('挿入位置が直接の子でない場合や選択した子の場合を拒否する', () => {
   const text = '- target\n  target note\n  - first\n    - grandchild\n  - second\n- moving\n';
-  assert.throws(() => core.reparent(text, [5], 0, 0), /直接の子/);
-  assert.throws(() => core.reparent(text, [5], 0, 1), /直接の子/);
-  assert.throws(() => core.reparent(text, [5], 0, 3), /直接の子/);
-  assert.throws(() => core.reparent(text, [5], 0, 5), /直接の子/);
-  assert.throws(() => core.reparent(text, [5], 0, 99), /直接の子/);
-  assert.throws(() => core.reparent(text, [5], 0, '2'), /直接の子/);
-  assert.throws(() => core.reparent(text, [2], 0, 2), /選択した項目/);
-  assert.throws(() => core.reparent(text, [2, 4], 0, 4), /選択した項目/);
+  assert.throws(() => core.reparent(text, [5], 0, 0), { code: 'invalidInsertPosition' });
+  assert.throws(() => core.reparent(text, [5], 0, 1), { code: 'invalidInsertPosition' });
+  assert.throws(() => core.reparent(text, [5], 0, 3), { code: 'invalidInsertPosition' });
+  assert.throws(() => core.reparent(text, [5], 0, 5), { code: 'invalidInsertPosition' });
+  assert.throws(() => core.reparent(text, [5], 0, 99), { code: 'invalidInsertPosition' });
+  assert.throws(() => core.reparent(text, [5], 0, '2'), { code: 'invalidInsertPosition' });
+  assert.throws(() => core.reparent(text, [2], 0, 2), { code: 'insertPositionInSelection' });
+  assert.throws(() => core.reparent(text, [2, 4], 0, 4), { code: 'insertPositionInSelection' });
 });
 
 test('子の間への移動も埋め込みや本文の境界をまたげない', () => {
-  assert.throws(() => core.reparent('- target\n  - ![[work.md]]\n- moving\n', [2], 0, 1), /埋め込み/);
-  assert.throws(() => core.reparent('- target\n  - child\n# Heading\n- moving\n', [3], 0, 1), /本文/);
+  assert.throws(() => core.reparent('- target\n  - ![[work.md]]\n- moving\n', [2], 0, 1), { code: 'reparentAcrossEmbed' });
+  assert.throws(() => core.reparent('- target\n  - child\n# Heading\n- moving\n', [3], 0, 1), { code: 'reparentAcrossText' });
 });
 
 test('Bの子CをルートのBの前へ移してA、C、Bの順にする', () => {
@@ -321,18 +321,18 @@ test('ルート末尾へ移しても途中と末尾にあった空行を削除�
 });
 
 test('ルートへの移動も本文と埋め込みの境界を拒否する', () => {
-  assert.throws(() => core.reparent('- parent\n  - child\n# Footer\n', [1], null), /本文/);
-  assert.throws(() => core.reparent('- before\n# Heading\n- parent\n  - child\n', [3], null, 0), /本文/);
-  assert.throws(() => core.reparent('- parent\n  - child\n- ![[work.md]]\n', [1], null), /埋め込み/);
-  assert.throws(() => core.reparent('- parent\n  - child\n- ![[work.md]]\n', [1], null, 2), /埋め込み/);
-  assert.throws(() => core.reparent('- ![[work.md]]\n  - child\n- after\n', [1], null, 2), /埋め込み/);
+  assert.throws(() => core.reparent('- parent\n  - child\n# Footer\n', [1], null), { code: 'reparentAcrossText' });
+  assert.throws(() => core.reparent('- before\n# Heading\n- parent\n  - child\n', [3], null, 0), { code: 'reparentAcrossText' });
+  assert.throws(() => core.reparent('- parent\n  - child\n- ![[work.md]]\n', [1], null), { code: 'reparentAcrossEmbed' });
+  assert.throws(() => core.reparent('- parent\n  - child\n- ![[work.md]]\n', [1], null, 2), { code: 'reparentAcrossEmbed' });
+  assert.throws(() => core.reparent('- ![[work.md]]\n  - child\n- after\n', [1], null, 2), { code: 'reparentAcrossEmbed' });
 });
 
 test('ルートの挿入位置に子や選択中の項目を指定できない', () => {
   const text = '- A\n  - child\n- B\n';
-  assert.throws(() => core.reparent(text, [2], null, 1), /直接の子/);
-  assert.throws(() => core.reparent(text, [0], null, 0), /選択した項目/);
-  assert.throws(() => core.reparent(text, [0], null, 99), /直接の子/);
+  assert.throws(() => core.reparent(text, [2], null, 1), { code: 'invalidInsertPosition' });
+  assert.throws(() => core.reparent(text, [0], null, 0), { code: 'insertPositionInSelection' });
+  assert.throws(() => core.reparent(text, [0], null, 99), { code: 'invalidInsertPosition' });
 });
 
 test('項目を子とノートごと字下げを戻して切り出し、元の字下げで埋め込みに置き換える', () => {
@@ -350,15 +350,16 @@ test('タブ字下げと箇条書きの項目をタブを保ったまま切り�
 });
 
 test('埋め込み行と不正なファイル名は切り出さない', () => {
-  assert.throws(() => core.extractToFile('- ![[work.md]]\n', 0, 'work 2.md'), /埋め込み/);
-  assert.throws(() => core.extractToFile('- [ ] task\n', 0, 'a/b.md'), /ファイル名/);
-  assert.throws(() => core.extractToFile('- [ ] task\n', 0, 'task'), /ファイル名/);
+  assert.throws(() => core.extractToFile('- ![[work.md]]\n', 0, 'work 2.md'), { code: 'extractEmbed' });
+  assert.throws(() => core.extractToFile('- [ ] task\n', 0, 'a/b.md'), { code: 'invalidFileName' });
+  assert.throws(() => core.extractToFile('- [ ] task\n', 0, 'task'), { code: 'invalidFileName' });
 });
 
 test('タイトルからタグと使えない文字を除いてファイル名を作り、重複には番号を付ける', () => {
-  assert.equal(core.fileName('[資料] 作成: A/B #work  #urgent', []), '資料 作成 AB.md');
-  assert.equal(core.fileName('a\\b*c?d"e<f>g|h^i', []), 'abcdefghi.md');
-  assert.equal(core.fileName('#work', []), 'タスク.md');
-  assert.equal(core.fileName('...hidden', []), 'hidden.md');
-  assert.equal(core.fileName('Plan', ['plan.md', 'Plan 2.md', 'other.md']), 'Plan 3.md');
+  assert.equal(core.fileName('[資料] 作成: A/B #work  #urgent', [], 'タスク'), '資料 作成 AB.md');
+  assert.equal(core.fileName('a\\b*c?d"e<f>g|h^i', [], 'タスク'), 'abcdefghi.md');
+  assert.equal(core.fileName('#work', [], 'タスク'), 'タスク.md');
+  assert.equal(core.fileName('#work', ['Task.md'], 'Task'), 'Task 2.md');
+  assert.equal(core.fileName('...hidden', [], 'タスク'), 'hidden.md');
+  assert.equal(core.fileName('Plan', ['plan.md', 'Plan 2.md', 'other.md'], 'タスク'), 'Plan 3.md');
 });

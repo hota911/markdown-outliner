@@ -2,6 +2,7 @@ import { flushSync } from 'svelte';
 import * as core from '../core.ts';
 import type { Status } from '../core.ts';
 import { RowKeys, type KeyedRow } from './keys.ts';
+import { errorText, messages, type Messages } from './messages.ts';
 import type { Adapter, Bookmark, Doc, MountOptions, Preferences, StatusFilter } from './types.ts';
 
 export type Field = 'title' | 'note';
@@ -21,10 +22,10 @@ export interface Drop {
   offset?: number;
 }
 
-export const statuses: [Status, string][] = [['todo', '未着手'], ['in-progress', '進行中'], ['done', '完了']];
-export const filters: [StatusFilter, string][] = [['all', 'すべて'], ['not-done', '完了以外'], ...statuses];
+export const statuses: Status[] = ['todo', 'in-progress', 'done'];
+export const filters: StatusFilter[] = ['all', 'not-done', ...statuses];
 export const statusIcons: Record<Status, string> = { todo: '○', 'in-progress': '◐', done: '✓' };
-const nextStatus = (status: Status | null) => statuses[(statuses.findIndex(([value]) => value === status) + 1) % statuses.length];
+const nextStatus = (status: Status | null) => statuses[(statuses.indexOf(status!) + 1) % statuses.length];
 
 // Only http(s) targets become anchors; any other Markdown link stays plain text.
 const markdownLink = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/;
@@ -100,12 +101,11 @@ function validBookmark(bookmark: unknown): bookmark is Bookmark {
   const value = bookmark as Bookmark | null;
   return !!value && typeof value.id === 'string' && ['file', 'search'].includes(value.kind)
     && typeof value.file === 'string' && value.file.length > 0
-    && ['all', ...statuses.map(([status]) => status)].includes(value.status)
+    && ['all', ...statuses].includes(value.status)
     && Array.isArray(value.tags) && value.tags.every(tag => typeof tag === 'string')
     && (value.searchText === undefined || typeof value.searchText === 'string');
 }
 
-const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 // One line of title text, matching the textarea's minimum height in styles.css.
 const MIN_TITLE_HEIGHT = 28;
 
@@ -118,6 +118,8 @@ export class Controller {
   saveState = $state({ text: '', dirty: false });
   searchSaved = $state(false);
 
+  // Messages in the display language chosen by the host (see MountOptions.language).
+  readonly t: Messages;
   readonly docs: Map<string, Doc>;
   private readonly adapter: Adapter;
   private readonly preferences: Preferences;
@@ -160,7 +162,8 @@ export class Controller {
   private renderCount = 0;
   private readonly recorded = new WeakMap<HTMLElement, number>();
 
-  constructor({ adapter, drafts, initialFile = 'tasks.md', preferences = { bookmarks: [] }, savePreferences }: MountOptions) {
+  constructor({ adapter, drafts, initialFile = 'tasks.md', language, preferences = { bookmarks: [] }, savePreferences }: MountOptions) {
+    this.t = messages[language];
     this.adapter = adapter;
     this.docs = drafts || new Map<string, Doc>();
     this.initialFile = initialFile;
@@ -168,6 +171,10 @@ export class Controller {
     this.fileList = [initialFile];
     this.preferences = preferences;
     this.savePreferences = savePreferences;
+  }
+
+  private describe(error: unknown) {
+    return errorText(this.t, error);
   }
 
   // Starts timers and listeners once the component is in the document.
@@ -189,7 +196,7 @@ export class Controller {
     this.adapter.list().then(list => {
       this.fileList = [...new Set([this.initialFile, ...list])];
       return this.openFile(this.current);
-    }).catch((error: unknown) => { this.message = message(error); this.render(); });
+    }).catch((error: unknown) => { this.message = this.describe(error); this.render(); });
   }
 
   destroy() {
@@ -263,11 +270,11 @@ export class Controller {
   }
 
   private normalize(from: string, target: string | null) {
-    if (typeof target !== 'string' || !target || /^(?:[/\\]|[a-zA-Z]:|[a-zA-Z]+:)/.test(target)) throw new Error('埋め込み先にはフォルダー内の相対パスを指定してください。');
+    if (typeof target !== 'string' || !target || /^(?:[/\\]|[a-zA-Z]:|[a-zA-Z]+:)/.test(target)) throw new Error(this.t.edit.embedRelativePath);
     const parts = from.split('/').slice(0, -1);
     for (const part of target.replace(/\\/g, '/').split('/')) {
       if (part === '..') {
-        if (!parts.length) throw new Error('埋め込み先がフォルダーの外にあります。');
+        if (!parts.length) throw new Error(this.t.edit.embedOutsideFolder);
         parts.pop();
       } else if (part && part !== '.') parts.push(part);
     }
@@ -339,7 +346,7 @@ export class Controller {
     const doc = this.docs.get(path)!;
     let result: core.EditResult;
     try { result = fn(doc.text); }
-    catch (error) { this.showToast(message(error)); return; }
+    catch (error) { this.showToast(this.describe(error)); return; }
     this.message = '';
     if (result.text === doc.text) return;
     this.remember();
@@ -369,7 +376,7 @@ export class Controller {
     let result: core.EditResult;
     try { result = field === 'note' ? core.updateNote(doc.text, line, value) : core.updateTitle(doc.text, line, value); }
     catch (error) {
-      this.message = message(error);
+      this.message = this.describe(error);
       this.notice = this.message;
       return;
     }
@@ -420,9 +427,9 @@ export class Controller {
 
   extractToFile = async (path: string, line: number) => {
     const doc = this.docs.get(path)!;
-    if (this.selectedLines.size > 1) { this.showToast('複数選択中はファイルにできません。選択を解除してください。'); return; }
-    if (!this.adapter.create) { this.showToast('ファイルを指定して開いたときは新しいファイルを作れません。'); return; }
-    if (this.busy || doc.conflict) { this.showToast('保存処理中または保存競合中はファイルにできません。'); return; }
+    if (this.selectedLines.size > 1) { this.showToast(this.t.edit.extractMultiple); return; }
+    if (!this.adapter.create) { this.showToast(this.t.edit.extractSingleFile); return; }
+    if (this.busy || doc.conflict) { this.showToast(this.t.edit.extractBusy); return; }
     this.busy = true;
     this.updateStatus();
     const before = doc.text;
@@ -431,7 +438,7 @@ export class Controller {
     try {
       const siblings = (await this.adapter.list()).filter(file => file.split('/').slice(0, -1).join('/') === folder).map(file => file.split('/').pop()!);
       const row = this.rows(path, before).find(value => value.line === line)!;
-      name = core.fileName(row.title, siblings);
+      name = core.fileName(row.title, siblings, this.t.edit.untitledFile);
       relative = folder ? folder + '/' + name : name;
       result = core.extractToFile(before, line, name);
       // The new file is created first so that a failure leaves the original untouched.
@@ -439,13 +446,13 @@ export class Controller {
     } catch (error) {
       this.busy = false;
       this.updateStatus();
-      this.showToast('ファイルにできませんでした: ' + message(error));
+      this.showToast(this.t.edit.extractFailed(this.describe(error)));
       return;
     }
     this.busy = false;
     this.updateStatus();
     if (doc.text !== before) {
-      this.showToast(name + ' を作成しましたが、作成中に入力が変わったため元の項目は置き換えていません。');
+      this.showToast(this.t.edit.extractChanged(name));
       return;
     }
     this.docs.set(relative, { text: result.extracted, baseRevision: created.revision, dirty: false, conflict: false });
@@ -455,7 +462,7 @@ export class Controller {
     this.undo.length = 0;
     this.redo.length = 0;
     await this.saveAll();
-    this.showToast(name + ' を作成しました。Undo の履歴は消去しました。');
+    this.showToast(this.t.edit.extracted(name));
   };
 
   // --- Field events -------------------------------------------------------------------------
@@ -799,14 +806,14 @@ export class Controller {
 
   openSource = async () => {
     try { await this.adapter.openSource!(this.zoom ? this.zoom.path : this.current); }
-    catch (error) { this.message = message(error); this.render(); }
+    catch (error) { this.message = this.describe(error); this.render(); }
   };
 
   copyConflict = (path: string, node: HTMLTextAreaElement) => {
     node.focus();
     node.select();
     const text = this.docs.get(path)!.text;
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(() => { this.message = '入力内容を選択しました。コピーしてください。'; });
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(() => { this.message = this.t.conflict.selectedForCopy; });
   };
 
   openExternal = async (path: string) => {
@@ -818,7 +825,7 @@ export class Controller {
       this.message = '';
       this.active = null;
       this.render();
-    } catch (error) { this.message = message(error); this.render(); }
+    } catch (error) { this.message = this.describe(error); this.render(); }
   };
 
   // --- Bookmarks ----------------------------------------------------------------------------
@@ -828,13 +835,13 @@ export class Controller {
     if (!save) return;
     const snapshot = JSON.parse(JSON.stringify(this.preferences)) as Preferences;
     this.preferenceSave = this.preferenceSave.then(() => save(snapshot)).catch((error: unknown) => {
-      if (!this.destroyed) this.showToast('画面設定を保存できませんでした: ' + message(error));
+      if (!this.destroyed) this.showToast(this.t.bookmarks.saveFailed(this.describe(error)));
     });
   }
 
   addBookmark = (kind: 'file' | 'search') => {
     if (!Array.isArray(this.preferences.bookmarks)) {
-      this.showToast('ブックマークの設定を読み込めません。設定ファイルを確認してください。');
+      this.showToast(this.t.bookmarks.listUnreadable);
       return;
     }
     const bookmark: Bookmark = {
@@ -844,7 +851,7 @@ export class Controller {
     if (this.preferences.bookmarks.some(saved => validBookmark(saved) && saved.kind === kind && saved.file === bookmark.file
       && saved.status === bookmark.status && JSON.stringify(saved.tags) === JSON.stringify(bookmark.tags)
       && (saved.searchText || '') === bookmark.searchText)) {
-      this.showToast('このブックマークは登録済みです。');
+      this.showToast(this.t.bookmarks.exists);
       return;
     }
     this.preferences.bookmarks.push(bookmark);
@@ -884,9 +891,9 @@ export class Controller {
   };
 
   openBookmark = async (bookmark: unknown) => {
-    if (!validBookmark(bookmark)) { this.showToast('このブックマークの設定は読み込めません。'); return; }
+    if (!validBookmark(bookmark)) { this.showToast(this.t.bookmarks.invalid); return; }
     try { await this.loadEmbeds(bookmark.file); }
-    catch (error) { this.showToast('ブックマークを開けませんでした: ' + message(error)); return; }
+    catch (error) { this.showToast(this.t.bookmarks.openFailed(this.describe(error))); return; }
     if (this.destroyed) return;
     this.filter = bookmark.kind === 'file' ? 'all' : bookmark.status;
     this.tags = bookmark.kind === 'file' ? '' : bookmark.tags.map(tag => '#' + tag).join(' ');
@@ -898,10 +905,10 @@ export class Controller {
   private bookmarkViews(): BookmarkView[] {
     return this.preferences.bookmarks.map(bookmark => {
       const valid = validBookmark(bookmark);
-      const filename = valid ? bookmark.file.split('/').pop()! : '読み込めないブックマーク';
-      const state = valid ? filters.find(([value]) => value === bookmark.status)![1] : '';
-      const label = valid && bookmark.kind === 'search' ? state + (bookmark.tags.length ? ' ' + bookmark.tags.map(tag => '#' + tag).join(' ') : '')
-        + (bookmark.searchText ? '「' + bookmark.searchText + '」' : '') + ' · ' + filename : filename;
+      const filename = valid ? bookmark.file.split('/').pop()! : this.t.bookmarks.unreadableLabel;
+      const label = valid && bookmark.kind === 'search'
+        ? this.t.bookmarks.searchLabel(this.t.filter[bookmark.status], bookmark.tags.map(tag => '#' + tag).join(' '), bookmark.searchText || '', filename)
+        : filename;
       return { bookmark, label, title: valid ? bookmark.file : label };
     });
   }
@@ -913,7 +920,7 @@ export class Controller {
     const dirty = docs.filter(doc => doc.dirty).length;
     const conflicts = docs.filter(doc => doc.conflict).length;
     this.saveState = {
-      text: this.busy ? '処理中…' : conflicts ? '保存競合 ' + conflicts + ' ファイル（入力保持）' : dirty ? '未保存 ' + dirty + ' ファイル' : '保存済み',
+      text: this.busy ? this.t.saveState.busy : conflicts ? this.t.saveState.conflicts(conflicts) : dirty ? this.t.saveState.unsaved(dirty) : this.t.saveState.saved,
       dirty: !!dirty,
     };
   }
@@ -989,8 +996,8 @@ export class Controller {
 
   private statusView(row: KeyedRow, zoomed: boolean) {
     if (row.kind !== 'task' || !row.status) return null;
-    const [next, nextLabel] = nextStatus(row.status);
-    const label = zoomed ? 'ズーム対象を' + nextLabel + 'にする' : statuses.find(([value]) => value === row.status)![1] + '（クリックで' + nextLabel + '）';
+    const next = nextStatus(row.status);
+    const label = zoomed ? this.t.zoomStatusButton(next) : this.t.statusButton(row.status, next);
     return { icon: statusIcons[row.status], label, next };
   }
 
@@ -1040,7 +1047,7 @@ export class Controller {
           try {
             item.embed.target = this.normalize(path, row.embed);
             item.embed.outline = this.outlineView(item.embed.target, [...chain, path]);
-          } catch (error) { item.embed.error = message(error); }
+          } catch (error) { item.embed.error = this.describe(error); }
         }
       } else itemByLine.set(row.line, item);
       items.push(item);
@@ -1050,7 +1057,7 @@ export class Controller {
       const descendants = rows.filter(child => child.line >= row.line && child.line < row.end && itemByLine.has(child.line));
       // Later (inner) rows go first, matching insertion right after the same item.
       itemByLine.get(descendants[descendants.length - 1].line)!.ends.unshift({
-        key: 'end-' + row.key, parentLine: row.line, depth: Math.max(0, row.depth + 1 - baseDepth), label: row.title + ' の子項目の末尾',
+        key: 'end-' + row.key, parentLine: row.line, depth: Math.max(0, row.depth + 1 - baseDepth), label: this.t.item.childrenEnd(row.title),
       });
     }
     const siblings = rows.filter(row => row.parentLine === (rootRow ? rootRow.line : null));
@@ -1083,7 +1090,7 @@ export class Controller {
     this.message = '';
     this.render();
     try { await this.loadEmbeds(path); }
-    catch (error) { this.message = message(error); }
+    catch (error) { this.message = this.describe(error); }
     this.render();
   };
 
@@ -1102,7 +1109,7 @@ export class Controller {
         doc.conflict = false;
       } catch (error) {
         doc.conflict = true;
-        this.message = '保存できませんでした: ' + message(error);
+        this.message = this.t.edit.saveFailed(this.describe(error));
       }
     }
     this.busy = false;
@@ -1120,13 +1127,13 @@ export class Controller {
         const result = await this.adapter.read(path);
         if (doc.dirty) {
           if (result.revision !== doc.baseRevision) doc.conflict = true;
-          this.message = '未保存の入力を保持しています。保存後に再読込してください。';
+          this.message = this.t.edit.reloadKeptInput;
         } else {
           if (doc.text !== result.text) this.clearSelection();
           doc.text = result.text;
           doc.baseRevision = result.revision;
         }
-      } catch (error) { this.message = message(error); }
+      } catch (error) { this.message = this.describe(error); }
     }
     await this.loadEmbeds(this.current);
     if (this.active || this.composing) { this.deferred = true; this.updateStatus(); } else this.render();
@@ -1152,7 +1159,7 @@ export class Controller {
             doc.baseRevision = result.revision;
             changed = true;
           }
-        } catch (error) { if (this.message !== message(error)) changed = true; this.message = message(error); }
+        } catch (error) { if (this.message !== this.describe(error)) changed = true; this.message = this.describe(error); }
       }
       const focused = this.activeElement;
       const editingControl = !!focused && !!this.container?.contains(focused) && ['INPUT', 'TEXTAREA', 'SELECT'].includes(focused.tagName) && (focused as HTMLInputElement).type !== 'checkbox';

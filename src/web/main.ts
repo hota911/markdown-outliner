@@ -1,6 +1,7 @@
 import '../styles.css';
 import './theme.css';
 import './web.css';
+import { languageOf, messages, serverErrorText } from '../ui/messages.ts';
 import { mountOutliner } from '../ui/mount.ts';
 import type { Adapter, Preferences } from '../ui/types.ts';
 
@@ -14,11 +15,15 @@ interface WebConfig {
 
 const app = document.getElementById('app')!;
 const config = JSON.parse(document.getElementById('outliner-config')!.textContent) as WebConfig;
+const language = languageOf(navigator.language);
+const t = messages[language];
+document.documentElement.lang = language;
+document.title = t.web.title;
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, options);
-  const result = (await response.json()) as T & { error?: string };
-  if (!response.ok) throw new Error(result.error || '操作に失敗しました。');
+  const result = (await response.json()) as T & { code?: unknown };
+  if (!response.ok) throw new Error(serverErrorText(t, result.code));
   return result;
 }
 
@@ -41,13 +46,14 @@ try {
   const saved = localStorage.getItem(config.preferencesKey);
   if (saved) preferences = JSON.parse(saved) as Preferences;
 } catch (error) {
-  app.textContent = 'ブックマークを読み込めません。ブラウザの保存設定を確認してください。';
+  app.textContent = t.web.preferencesUnreadable;
   throw error;
 }
 
 mountOutliner(app, {
   adapter,
   initialFile: config.initialFile,
+  language,
   preferences,
   savePreferences: value => {
     localStorage.setItem(config.preferencesKey, JSON.stringify(value));
