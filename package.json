@@ -1,6 +1,6 @@
 {
   "name": "markdown-outliner",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Outliner for Markdown task lists, as an Obsidian plugin and a local web app.",
   "license": "MIT",
   "author": "hota911",
