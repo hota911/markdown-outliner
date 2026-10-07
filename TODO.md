@@ -19,8 +19,8 @@
   - [ ] IME composition, save conflicts, dragging an item under another, and editing alongside the regular Markdown editor
   - [ ] The status button in Safari and with touch input
   - [ ] Embedded files created with 「ファイルにする」 (move to a file)
-- [ ] Screen tests for drag and drop
-  jsdom cannot reproduce dragging, so these are marked todo in test/ui.
+- [x] Screen tests for drag and drop
+  jsdom cannot reproduce dragging, so these run in Chromium with Playwright (`e2e/`, `npm run test:e2e`).
 - [x] Match the theme colors
   Done in 0.1.1: src/styles.css uses Obsidian's CSS variables and no longer sets `color-scheme: light`. The web version defines the same variables in light and dark sets in src/web/theme.css. A Mac version would reuse that file.
 - [x] Localization
