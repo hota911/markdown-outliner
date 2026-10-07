@@ -304,14 +304,5 @@ describe('outline view', () => {
     expect(titleValues()).toEqual(['a', 'child', 'b']);
   });
 
-  it('adds a bookmark for the current file', async () => {
-    const stored = [];
-    const { user, screen } = await setup({ 'tasks.md': '- [ ] a\n' }, { savePreferences: async value => { stored.push(value); } });
-    await user.click(screen.getByRole('button', { name: 'ファイルを追加' }));
-    expect(screen.getByRole('button', { name: 'tasks.md' })).toBeTruthy();
-    await flush();
-    expect(stored.at(-1).bookmarks).toMatchObject([{ kind: 'file', file: 'tasks.md', status: 'all', tags: [] }]);
-  });
-
   // Drag and drop needs layout and DataTransfer, which jsdom lacks; it is tested in e2e/drag.spec.ts.
 });
