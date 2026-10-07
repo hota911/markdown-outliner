@@ -7,7 +7,7 @@ The user interface is available in English and Japanese. The Obsidian plugin fol
 ## Features
 
 - Edit `- [ ]` / `- [/]` / `- [x]` tasks and plain bullets as an outline, with notes indented under each item.
-- Filter by status, tags, and title text, and keep adding tasks, children, and notes while a filter is active. New tasks get the current status and tags.
+- Filter by status, tags, and title text, and keep adding tasks, children, and notes while a filter is active. New tasks get the current status and tags. ⌘-click (Ctrl-click on Windows and Linux) a `#tag` in an item to add it to the filter.
 - Change hierarchy with Tab / Shift+Tab, move items with Alt+Up/Down or drag and drop, and select several siblings to move or update them together.
 - Zoom into an item, collapse items and embeds, and bookmark files and searches.
 - Item-level embeds such as `- ![[work.md]]` are edited in place and saved back to the embedded file. Embeds are resolved relative to the embedding file's folder.

@@ -1,7 +1,7 @@
 <script lang="ts">
   import Outline from './Outline.svelte';
   import type { Controller, Drop, ItemView } from './controller.svelte.ts';
-  import { linkParts, syncValue } from './controller.svelte.ts';
+  import { linkParts, syncValue, tagAt } from './controller.svelte.ts';
 
   let { ctrl, item }: { ctrl: Controller; item: ItemView } = $props();
 
@@ -21,8 +21,27 @@
     ctrl.dragOver(item.path, event.currentTarget as HTMLElement, event, destination);
   }
 
+  // ⌘/Ctrl-click on a #tag adds it to the search. A plain click keeps placing the caret.
+  function filterTag(event: MouseEvent, text: string, offset: number) {
+    const tag = event.metaKey || event.ctrlKey ? tagAt(text, offset) : null;
+    if (tag === null) return false;
+    event.preventDefault();
+    ctrl.filterByTag(tag);
+    return true;
+  }
+
+  function titleClick(event: MouseEvent & { currentTarget: HTMLTextAreaElement }) {
+    // The click has already put the caret where the pointer is.
+    const node = event.currentTarget;
+    if (node.selectionStart === node.selectionEnd && filterTag(event, node.value, node.selectionStart)) node.blur();
+  }
+
   function displayClick(event: MouseEvent) {
     if ((event.target as Element).closest('a') || !titleNode) return;
+    // The rendered text with links covers the textarea, so the clicked offset comes from the text node.
+    // Engines without caretPositionFromPoint (Safari before 18.4) just start editing.
+    const clicked = (event.metaKey || event.ctrlKey) ? document.caretPositionFromPoint?.(event.clientX, event.clientY) : null;
+    if (clicked && clicked.offsetNode.nodeType === Node.TEXT_NODE && filterTag(event, clicked.offsetNode.textContent!, clicked.offset)) return;
     titleNode.focus();
     titleNode.setSelectionRange(titleNode.value.length, titleNode.value.length);
   }
@@ -85,6 +104,7 @@
           data-line={item.row.line}
           data-field="title"
           {...titleEvents}
+          onclick={titleClick}
           onfocus={event => { titleEvents.onfocus(event); editing = true; }}
           onblur={event => { editing = false; shownTitle = event.currentTarget.value; titleEvents.onblur(); }}
         ></textarea>

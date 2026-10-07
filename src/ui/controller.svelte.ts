@@ -44,6 +44,13 @@ export function linkParts(title: string): LinkPart[] | null {
   return parts;
 }
 
+// The tag (without `#`) of the whitespace-separated word around `offset`, or null when that word
+// is not a tag. A word counts as a tag exactly when the search box would treat it as one.
+export function tagAt(text: string, offset: number): string | null {
+  const word = text.slice(0, offset).match(/\S*$/)![0] + text.slice(offset).match(/^\S*/)![0];
+  return /^#[^#\s]+$/.test(word) ? word.slice(1) : null;
+}
+
 // Attachment that writes the model value into an input on every render. A `value` attribute
 // is not enough: Svelte compares with the previously rendered value, not with what the user
 // typed since, so undo back to that value would leave the typed text in place.
@@ -869,6 +876,11 @@ export class Controller {
     this.kept.clear();
     this.active = null;
     this.render();
+  };
+
+  // Adds a tag to the search as if typed and applied; a tag already in the search is left as is.
+  filterByTag = (tag: string) => {
+    if (!this.tagList().includes(tag)) this.applySearch(this.searchValue() + ' #' + tag);
   };
 
   reset = () => {
