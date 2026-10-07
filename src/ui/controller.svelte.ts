@@ -52,6 +52,8 @@ function relativePath(from: string, target: string) {
 export const statuses: Status[] = ['todo', 'in-progress', 'done'];
 export const filters: StatusFilter[] = ['all', 'not-done', ...statuses];
 export const statusIcons: Record<Status, string> = { todo: '○', 'in-progress': '◐', done: '✓' };
+// Icons of the status filter options; 'all' has none since it is not narrowed to any status.
+export const filterIcons: Record<StatusFilter, string> = { all: '', 'not-done': '◌', ...statusIcons };
 const nextStatus = (status: Status | null) => statuses[(statuses.indexOf(status!) + 1) % statuses.length];
 
 // Only http(s) targets become anchors; any other Markdown link stays plain text.
