@@ -1,39 +1,39 @@
-# 開発タスク
+# Development tasks
 
-- [ ] 初回リリース（0.1.0） #P1
-  GitHub の Release から BRAT で入れられる状態を先に作り、コミュニティディレクトリへの登録はその後に行う。
-  - [ ] Plugin guidelines に合わせる #P1
-    getFileByPath への置き換えとタイトルの高さの CSS 変数化は済んだ。createEl は未対応。テーマ変数は「テーマに合わせた配色」で扱う。
-  - [ ] GitHub の Release を作る #P1
-    タグは manifest.json の version と同じにし、v を付けない。main.js、manifest.json、styles.css を添付する。
-  - [ ] コミュニティディレクトリに登録する
-    community.obsidian.md で GitHub アカウントを連携して追加し、自動レビューの指摘に対応する。
-- [ ] 入力欄にカーソルがあるタブにも外部の変更を反映する
-  3秒ごとの読み直しは動いているが、入力欄にカーソルがある間は反映を保留する。タブを切り替えてもカーソルは残るため、2つのタブで編集すると保留が解けない。保留中も表示は「保存済み」のまま。
-  対応：保留中は状態表示に外部の変更があることを出す。タブが再び表示されたとき、未保存の入力がなければ外部の変更を反映し、カーソルを同じ項目に戻す。
-- [ ] 保存競合を自動でマージする
-  読み込み時点・画面の編集・ディスクの3つを比べ、重ならない変更は自動で取り込み、同じ行の変更だけ diff を見せて確認する。読み込み時点の全文を保持する必要がある。
-- [ ] Obsidian 実機で確認する
-  - [ ] IME の変換確定、保存競合、ドラッグでの子への移動、通常のエディタとの同時編集
-  - [ ] 状態ボタンを Safari とタッチ操作で押す
-  - [ ] 「ファイルにする」で作った埋め込みファイル
-- [ ] ドラッグ操作の画面テスト
-  jsdom ではドラッグを再現できず、test/ui で todo にしている。
-- [ ] テーマに合わせた配色
-  src/styles.css の色は固定値で color-scheme: light のため、Obsidian のダークモードや他のテーマでは画面が白く浮く。色を Obsidian の CSS 変数に置き換え、Web 版と Mac 版は同名の変数をライトとダークの2組で定義する。CSS フレームワークは入れない（styles.css は Obsidian 全体に読み込まれ、本体の UI に影響するため）。
-- [ ] 多言語化
-  画面の文言は日本語だけ。まず英語を加える。Obsidian 版は Obsidian の表示言語に合わせる。
-- [ ] Obsidian 対応
-  - [ ] サイドメニューから開けるようにする
-  - [ ] ファイルごとにタブで開けるようにする
-    .md を開いたときに自動で切り替える方法は未調査。
-- [ ] Mac アプリ版
-  - [ ] Mac アプリ版の追加
-  - [ ] Mac アプリの配布
-- [ ] 将来の機能
-  仕様は未決定。
-  - [ ] 必要な項目だけにブロック ID（^id）を付ける
-  - [ ] Pomodoro（見積もりの記載、実行、見積もりの合計）
-  - [ ] アーカイブ
-    完了したタスクを別のファイル（例：TODO.md から TODO.archived.md）へ移す。
-  - [ ] タスク管理の Skill と MCP
+- [ ] First release (0.1.0) #P1
+  Make the plugin installable with BRAT from a GitHub Release first, then submit it to the community directory.
+  - [ ] Follow the Plugin guidelines #P1
+    Switching to getFileByPath and moving the title height into a CSS variable are done. createEl is not yet used. Theme variables are covered by "Match the theme colors".
+  - [ ] Create a GitHub Release #P1
+    The tag is exactly the version in manifest.json, without a `v` prefix. Attach main.js, manifest.json, and styles.css.
+  - [ ] Submit to the community directory
+    Add the plugin on community.obsidian.md after linking the GitHub account, and address the automated review.
+- [ ] Apply external changes in a tab whose input has focus
+  The page re-reads files every 3 seconds, but it defers external changes while an input has focus. Switching browser tabs keeps that focus, so when two tabs edit the same file the deferral never ends, and the status still shows 「保存済み」 (saved).
+  Plan: while a change is deferred, say so in the status. When the tab becomes visible again and there is no unsaved input, apply the external change and restore the focus to the same item.
+- [ ] Merge save conflicts automatically
+  Compare the loaded version, the on-screen edits, and the file on disk. Apply non-overlapping changes automatically and show a diff for confirmation only when the same line changed. This requires keeping the full text as loaded.
+- [ ] Check in Obsidian itself
+  - [ ] IME composition, save conflicts, dragging an item under another, and editing alongside the regular Markdown editor
+  - [ ] The status button in Safari and with touch input
+  - [ ] Embedded files created with 「ファイルにする」 (move to a file)
+- [ ] Screen tests for drag and drop
+  jsdom cannot reproduce dragging, so these are marked todo in test/ui.
+- [ ] Match the theme colors
+  Colors in src/styles.css are fixed and set `color-scheme: light`, so the outliner stays white in Obsidian's dark mode and in other themes. Replace the colors with Obsidian's CSS variables, and define the same variables in light and dark sets for the web and Mac versions. Do not add a CSS framework: styles.css is loaded into all of Obsidian and would affect its own UI.
+- [ ] Localization
+  The UI text is Japanese only. Add English first. The Obsidian version follows Obsidian's display language.
+- [ ] Obsidian integration
+  - [ ] Open the outliner from the side menu
+  - [ ] Open each file in its own tab
+    How to switch automatically when a .md file is opened has not been investigated.
+- [ ] Mac app
+  - [ ] Add a Mac app version
+  - [ ] Distribute the Mac app
+- [ ] Future features
+  Not yet specified.
+  - [ ] Add block IDs (`^id`) only to the items that need them
+  - [ ] Pomodoro (write estimates, run timers, sum the estimates)
+  - [ ] Archive
+    Move completed tasks to another file, for example from TODO.md to TODO.archived.md.
+  - [ ] A skill and an MCP server for task management
