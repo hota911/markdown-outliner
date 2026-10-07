@@ -7,8 +7,8 @@ export type CoreErrorCode =
   | 'noEditableItem' | 'titleNewline' | 'unknownStatus' | 'embedHasNoStatus' | 'noteFormat' | 'noteUnsafe'
   | 'invalidInsert' | 'invalidTag' | 'invalidMergeDirection' | 'mergeAcrossEmbed' | 'mergeAcrossText'
   | 'mergeBothHaveContent' | 'unsafeIndent' | 'invalidMoveDirection' | 'invalidReorder' | 'reorderSiblingsOnly'
-  | 'reorderAcrossEmbed' | 'reorderAcrossText' | 'invalidReparent' | 'reparentIntoSelf' | 'reparentSiblingsOnly'
-  | 'invalidInsertPosition' | 'insertPositionInSelection' | 'reparentAcrossEmbed' | 'reparentAcrossText'
+  | 'reorderAcrossText' | 'invalidReparent' | 'reparentIntoSelf' | 'reparentSiblingsOnly'
+  | 'invalidInsertPosition' | 'insertPositionInSelection' | 'reparentIntoEmbed' | 'reparentAcrossText'
   | 'invalidFileNameInput' | 'invalidFileName' | 'extractEmbed' | 'invalidFilter';
 
 // Edits refuse with a code; the UI turns it into text in the display language (src/ui/messages.ts).
@@ -320,7 +320,6 @@ export function reorder(text: string, lines: number[], targetLine: number, posit
   const group = siblings(doc);
   const bounds = [...moving, doc.row].map(row => group.indexOf(row));
   const affected = group.slice(Math.min(...bounds), Math.max(...bounds) + 1);
-  if (doc.rows.some(row => row.kind === 'embed' && row.line >= affected[0].line && row.line < affected[affected.length - 1].end)) throw new CoreError('reorderAcrossEmbed');
   for (let index = 1; index < affected.length; index++) {
     if (doc.lines.slice(affected[index - 1].end, affected[index].line).some(value => value.trim())) throw new CoreError('reorderAcrossText');
   }
@@ -369,9 +368,9 @@ export function reparent(text: string, sourceLines: number[], targetLine: number
   if (targetLine === null && beforeLine === null && doc.lines[insertion - 1] === '') insertion--;
   const start = Math.min(targetLine === null ? insertion : targetLine, first.line);
   const end = Math.max(doc.row ? doc.row.end : Math.min(insertion + 1, doc.lines.length), moving[moving.length - 1].end);
-  if (doc.rows.some(row => row.kind === 'embed' && row.line >= start && row.line < end)) throw new CoreError('reparentAcrossEmbed');
-  const isEmbed = (row: ScannedRow) => row.kind === 'embed';
-  if (ancestorsInclude(doc, doc.row, isEmbed) || ancestorsInclude(doc, first, isEmbed)) throw new CoreError('reparentAcrossEmbed');
+  // An embed line is moved like an item, but nothing goes under it: its children would read as
+  // part of the embedded file.
+  if (ancestorsInclude(doc, doc.row, row => row.kind === 'embed')) throw new CoreError('reparentIntoEmbed');
   for (let line = start; line < end; line++) {
     if (doc.lines[line].trim() && !doc.rows.some(row => line >= row.line && line < row.ownEnd)) throw new CoreError('reparentAcrossText');
   }

@@ -1052,6 +1052,29 @@ export class Controller {
     }, 'title');
   };
 
+  // Alt+Up / Alt+Down on a focused handle. This is how an embed line, which has no text field, moves
+  // from the keyboard. A selection that includes the row moves as a whole.
+  handleKeydown = (path: string, row: KeyedRow, event: KeyboardEvent) => {
+    if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+    event.preventDefault();
+    const down = event.key === 'ArrowDown';
+    const sortedSelection = () => [...this.selectedLines].sort((a, b) => a - b);
+    let line = row.line;
+    if (this.selectedPath === path && this.selectedLines.has(row.line)) {
+      const index = sortedSelection().indexOf(row.line);
+      this.moveSelection(down);
+      line = sortedSelection()[index];
+    } else {
+      this.mutate(path, text => {
+        const result = core.move(text, row.line, down ? 'down' : 'up');
+        line = result.line;
+        return result;
+      }, null);
+    }
+    // The re-render may have moved or replaced the focused handle.
+    [...this.container!.querySelectorAll<HTMLElement>('.drag-handle')].find(node => node.dataset.path === path && Number(node.dataset.line) === line)?.focus();
+  };
+
   clearSelectionAndRender = () => {
     this.clearSelection();
     this.render();
@@ -1088,8 +1111,10 @@ export class Controller {
     const hasChildren = rows.some(child => child.parentLine === row.line);
     const bounds = node.getBoundingClientRect();
     const fraction = (event.clientY - bounds.top) / bounds.height;
-    const titleLeft = node.querySelector('.title-input')!.getBoundingClientRect().left;
-    if (!hasChildren && fraction >= .25 && fraction <= .75 && event.clientX >= titleLeft) {
+    // An embed line has no text field; the embed's name starts where an item's title would.
+    const titleLeft = node.querySelector('.title-input, .embed-title')!.getBoundingClientRect().left;
+    // Nothing goes under an embed line (core.reparent refuses it), so it only takes drops before and after.
+    if (row.kind !== 'embed' && !hasChildren && fraction >= .25 && fraction <= .75 && event.clientX >= titleLeft) {
       return { parentLine: row.line, beforeLine: null, indicator: 'drop-child', offset: 24 };
     }
     const position = fraction < .5 ? 'before' : 'after';
@@ -1479,7 +1504,8 @@ export class Controller {
             item.embed.outline = this.outlineView(item.embed.target, [...chain, path]);
           } catch (error) { item.embed.error = this.describe(error); }
         }
-      } else itemByLine.set(row.line, item);
+      }
+      itemByLine.set(row.line, item);
       items.push(item);
     }
     for (const row of rows) {

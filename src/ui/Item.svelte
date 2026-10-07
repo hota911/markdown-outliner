@@ -64,13 +64,36 @@
   }
 </script>
 
+{#snippet handle()}
+  <button
+    type="button"
+    class="icon drag-handle"
+    title={ctrl.t.item.dragHandle}
+    aria-pressed={item.selected}
+    draggable="true"
+    data-path={item.path}
+    data-line={item.row.line}
+    onclick={event => ctrl.selectRow(item.path, item.row, event)}
+    onkeydown={event => ctrl.handleKeydown(item.path, item.row, event)}
+    ondragstart={event => ctrl.dragStart(item.path, item.row, event)}
+    ondragend={ctrl.dragEnd}
+  >⠿</button>
+{/snippet}
+
 <!-- Plain text pieces carry their offset in the title, so a click on them, marked or not, can put the caret there. -->
 {#snippet marked(pieces: Piece[], plain: boolean)}{#each pieces as piece, index (index)}{#if piece.mark}<mark data-start={plain ? piece.start : undefined}>{piece.text}</mark>{:else if plain}<span data-start={piece.start}>{piece.text}</span>{:else}{piece.text}{/if}{/each}{/snippet}
 
 <div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} class:is-context={item.context} style:--depth={item.depth} in:grow>
   {#if item.embed}
-    <div class="outline-line">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="outline-line"
+      ondragover={event => dragOver(event, lineDrop(event.currentTarget))}
+      ondragleave={ctrl.clearDrop}
+      ondrop={event => ctrl.drop(item.path, event, lineDrop(event.currentTarget))}
+    >
       <button type="button" class="icon fold" title={ctrl.t.item.fold} onclick={() => ctrl.toggleFold(item.path, item.row.line)}>{item.collapsed ? '▸' : '▾'}</button>
+      {@render handle()}
       <span class="embed-title">{item.row.embed}</span>
     </div>
     {#if !item.collapsed}
@@ -95,16 +118,7 @@
       ondrop={event => ctrl.drop(item.path, event, lineDrop(event.currentTarget))}
     >
       <button type="button" class="icon fold" title={ctrl.t.item.fold} disabled={!item.hasChildren} onclick={() => ctrl.toggleFold(item.path, item.row.line)}>{item.collapsed ? '▸' : '▾'}</button>
-      <button
-        type="button"
-        class="icon drag-handle"
-        title={ctrl.t.item.dragHandle}
-        aria-pressed={item.selected}
-        draggable="true"
-        onclick={event => ctrl.selectRow(item.path, item.row, event)}
-        ondragstart={event => ctrl.dragStart(item.path, item.row, event)}
-        ondragend={ctrl.dragEnd}
-      >⠿</button>
+      {@render handle()}
       {#if item.status}
         {@const status = item.status}
         <button type="button" class="task-status" title={status.label} aria-label={status.label} data-status={item.row.status} onclick={() => ctrl.setStatus(item.path, item.row.line, status.next)}>{status.icon}</button>
