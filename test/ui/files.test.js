@@ -34,6 +34,35 @@ describe('embeds', () => {
     expect(adapter.files.get('tasks.md')).toBe('- ![[sub/work.md]]\n');
   });
 
+  it('edits the zoom title and note of the file opened after switching to an already loaded file', async () => {
+    const { user, screen, title, saved, adapter } = await setup({
+      'tasks.md': '- [ ] host\n- ![[work.md]]\n',
+      'work.md': '- [ ] job\n',
+    });
+    await user.selectOptions(screen.getByRole('combobox', { name: '開くファイル' }), 'work.md');
+    await user.click(title('job').closest('.outline-item').querySelector('[title="この項目にズーム"]'));
+    await user.type(screen.getByRole('textbox', { name: 'ズーム対象のタイトル' }), ' title');
+    await user.click(screen.getByRole('button', { name: 'ノート' }));
+    await user.type(screen.getByRole('textbox', { name: 'ズーム対象のノート' }), 'memo');
+    const work = await saved('work.md');
+    expect(adapter.files.get('tasks.md')).toBe('- [ ] host\n- ![[work.md]]\n');
+    expect(work).toBe('- [ ] job title\n  memo\n');
+  });
+
+  it('edits the zoom title and note of an embedded item in its own file', async () => {
+    const { user, screen, title, saved, adapter } = await setup({
+      'tasks.md': '- [ ] host\n- ![[work.md]]\n',
+      'work.md': '- [ ] job\n',
+    });
+    await user.click(title('job').closest('.outline-item').querySelector('[title="この項目にズーム"]'));
+    await user.type(screen.getByRole('textbox', { name: 'ズーム対象のタイトル' }), ' title');
+    await user.click(screen.getByRole('button', { name: 'ノート' }));
+    await user.type(screen.getByRole('textbox', { name: 'ズーム対象のノート' }), 'memo');
+    const work = await saved('work.md');
+    expect(adapter.files.get('tasks.md')).toBe('- [ ] host\n- ![[work.md]]\n');
+    expect(work).toBe('- [ ] job title\n  memo\n');
+  });
+
   it('shows a notice for a circular embed', async () => {
     const { screen } = await setup({ 'tasks.md': '- ![[tasks.md]]\n' });
     expect(screen.getByText('このファイルはすでに埋め込まれています。循環する埋め込みは表示できません。')).toBeTruthy();
