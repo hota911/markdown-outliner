@@ -112,15 +112,79 @@ describe('undo and redo', () => {
 });
 
 describe('external changes and conflicts', () => {
-  it('keeps the input and shows a conflict when the file changed before saving', async () => {
-    const { user, screen, title, adapter } = await setup({ 'tasks.md': '- [ ] a\n' });
+  it('merges an external change to other lines when saving, and typing continues in the same item', async () => {
+    const { user, screen, title, titleValues, adapter, saved } = await setup({ 'tasks.md': '- [ ] top\n- [ ] alpha\n' });
+    await user.type(title('alpha'), 'X');
+    adapter.externalWrite('tasks.md', '- [ ] top theirs\n- [ ] inserted\n- [ ] alpha\n');
+    await waitFor(() => expect(adapter.files.get('tasks.md')).toBe('- [ ] top theirs\n- [ ] inserted\n- [ ] alphaX\n'), { timeout: 4000 });
+    expect(screen.getByRole('status').textContent).toBe('tasks.md に外部の変更を取り込みました。Undo の履歴は消去しました。');
+    expect(titleValues()).toEqual(['top theirs', 'inserted', 'alphaX']);
+    expect(document.activeElement).toBe(title('alphaX'));
+    expect(title('alphaX').selectionStart).toBe(6);
+    await user.keyboard('!');
+    expect(await saved()).toBe('- [ ] top theirs\n- [ ] inserted\n- [ ] alphaX!\n');
+  });
+
+  it('merges an external change into unsaved input when the tab is shown again', async () => {
+    const { user, title, titleValues, adapter, saved } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n' });
+    await user.type(title('a'), '1');
+    adapter.externalWrite('tasks.md', '- [ ] a\n- [ ] b2\n');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await waitFor(() => expect(titleValues()).toEqual(['a1', 'b2']));
+    expect(document.activeElement).toBe(title('a1'));
+    expect(await saved()).toBe('- [ ] a1\n- [ ] b2\n');
+  });
+
+  it('merges again when the file changes once more between the merge and the save', async () => {
+    const { user, screen, title, adapter } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n- [ ] c\n' });
+    // Another editor writes again right after the merge read the file.
+    const read = adapter.read;
+    let writes = 0;
+    adapter.read = async path => {
+      const result = await read(path);
+      if (writes++ === 0) adapter.externalWrite('tasks.md', '- [ ] a\n- [ ] b2\n- [ ] c3\n');
+      return result;
+    };
+    await user.type(title('a'), '1');
+    adapter.externalWrite('tasks.md', '- [ ] a\n- [ ] b2\n- [ ] c\n');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(adapter.files.get('tasks.md')).toBe('- [ ] a1\n- [ ] b2\n- [ ] c3\n'));
+    expect(screen.queryByText(/保存競合/)).toBeNull();
+  });
+
+  it('shows the lines both sides changed, and keeps the other changes whichever side is chosen', async () => {
+    const { user, screen, title, container, adapter, saved } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n- [ ] c\n' });
     await user.type(title('a'), 'b');
-    adapter.externalWrite('tasks.md', '- [ ] changed elsewhere\n');
+    await user.type(title('c'), ' mine');
+    adapter.externalWrite('tasks.md', '- [ ] a theirs\n- [ ] b theirs\n- [ ] c\n');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(screen.getByText('tasks.md は外部でも変更され、1 か所が入力内容と競合しています。競合箇所にどちらを使うか選んでください。ほかの行の変更は両方とも残します。')).toBeTruthy());
+    expect([...container.querySelectorAll('.conflict-hunk pre')].map(side => side.textContent)).toEqual(['- [ ] ab', '- [ ] a theirs']);
+    expect(screen.getByRole('textbox', { name: 'tasks.md の保存前の入力内容' }).value).toBe('- [ ] ab\n- [ ] b\n- [ ] c mine\n');
+    expect(screen.getByText(/保存競合 1 ファイル/)).toBeTruthy();
+    expect(adapter.files.get('tasks.md')).toBe('- [ ] a theirs\n- [ ] b theirs\n- [ ] c\n');
+    await user.click(screen.getByRole('button', { name: '外部の内容を使う' }));
+    expect(screen.queryByText(/保存競合/)).toBeNull();
+    expect(await saved()).toBe('- [ ] a theirs\n- [ ] b theirs\n- [ ] c mine\n');
+  });
+
+  it('"入力内容を使う" keeps your lines where both sides changed them', async () => {
+    const { user, screen, title, adapter, saved } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n- [ ] c\n' });
+    await user.type(title('a'), 'b');
+    adapter.externalWrite('tasks.md', '- [ ] a theirs\n- [ ] b\n- [ ] c\n- [ ] d theirs\n');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(await screen.findByRole('button', { name: '入力内容を使う' }));
+    expect(await saved()).toBe('- [ ] ab\n- [ ] b\n- [ ] c\n- [ ] d theirs\n');
+  });
+
+  it('keeps the input with only the copy options when saving fails for another reason', async () => {
+    const { user, screen, title, adapter } = await setup({ 'tasks.md': '- [ ] a\n' });
+    adapter.save = async () => { throw new Error('ディスクがいっぱいです。'); };
+    await user.type(title('a'), 'b');
     await user.click(screen.getByRole('button', { name: '保存' }));
     await waitFor(() => expect(screen.getByText('tasks.md に外部の変更があります。入力内容を残しています。必要ならコピーしてから外部の内容を開いてください。')).toBeTruthy());
     expect(screen.getByRole('textbox', { name: 'tasks.md の保存前の入力内容' }).value).toBe('- [ ] ab\n');
-    expect(screen.getByText(/保存競合 1 ファイル/)).toBeTruthy();
-    expect(adapter.files.get('tasks.md')).toBe('- [ ] changed elsewhere\n');
+    expect(screen.queryByRole('button', { name: '入力内容を使う' })).toBeNull();
   });
 
   it('"外部の内容を開く" switches to the external content, and Undo brings the input back', async () => {

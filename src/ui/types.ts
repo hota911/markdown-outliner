@@ -1,4 +1,5 @@
 import type { Status } from '../core.ts';
+import type { Conflict } from '../three-way-merge.ts';
 import type { Language } from './messages.ts';
 
 // Web uses content hashes, Obsidian uses the text itself, tests use counters.
@@ -15,9 +16,13 @@ export interface Adapter {
 
 export interface Doc {
   text: string;
+  // The text as last loaded or saved: the common base when merging an external change.
+  baseText: string;
   baseRevision: Revision;
   dirty: boolean;
   conflict: boolean;
+  // The external version whose changes to the same lines conflict with this text, while unresolved.
+  external?: { text: string; revision: Revision; conflicts: Conflict[] };
 }
 
 export type StatusFilter = 'all' | 'not-done' | Status;

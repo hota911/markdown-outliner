@@ -85,7 +85,19 @@
       {/if}
       {#each view.conflicts as conflict (conflict.path)}
         <div class="conflict">
-          <p>{ctrl.t.conflict.message(conflict.path)}</p>
+          {#if conflict.hunks}
+            <p>{ctrl.t.conflict.conflictingLines(conflict.path, conflict.hunks.length)}</p>
+            {#each conflict.hunks as hunk, index (index)}
+              <div class="conflict-hunk">
+                <div><span>{ctrl.t.conflict.yours}</span><pre>{hunk.ours ?? ctrl.t.conflict.removed}</pre></div>
+                <div><span>{ctrl.t.conflict.external}</span><pre>{hunk.theirs ?? ctrl.t.conflict.removed}</pre></div>
+              </div>
+            {/each}
+            <button type="button" title={ctrl.t.conflict.keepMineTitle} onclick={() => ctrl.resolveConflict(conflict.path, 'ours')}>{ctrl.t.conflict.keepMine}</button>
+            <button type="button" title={ctrl.t.conflict.takeExternalTitle} onclick={() => ctrl.resolveConflict(conflict.path, 'theirs')}>{ctrl.t.conflict.takeExternal}</button>
+          {:else}
+            <p>{ctrl.t.conflict.message(conflict.path)}</p>
+          {/if}
           <textarea class="local-copy" readonly value={conflict.text} aria-label={ctrl.t.conflict.copyLabel(conflict.path)}></textarea>
           <button type="button" title={ctrl.t.conflict.copyTitle} onclick={event => copyConflict(conflict.path, event)}>{ctrl.t.conflict.copy}</button>
           <button type="button" title={ctrl.t.conflict.openExternalTitle} onclick={() => ctrl.openExternal(conflict.path)}>{ctrl.t.conflict.openExternal}</button>
