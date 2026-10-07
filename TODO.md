@@ -19,8 +19,8 @@
   - [ ] Embedded files created with 「ファイルにする」 (move to a file)
 - [ ] Screen tests for drag and drop
   jsdom cannot reproduce dragging, so these are marked todo in test/ui.
-- [ ] Match the theme colors
-  Colors in src/styles.css are fixed and set `color-scheme: light`, so the outliner stays white in Obsidian's dark mode and in other themes. Replace the colors with Obsidian's CSS variables, and define the same variables in light and dark sets for the web and Mac versions. Do not add a CSS framework: styles.css is loaded into all of Obsidian and would affect its own UI.
+- [x] Match the theme colors
+  Done in 0.1.1: src/styles.css uses Obsidian's CSS variables and no longer sets `color-scheme: light`. The web version defines the same variables in light and dark sets in src/web/theme.css. A Mac version would reuse that file.
 - [ ] Localization
   The UI text is Japanese only. Add English first. The Obsidian version follows Obsidian's display language.
 - [ ] Obsidian integration

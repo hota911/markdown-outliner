@@ -1,4 +1,5 @@
 import '../styles.css';
+import './theme.css';
 import './web.css';
 import { mountOutliner } from '../ui/mount.ts';
 import type { Adapter, Preferences } from '../ui/types.ts';
