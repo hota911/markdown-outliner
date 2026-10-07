@@ -47,6 +47,13 @@ export default defineConfig([
     rules: { 'no-unused-vars': 'off', '@typescript-eslint/no-unused-vars': 'error' },
   },
   {
+    // KeyboardEvent#keyCode is deprecated, but 229 is the only IME signal some browsers give
+    // for the key that ends composition. Keep reporting every other deprecated API.
+    files: ['**/*.{ts,svelte}'],
+    ignores: nodeFiles,
+    rules: { '@typescript-eslint/no-deprecated': ['warn', { allow: [{ from: 'lib', name: 'keyCode' }] }] },
+  },
+  {
     // The controller re-renders through its `version` counter (see render()), so its Maps and
     // Sets are deliberately plain collections rather than SvelteMap / SvelteSet.
     files: ['src/ui/controller.svelte.ts'],
