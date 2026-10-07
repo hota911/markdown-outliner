@@ -3,8 +3,9 @@ import * as core from '../core.ts';
 import type { Status } from '../core.ts';
 import { merge3, type Side } from '../three-way-merge.ts';
 import { RowKeys, type KeyedRow } from './keys.ts';
+import { filterActive, rowMatches, type FilterQuery, type TextQuery } from './filter.ts';
 import { errorText, messages, type Messages } from './messages.ts';
-import type { Adapter, Bookmark, Doc, MountOptions, Preferences, Revision, StatusFilter } from './types.ts';
+import type { Adapter, Bookmark, BookmarkZoom, Doc, MountOptions, Preferences, Revision, StatusFilter } from './types.ts';
 
 export type Field = 'title' | 'note';
 type RowKind = 'task' | 'bullet';
@@ -23,25 +24,74 @@ export interface Drop {
   offset?: number;
 }
 
+type SlashCommand = keyof Messages['slash']['command'];
+// The `/` or `#` menu of a title. `start` is the offset of the `/` or `#`, and the text after it up
+// to the caret is `query`. The 'files' step lists the files to embed, filtered by the same query.
+// The 'tags' step, opened by `#`, lists the tags in use (`tags`, sorted).
+interface Slash { path: string; line: number; start: number; query: string; step: 'commands' | 'files' | 'tags'; index: number; files: string[]; tags: string[] }
+export interface SlashMenu { id: string; label: string; options: { id: string; label: string }[]; index: number }
+// Gives each outliner its own option ids; Obsidian can show several outliners in one document.
+let slashMenus = 0;
+
+// Folds text for matching commands: full-width and half-width forms (NFKC), case, and katakana to
+// hiragana, so `ノート`, `のーと` and `ﾉｰﾄ` match each other.
+function foldKana(text: string) {
+  return text.normalize('NFKC').toLowerCase().replace(/[ァ-ヶ]/g, char => String.fromCharCode(char.charCodeAt(0) - 0x60));
+}
+
+const trigger = (slash: Slash) => slash.step === 'tags' ? '#' : '/';
+const sortTags = (tags: Iterable<string>) => [...new Set(tags)].sort((a, b) => a.localeCompare(b));
+
+// The path of `target` relative to the folder of `from`, as embeds are written (see normalize).
+function relativePath(from: string, target: string) {
+  const folder = from.split('/').slice(0, -1), parts = target.split('/');
+  let common = 0;
+  while (common < folder.length && common < parts.length - 1 && folder[common] === parts[common]) common++;
+  return [...folder.slice(common).map(() => '..'), ...parts.slice(common)].join('/');
+}
+
 export const statuses: Status[] = ['todo', 'in-progress', 'done'];
 export const filters: StatusFilter[] = ['all', 'not-done', ...statuses];
 export const statusIcons: Record<Status, string> = { todo: '○', 'in-progress': '◐', done: '✓' };
+// Icons of the status filter options; 'all' has none since it is not narrowed to any status.
+export const filterIcons: Record<StatusFilter, string> = { all: '', 'not-done': '◌', ...statusIcons };
 const nextStatus = (status: Status | null) => statuses[(statuses.indexOf(status!) + 1) % statuses.length];
 
 // Only http(s) targets become anchors; any other Markdown link stays plain text.
 const markdownLink = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/;
-export interface LinkPart { text: string; href?: string }
-export function linkParts(title: string): LinkPart[] | null {
-  if (!markdownLink.test(title)) return null;
-  const parts: LinkPart[] = [];
-  let rest = title, match;
-  while ((match = markdownLink.exec(rest))) {
-    if (match.index) parts.push({ text: rest.slice(0, match.index) });
-    parts.push({ text: match[1], href: match[2] });
-    rest = rest.slice(match.index + match[0].length);
+// A tag is a whole whitespace-separated word, the same rule the search box uses.
+// The leading space is captured rather than looked behind for, which iOS before 16.4 lacks.
+const tagWord = /(^|\s)(#[^#\s]+)(?=\s|$)/g;
+// `start` is the offset of the shown text in the title, so that a click on the rendered text can
+// put the caret there and filter matches can be marked in it.
+export interface TitlePart { text: string; start: number; href?: string; tag?: string }
+
+// The title split into http(s) links, #tags and plain text; null when it has neither links nor tags.
+export function titleParts(title: string): TitlePart[] | null {
+  const links = [...title.matchAll(new RegExp(markdownLink, 'g'))]
+    // The shown link text follows the opening bracket.
+    .map(match => ({ start: match.index, end: match.index + match[0].length, part: { text: match[1], start: match.index + 1, href: match[2] } }));
+  const tags = [...title.matchAll(tagWord)]
+    .map(match => ({ start: match.index + match[1].length, end: match.index + match[0].length, tag: match[2] }))
+    .map(({ start, end, tag }) => ({ start, end, part: { text: tag, start, tag: tag.slice(1) } }))
+    .filter(tag => !links.some(link => tag.start < link.end && link.start < tag.end));
+  if (!links.length && !tags.length) return null;
+  const parts: TitlePart[] = [];
+  let offset = 0;
+  for (const token of [...links, ...tags].sort((a, b) => a.start - b.start)) {
+    if (token.start > offset) parts.push({ text: title.slice(offset, token.start), start: offset });
+    parts.push(token.part);
+    offset = token.end;
   }
-  if (rest) parts.push({ text: rest });
+  if (offset < title.length) parts.push({ text: title.slice(offset), start: offset });
   return parts;
+}
+
+// The tag (without `#`) of the whitespace-separated word around `offset`, or null when that word
+// is not a tag. A word counts as a tag exactly when the search box would treat it as one.
+export function tagAt(text: string, offset: number): string | null {
+  const word = text.slice(0, offset).match(/\S*$/)![0] + text.slice(offset).match(/^\S*/)![0];
+  return /^#[^#\s]+$/.test(word) ? word.slice(1) : null;
 }
 
 // Attachment that writes the model value into an input on every render. A `value` attribute
@@ -63,7 +113,11 @@ export interface ItemView {
   hasChildren: boolean;
   showNote: boolean;
   status: { icon: string; label: string; next: Status } | null;
-  links: LinkPart[] | null;
+  titleParts: TitlePart[] | null;
+  // Shown only because a descendant matches the active filter; rendered dimmed.
+  context: boolean;
+  // The search box words and #tags to mark in the title; null without a text filter and for context rows.
+  highlight: TextQuery | null;
   embed: { target: string | null; error: string | null; outline: OutlineView | null } | null;
   // Drop targets after the last shown descendant of each ancestor that ends here, innermost first.
   ends: { key: string; parentLine: number; depth: number; label: string }[];
@@ -80,7 +134,8 @@ export type OutlineView =
   | { kind: 'missing' }
   | { kind: 'outline'; path: string; zoom: ZoomView | null; items: ItemView[]; addKind: RowKind; appendLine: number | null; appendChild: boolean };
 
-export interface BookmarkView { bookmark: unknown; label: string; title: string }
+// `defaultLabel` is the label derived from the view, shown while renaming; empty for an unreadable bookmark.
+export interface BookmarkView { bookmark: unknown; label: string; title: string; defaultLabel: string }
 
 export interface View {
   fileList: string[];
@@ -103,12 +158,27 @@ export interface View {
 
 function validBookmark(bookmark: unknown): bookmark is Bookmark {
   const value = bookmark as Bookmark | null;
-  return !!value && typeof value.id === 'string' && ['file', 'search'].includes(value.kind)
+  const zoom = value?.zoom;
+  return !!value && typeof value.id === 'string' && ['file', 'search', 'view'].includes(value.kind)
     && typeof value.file === 'string' && value.file.length > 0
-    && ['all', ...statuses].includes(value.status)
+    && filters.includes(value.status)
     && Array.isArray(value.tags) && value.tags.every(tag => typeof tag === 'string')
-    && (value.searchText === undefined || typeof value.searchText === 'string');
+    && (value.searchText === undefined || typeof value.searchText === 'string')
+    && (zoom === undefined || !!zoom && typeof zoom.path === 'string' && Number.isInteger(zoom.line) && typeof zoom.title === 'string')
+    && (value.name === undefined || typeof value.name === 'string');
 }
+
+// What a bookmark restores. A 'file' bookmark of 0.1.x shows the file without filters.
+interface SavedView { file: string; status: StatusFilter; tags: string[]; searchText: string; zoom: BookmarkZoom | null }
+
+const savedView = (bookmark: Bookmark): SavedView => bookmark.kind === 'file'
+  ? { file: bookmark.file, status: 'all', tags: [], searchText: '', zoom: null }
+  : { file: bookmark.file, status: bookmark.status, tags: bookmark.tags, searchText: bookmark.searchText || '', zoom: bookmark.zoom ?? null };
+
+// The zoomed item is compared by title, the same way openBookmark() finds it again.
+const sameView = (a: SavedView, b: SavedView) => a.file === b.file && a.status === b.status
+  && JSON.stringify(a.tags) === JSON.stringify(b.tags) && a.searchText === b.searchText
+  && (a.zoom === null ? b.zoom === null : b.zoom !== null && a.zoom.path === b.zoom.path && a.zoom.title === b.zoom.title);
 
 // Saves of one file per save request, when external changes keep merging cleanly in between.
 const SAVE_ATTEMPTS = 3;
@@ -127,6 +197,8 @@ export class Controller {
   notice = $state('');
   saveState = $state({ text: '', dirty: false });
   searchSaved = $state(false);
+  private slash = $state<Slash | null>(null);
+  private readonly slashId = 'outliner-slash-' + ++slashMenus;
 
   // Messages in the display language chosen by the host (see MountOptions.language).
   readonly t: Messages;
@@ -624,14 +696,20 @@ export class Controller {
     return {
       onfocus: (event: FocusEvent) => this.focusField(path, row().line, field, event.currentTarget as HTMLTextAreaElement),
       oncompositionstart: () => { this.composing = true; },
-      oncompositionend: () => { this.composing = false; this.scheduleSave(); },
-      oninput: (event: Event) => this.inputField(path, row().line, field, event.currentTarget as HTMLTextAreaElement),
+      oncompositionend: (event: CompositionEvent) => {
+        this.composing = false;
+        // Some browsers send no input event after the composition ends; check the menu against
+        // the committed text here.
+        if (field === 'title') this.slashInput(path, row().line, event.currentTarget as HTMLTextAreaElement, null);
+        this.scheduleSave();
+      },
+      oninput: (event: Event) => this.inputField(path, row().line, field, event.currentTarget as HTMLTextAreaElement, event as InputEvent),
       onblur: () => this.blurField(),
       onkeydown: (event: KeyboardEvent) => this.keydownField(path, row(), field, event.currentTarget as HTMLTextAreaElement, event),
     };
   }
 
-  private inputField(path: string, line: number, field: Field, node: HTMLTextAreaElement) {
+  private inputField(path: string, line: number, field: Field, node: HTMLTextAreaElement, event: InputEvent | null) {
     if (field === 'title' && /[\r\n]/.test(node.value)) {
       const position = node.selectionStart;
       const prefix = node.value.slice(0, position).replace(/[\r\n]+/g, ' ');
@@ -645,11 +723,15 @@ export class Controller {
     }
     this.inputEdit(path, line, field, node.value);
     if (field === 'note') node.rows = Math.max(1, Math.min(8, node.value.split('\n').length));
-    else this.fitTitle(node);
+    else {
+      this.fitTitle(node);
+      this.slashInput(path, line, node, event);
+    }
   }
 
   private blurField() {
     if (this.rendering) return;
+    this.slash = null;
     this.active = null;
     this.composing = false;
     this.deferred = true;
@@ -664,6 +746,7 @@ export class Controller {
   private keydownField(path: string, row: KeyedRow, field: Field, node: HTMLTextAreaElement, event: KeyboardEvent) {
     // keyCode 229 is the only IME signal some browsers give for the key that ends composition.
     if (event.isComposing || this.composing || event.keyCode === 229) return;
+    if (field === 'title' && this.slash?.path === path && this.slash.line === row.line && this.slashKey(node, event)) return;
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
       this.completeActive();
@@ -772,6 +855,191 @@ export class Controller {
     if (status) this.mutate(path, text => core.updateStatus(text, row.line, nextStatus(status)), field);
   });
 
+  // --- The `/` and `#` menus -----------------------------------------------------------------
+
+  // Opens, filters or closes the menu after input in a title. Only an ASCII `/` or `#` typed at
+  // the start or after whitespace opens it, so `A/B`, URLs and paths do not, and never an IME:
+  // neither its full-width `／` or `＃` nor the input events that commit a composition.
+  private slashInput(path: string, line: number, node: HTMLTextAreaElement, event: InputEvent | null) {
+    const value = node.value, caret = node.selectionStart;
+    const slash = this.slash;
+    if (slash?.path === path && slash.line === line && (this.composing || event?.isComposing)) {
+      // While an IME converts, the clause being converted is selected, so the caret rules below do
+      // not hold. The query runs to the end of the selection; the menu is checked again when the
+      // composition ends.
+      const end = node.selectionEnd, query = value.slice(slash.start + 1, end);
+      if (value[slash.start] === trigger(slash) && end > slash.start && !/\s/.test(query) && query !== slash.query) {
+        slash.query = query;
+        slash.index = 0;
+      }
+      return;
+    }
+    if (slash?.path === path && slash.line === line) {
+      const query = value.slice(slash.start + 1, caret);
+      if (value[slash.start] === trigger(slash) && caret > slash.start && node.selectionEnd === caret && !/\s/.test(query)) {
+        if (query !== slash.query) { slash.query = query; slash.index = 0; }
+        return;
+      }
+      this.slash = null;
+    }
+    if (event?.inputType !== 'insertText' || (event.data !== '/' && event.data !== '#') || event.isComposing || this.composing) return;
+    if (value[caret - 1] === event.data && (caret === 1 || /\s/.test(value[caret - 2]))) {
+      const start = caret - 1;
+      if (event.data === '/') {
+        this.slash = { path, line, start, query: '', step: 'commands', index: 0, files: [], tags: [] };
+        return;
+      }
+      // Without the `#` just typed, so that text right after it (`#|word`) is not offered as a tag.
+      const typed = core.updateTitle(this.docs.get(path)!.text, line, value.slice(0, start) + value.slice(caret)).text;
+      const loaded = [...this.docs].flatMap(([key, doc]) => core.tagsIn(key === path ? typed : doc.text));
+      this.slash = { path, line, start, query: '', step: 'tags', index: 0, files: [], tags: sortTags(loaded) };
+      this.adapter.tags?.().then(tags => {
+        const current = this.slash;
+        if (current?.step === 'tags' && current.path === path && current.line === line && current.start === start) current.tags = sortTags([...current.tags, ...tags]);
+      }).catch((error: unknown) => this.showToast(this.describe(error)));
+    }
+  }
+
+  private slashOptions(slash: Slash) {
+    if (slash.step === 'tags') {
+      // Tags starting with the query come first, then the ones containing it, each alphabetically.
+      const query = foldKana(slash.query);
+      const folded = slash.tags.map(tag => ({ tag, folded: foldKana(tag) }));
+      const matches = [
+        ...folded.filter(({ folded }) => folded.startsWith(query)),
+        ...folded.filter(({ folded }) => !folded.startsWith(query) && folded.includes(query)),
+      ].map(({ tag }) => tag);
+      // A tag typed out in full is no suggestion on its own: the menu closes and Enter stays Enter.
+      if (matches.length === 1 && matches[0] === slash.query) return [];
+      return matches.map(tag => ({ id: tag, label: '#' + tag }));
+    }
+    const query = slash.step === 'files' ? slash.query.toLowerCase() : foldKana(slash.query);
+    if (slash.step === 'files') {
+      return slash.files.filter(file => file !== slash.path && file.toLowerCase().includes(query)).map(file => ({ id: file, label: file }));
+    }
+    const row = this.rows(slash.path).find(value => value.line === slash.line);
+    if (!row) return [];
+    const zoomed = this.zoomRoot(slash.path)?.line === row.line;
+    // Status commands also turn a bullet into a task, as core.updateStatus does.
+    const commands = (Object.keys(this.t.slash.command) as SlashCommand[]).filter(command =>
+      !(command === 'task' && row.kind === 'task' || command === 'bullet' && row.kind !== 'task' || command === 'zoom' && zoomed));
+    return commands
+      .filter(command => [messages.en, messages.ja].some(({ slash }) => foldKana(slash.command[command].label + ' ' + slash.command[command].keywords).includes(query)))
+      .map(command => ({ id: command, label: this.t.slash.command[command].label }));
+  }
+
+  // The open menu of a title, or null. A menu without matches is not shown, and Enter stays Enter.
+  slashMenu(path: string, line: number): SlashMenu | null {
+    const slash = this.slash;
+    if (slash?.path !== path || slash.line !== line) return null;
+    const options = this.slashOptions(slash);
+    if (!options.length) return null;
+    const label = slash.step === 'files' ? this.t.slash.files : slash.step === 'tags' ? this.t.slash.tags : this.t.slash.commands;
+    return { id: this.slashId, label, options, index: Math.min(slash.index, options.length - 1) };
+  }
+
+  // Returns whether the key was used by the menu.
+  private slashKey(node: HTMLTextAreaElement, event: KeyboardEvent) {
+    const slash = this.slash!;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      // The typed text stays; from the file list Escape goes back to the commands.
+      if (slash.step === 'files') { slash.step = 'commands'; slash.index = 0; }
+      else this.slash = null;
+      return true;
+    }
+    const options = this.slashOptions(slash);
+    if (!options.length || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      slash.index = (Math.min(slash.index, options.length - 1) + (event.key === 'ArrowDown' ? 1 : options.length - 1)) % options.length;
+      return true;
+    }
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault();
+      void this.runSlash(options[Math.min(slash.index, options.length - 1)].id, node);
+      return true;
+    }
+    return false;
+  }
+
+  private titleNode(path: string, line: number) {
+    return [...this.container!.querySelectorAll<HTMLTextAreaElement>('[data-field="title"]')]
+      .find(node => node.dataset.path === path && Number(node.dataset.line) === line) ?? null;
+  }
+
+  // Runs a command of the menu on its item. The `/query` text is removed in the same undo step as
+  // the command where the command edits the text; zoom and the note do not, and extracting to a
+  // file clears the undo history anyway.
+  runSlash = async (id: string, node = this.slash && this.titleNode(this.slash.path, this.slash.line)) => {
+    const slash = this.slash;
+    if (!slash || !node) return;
+    const { path, line, start } = slash;
+    // A tap during an IME composition commits the word first, as the touch bar does.
+    if (this.composing) node.blur();
+    const value = node.value, end = Math.max(start + 1, node.selectionStart);
+    if (value[start] !== trigger(slash)) { this.slash = null; return; }
+    if (slash.step === 'tags') {
+      // `#query` becomes `#tag` and a space, unless whitespace follows already; the caret goes after it.
+      const rest = value.slice(end), tag = '#' + id + (/^\s/.test(rest) ? '' : ' ');
+      const caret = start + tag.length + (/^\s/.test(rest) ? 1 : 0);
+      // mutate does not render when the text stays the same (the tag was typed out before a space).
+      this.slash = null;
+      this.mutate(path, text => core.updateTitle(text, line, value.slice(0, start) + tag + rest), 'title');
+      const focused = this.activeElement instanceof HTMLTextAreaElement && this.activeElement.dataset.field === 'title' ? this.activeElement : node;
+      if (focused.isConnected) {
+        if (this.activeElement !== focused) focused.focus();
+        focused.setSelectionRange(caret, caret);
+      }
+      return;
+    }
+    // At the end of the text, the space typed before the `/` goes too.
+    const title = value.slice(end) ? value.slice(0, start) + value.slice(end) : value.slice(0, start).trimEnd();
+    const strip = (text: string) => core.updateTitle(text, line, title).text;
+    const mutateTitle = (fn: (text: string) => core.EditResult) => {
+      this.mutate(path, fn, 'title');
+      const focused = this.activeElement;
+      if (focused instanceof HTMLTextAreaElement && focused.dataset.field === 'title') focused.setSelectionRange(start, start);
+    };
+    if (slash.step === 'files') {
+      const name = relativePath(path, id);
+      let replaced = false;
+      this.mutate(path, text => {
+        const result = core.embedFile(strip(text), line, name);
+        replaced = result.line === line;
+        return result;
+      }, null);
+      if (!replaced) this.active = { path, line, field: 'title' };
+      await this.loadEmbeds(path);
+      this.render();
+      return;
+    }
+    const command = id as SlashCommand;
+    if (command === 'embed') {
+      // The file list is filtered by what is typed after the same `/`.
+      node.value = value.slice(0, start + 1) + value.slice(end);
+      node.setSelectionRange(start + 1, start + 1);
+      this.inputField(path, line, 'title', node, null);
+      if (!node.isConnected) return;
+      if (this.activeElement !== node) node.focus();
+      this.slash = { ...slash, step: 'files', query: '', index: 0, files: [...this.fileList] };
+      this.adapter.list().then(list => { if (this.slash?.step === 'files' && this.slash.path === path && this.slash.line === line) this.slash.files = list; })
+        .catch((error: unknown) => this.showToast(this.describe(error)));
+      return;
+    }
+    if (command === 'todo' || command === 'in-progress' || command === 'done') mutateTitle(text => core.updateStatus(strip(text), line, command));
+    else if (command === 'task') mutateTitle(text => core.updateStatus(strip(text), line, 'todo'));
+    else if (command === 'bullet') mutateTitle(text => core.toBullet(strip(text), line));
+    else {
+      mutateTitle(text => core.updateTitle(text, line, title));
+      if (command === 'note') this.focusNote(path, line);
+      else if (command === 'zoom') this.zoomTo(path, line);
+      else await this.extractToFile(path, line);
+    }
+    if (node.isConnected && !(this.activeElement instanceof HTMLTextAreaElement)) node.focus();
+  };
+
   // --- Row actions --------------------------------------------------------------------------
 
   setStatus = (path: string, line: number, status: Status) => this.mutate(path, text => core.updateStatus(text, line, status), 'title');
@@ -798,24 +1066,42 @@ export class Controller {
     this.render();
   };
 
-  private shown(path: string, text: string) {
-    const tagFilters = this.tagList();
+  private query(): FilterQuery {
+    return { status: this.filter, tags: this.tagList(), text: this.textSearch.trim() };
+  }
+
+  // The lines to show, each mapped to whether the row matches the filter itself (true) or is shown
+  // only as an ancestor of a match (false). An embed matches when anything in its file matches.
+  // `chain` holds the files embedding this one, as in outlineView(), to stop at cycles.
+  private shown(path: string, text: string, chain: string[] = []): Map<number, boolean> {
+    const query = this.query(), active = filterActive(query);
     const rows = this.rows(path, text);
     const byLine = new Map(rows.map(row => [row.line, row]));
     const keptLines = new Set(this.keepFor(path));
-    const visible = new Set<number>();
+    const shown = new Map<number, boolean>();
     for (const row of rows) {
-      const words = (row.title + '\n' + row.note).split(/\s+/);
-      const matches = (this.filter === 'all' || (this.filter === 'not-done' ? row.status !== 'done' : row.status === this.filter)) && tagFilters.every(tag => words.includes('#' + tag))
-        && row.title.toLowerCase().includes(this.textSearch.trim().toLowerCase());
-      if (!keptLines.has(row.line) && !matches) continue;
-      let ancestor: KeyedRow | undefined = row;
-      while (ancestor) {
-        visible.add(ancestor.line);
-        ancestor = ancestor.parentLine === null ? undefined : byLine.get(ancestor.parentLine);
+      const matches = !active || keptLines.has(row.line)
+        || (row.kind === 'embed' ? this.embedMatches(path, row, chain) : rowMatches(row, query));
+      if (!matches) continue;
+      shown.set(row.line, true);
+      // Ancestors come before their descendants, so an ancestor already shown has its own ancestors shown too.
+      for (let ancestor = row.parentLine === null ? undefined : byLine.get(row.parentLine); ancestor && !shown.has(ancestor.line);
+        ancestor = ancestor.parentLine === null ? undefined : byLine.get(ancestor.parentLine)) {
+        shown.set(ancestor.line, false);
       }
     }
-    return visible;
+    return shown;
+  }
+
+  // Whether anything in the embedded file matches the filter. A cycle, an invalid path or a file
+  // that is not loaded has nothing to match.
+  private embedMatches(path: string, row: KeyedRow, chain: string[]) {
+    let target: string;
+    try { target = this.normalize(path, row.embed); }
+    catch { return false; }
+    const doc = this.docs.get(target);
+    if (!doc || chain.includes(target) || target === path) return false;
+    return [...this.shown(target, doc.text, [...chain, path]).values()].some(Boolean);
   }
 
   selectRow = (path: string, row: KeyedRow, event: MouseEvent) => {
@@ -875,6 +1161,29 @@ export class Controller {
     }, 'title');
   };
 
+  // Alt+Up / Alt+Down on a focused handle. This is how an embed line, which has no text field, moves
+  // from the keyboard. A selection that includes the row moves as a whole.
+  handleKeydown = (path: string, row: KeyedRow, event: KeyboardEvent) => {
+    if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+    event.preventDefault();
+    const down = event.key === 'ArrowDown';
+    const sortedSelection = () => [...this.selectedLines].sort((a, b) => a - b);
+    let line = row.line;
+    if (this.selectedPath === path && this.selectedLines.has(row.line)) {
+      const index = sortedSelection().indexOf(row.line);
+      this.moveSelection(down);
+      line = sortedSelection()[index];
+    } else {
+      this.mutate(path, text => {
+        const result = core.move(text, row.line, down ? 'down' : 'up');
+        line = result.line;
+        return result;
+      }, null);
+    }
+    // The re-render may have moved or replaced the focused handle.
+    [...this.container!.querySelectorAll<HTMLElement>('.drag-handle')].find(node => node.dataset.path === path && Number(node.dataset.line) === line)?.focus();
+  };
+
   clearSelectionAndRender = () => {
     this.clearSelection();
     this.render();
@@ -911,8 +1220,10 @@ export class Controller {
     const hasChildren = rows.some(child => child.parentLine === row.line);
     const bounds = node.getBoundingClientRect();
     const fraction = (event.clientY - bounds.top) / bounds.height;
-    const titleLeft = node.querySelector('.title-input')!.getBoundingClientRect().left;
-    if (!hasChildren && fraction >= .25 && fraction <= .75 && event.clientX >= titleLeft) {
+    // An embed line has no text field; the embed's name starts where an item's title would.
+    const titleLeft = node.querySelector('.title-input, .embed-title')!.getBoundingClientRect().left;
+    // Nothing goes under an embed line (core.reparent refuses it), so it only takes drops before and after.
+    if (row.kind !== 'embed' && !hasChildren && fraction >= .25 && fraction <= .75 && event.clientX >= titleLeft) {
       return { parentLine: row.line, beforeLine: null, indicator: 'drop-child', offset: 24 };
     }
     const position = fraction < .5 ? 'before' : 'after';
@@ -980,6 +1291,11 @@ export class Controller {
     this.render();
   };
 
+  // Adds a tag to the search as if typed and applied; a tag already in the search is left as is.
+  filterByTag = (tag: string) => {
+    if (!this.tagList().includes(tag)) this.applySearch(this.searchValue() + ' #' + tag);
+  };
+
   reset = () => {
     this.filter = 'all';
     this.tags = '';
@@ -1042,44 +1358,65 @@ export class Controller {
     });
   }
 
-  addBookmark = (kind: 'file' | 'search') => {
+  addBookmark = () => {
     if (this.current === null) return;
     if (!Array.isArray(this.preferences.bookmarks)) {
       this.showToast(this.t.bookmarks.listUnreadable);
       return;
     }
-    const bookmark: Bookmark = {
-      id: crypto.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(36).slice(2), kind, file: this.current,
-      status: kind === 'file' ? 'all' : this.filter, tags: kind === 'file' ? [] : this.tagList(), searchText: kind === 'file' ? '' : this.textSearch.trim(),
-    };
-    if (this.preferences.bookmarks.some(saved => validBookmark(saved) && saved.kind === kind && saved.file === bookmark.file
-      && saved.status === bookmark.status && JSON.stringify(saved.tags) === JSON.stringify(bookmark.tags)
-      && (saved.searchText || '') === bookmark.searchText)) {
+    const view = this.currentView()!;
+    // One bookmark per view: the star in the search box shows and removes the bookmark of the
+    // current view, which would be ambiguous with duplicates.
+    if (this.currentViewBookmark()) {
       this.showToast(this.t.bookmarks.exists);
       return;
     }
+    const bookmark: Bookmark = {
+      id: crypto.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(36).slice(2), kind: 'view',
+      file: view.file, status: view.status, tags: view.tags, searchText: view.searchText, ...(view.zoom ? { zoom: view.zoom } : {}),
+    };
     this.preferences.bookmarks.push(bookmark);
     this.persistPreferences();
     this.render();
   };
 
-  private currentSearchBookmark() {
-    return Array.isArray(this.preferences.bookmarks) ? this.preferences.bookmarks.find(saved => validBookmark(saved)
-      && saved.kind === 'search' && saved.file === this.current && saved.status === this.filter
-      && JSON.stringify(saved.tags) === JSON.stringify(this.tagList()) && (saved.searchText || '') === this.textSearch.trim()) : undefined;
+  private currentView(): SavedView | null {
+    if (this.current === null) return null;
+    const zoom = this.zoom;
+    const zoomRow = zoom && this.docs.has(zoom.path) ? this.rows(zoom.path).find(row => row.line === zoom.line) : undefined;
+    return {
+      file: this.current, status: this.filter, tags: this.tagList(), searchText: this.textSearch.trim(),
+      zoom: zoom && zoomRow ? { path: zoom.path, line: zoom.line, title: zoomRow.title } : null,
+    };
+  }
+
+  private currentViewBookmark() {
+    const view = this.currentView();
+    return view && Array.isArray(this.preferences.bookmarks)
+      ? this.preferences.bookmarks.find(saved => validBookmark(saved) && sameView(savedView(saved), view)) : undefined;
   }
 
   private updateStar() {
-    this.searchSaved = !!this.currentSearchBookmark();
+    this.searchSaved = !!this.currentViewBookmark();
   }
 
   toggleSearchBookmark = () => {
-    const existing = this.currentSearchBookmark();
+    const existing = this.currentViewBookmark();
     if (existing) {
       this.preferences.bookmarks.splice(this.preferences.bookmarks.indexOf(existing), 1);
       this.persistPreferences();
       this.render();
-    } else this.addBookmark('search');
+    } else this.addBookmark();
+  };
+
+  // An empty name removes the custom name, so the label is derived from the view again.
+  renameBookmark = (bookmark: unknown, name: string) => {
+    if (!validBookmark(bookmark)) { this.showToast(this.t.bookmarks.invalid); return; }
+    const trimmed = name.trim();
+    if (trimmed) bookmark.name = trimmed;
+    else delete bookmark.name;
+    this.persistPreferences();
+    this.render();
   };
 
   removeBookmark = (bookmark: unknown) => {
@@ -1099,21 +1436,31 @@ export class Controller {
     try { await this.loadEmbeds(bookmark.file); }
     catch (error) { this.showToast(this.t.bookmarks.openFailed(this.describe(error))); return; }
     if (this.destroyed) return;
-    this.filter = bookmark.kind === 'file' ? 'all' : bookmark.status;
-    this.tags = bookmark.kind === 'file' ? '' : bookmark.tags.map(tag => '#' + tag).join(' ');
-    this.textSearch = bookmark.kind === 'file' ? '' : bookmark.searchText || '';
+    const view = savedView(bookmark);
+    this.filter = view.status;
+    this.tags = view.tags.map(tag => '#' + tag).join(' ');
+    this.textSearch = view.searchText;
     this.kept.clear();
-    await this.openFile(bookmark.file);
+    await this.openFile(view.file);
+    if (this.destroyed || !view.zoom || this.current !== view.file) return;
+    const zoom = view.zoom;
+    const rows = this.docs.has(zoom.path) ? this.rows(zoom.path).filter(row => row.title === zoom.title) : [];
+    const nearest = rows.sort((a, b) => Math.abs(a.line - zoom.line) - Math.abs(b.line - zoom.line)).at(0);
+    if (!nearest) { this.showToast(this.t.bookmarks.zoomMissing(zoom.title)); return; }
+    this.zoomTo(zoom.path, nearest.line);
   };
 
   private bookmarkViews(): BookmarkView[] {
     return this.preferences.bookmarks.map(bookmark => {
-      const valid = validBookmark(bookmark);
-      const filename = valid ? bookmark.file.split('/').pop()! : this.t.bookmarks.unreadableLabel;
-      const label = valid && bookmark.kind === 'search'
-        ? this.t.bookmarks.searchLabel(this.t.filter[bookmark.status], bookmark.tags.map(tag => '#' + tag).join(' '), bookmark.searchText || '', filename)
+      if (!validBookmark(bookmark)) return { bookmark, label: this.t.bookmarks.unreadableLabel, title: this.t.bookmarks.unreadableLabel, defaultLabel: '' };
+      const view = savedView(bookmark);
+      const filename = view.file.split('/').pop()!;
+      const filtered = view.status !== 'all' || view.tags.length > 0 || view.searchText !== '';
+      const base = filtered || bookmark.kind === 'search'
+        ? this.t.bookmarks.searchLabel(this.t.filter[view.status], view.tags.map(tag => '#' + tag).join(' '), view.searchText, filename)
         : filename;
-      return { bookmark, label, title: valid ? bookmark.file : label };
+      const defaultLabel = view.zoom ? this.t.bookmarks.zoomLabel(base, view.zoom.title) : base;
+      return { bookmark, label: bookmark.name ?? defaultLabel, title: view.file, defaultLabel };
     });
   }
 
@@ -1141,6 +1488,8 @@ export class Controller {
     if (this.destroyed) return;
     if (this.composing) { this.deferred = true; return; }
     this.deferred = false;
+    // Every command ends in a render; any other render may move or remove the line the menu is on.
+    this.slash = null;
     const focus = this.active && { ...this.active };
     const focusRoot = this.focusRootAfterRender;
     this.focusRootAfterRender = false;
@@ -1220,7 +1569,9 @@ export class Controller {
     const doc = this.docs.get(path);
     if (!doc) return { kind: 'missing' };
     const rows = this.rows(path, doc.text);
-    const visible = this.shown(path, doc.text);
+    const visible = this.shown(path, doc.text, chain);
+    const query = this.query();
+    const highlight = query.text || query.tags.length ? { text: query.text, tags: query.tags } : null;
     const byLine = new Map(rows.map(row => [row.line, row]));
     const zoom = this.zoom;
     const rootRow = zoom && zoom.path === path ? byLine.get(zoom.line) ?? null : null;
@@ -1229,7 +1580,7 @@ export class Controller {
     const itemByLine = new Map<number, ItemView>();
     for (const row of rows) {
       if (rootRow && !(row.line > rootRow.line && row.line < rootRow.end)) continue;
-      if (!visible.has(row.line) && row.kind !== 'embed') continue;
+      if (!visible.has(row.line)) continue;
       let hidden = false;
       for (let ancestor = row.parentLine === null ? undefined : byLine.get(row.parentLine); ancestor; ancestor = ancestor.parentLine === null ? undefined : byLine.get(ancestor.parentLine)) {
         if (this.collapsed.has(this.key(path, ancestor.line))) { hidden = true; break; }
@@ -1247,7 +1598,10 @@ export class Controller {
         hasChildren: rows.some(child => child.parentLine === row.line),
         showNote: row.kind !== 'embed' && (!!row.note || this.isActive(path, row.line, 'note')),
         status: this.statusView(row, false),
-        links: row.kind === 'embed' ? null : linkParts(row.title),
+        titleParts: row.kind === 'embed' ? null : titleParts(row.title),
+        context: visible.get(row.line) === false,
+        // Context rows did not match, so any words they share with the query are not marked.
+        highlight: visible.get(row.line) ? highlight : null,
         embed: null,
         ends: [],
       };
@@ -1259,7 +1613,8 @@ export class Controller {
             item.embed.outline = this.outlineView(item.embed.target, [...chain, path]);
           } catch (error) { item.embed.error = this.describe(error); }
         }
-      } else itemByLine.set(row.line, item);
+      }
+      itemByLine.set(row.line, item);
       items.push(item);
     }
     for (const row of rows) {

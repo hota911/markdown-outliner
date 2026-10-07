@@ -191,6 +191,50 @@ describe('embeds', () => {
     expect(work).toBe('- [ ] job title\n  memo\n');
   });
 
+  const embedHandle = container => container.querySelector('.embed-title').closest('.outline-line').querySelector('[title="項目を選択／ドラッグして移動"]');
+
+  it('moves an embed line with Alt+ArrowUp / Alt+ArrowDown on its handle, and undo restores the order', async () => {
+    const { user, screen, container, saved, adapter } = await setup({
+      'tasks.md': '- [ ] a\n- ![[work.md]]\n- [ ] b\n',
+      'work.md': '- [ ] job\n',
+    });
+    embedHandle(container).focus();
+    await user.keyboard('{Alt>}{ArrowUp}{/Alt}');
+    // The handle keeps the focus, so the line can be moved again.
+    expect(document.activeElement).toBe(embedHandle(container));
+    expect(await saved()).toBe('- ![[work.md]]\n- [ ] a\n- [ ] b\n');
+    embedHandle(container).focus();
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}{Alt>}{ArrowDown}{/Alt}');
+    expect(await saved()).toBe('- [ ] a\n- [ ] b\n- ![[work.md]]\n');
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(await saved()).toBe('- [ ] a\n- ![[work.md]]\n- [ ] b\n');
+    expect(adapter.files.get('work.md')).toBe('- [ ] job\n');
+    expect(adapter.saves).not.toContain('work.md');
+  });
+
+  it('moves an item past an embed line with Alt+ArrowDown', async () => {
+    const { user, title, saved, adapter } = await setup({
+      'tasks.md': '- [ ] a\n- ![[work.md]]\n',
+      'work.md': '- [ ] job\n',
+    });
+    await user.click(title('a'));
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
+    expect(await saved()).toBe('- ![[work.md]]\n- [ ] a\n');
+    expect(adapter.files.get('work.md')).toBe('- [ ] job\n');
+  });
+
+  it('moves a selected embed line with the selection buttons', async () => {
+    const { user, screen, container, saved } = await setup({
+      'tasks.md': '- [ ] a\n- ![[work.md]]\n',
+      'work.md': '- [ ] job\n',
+    });
+    await user.click(embedHandle(container));
+    await user.click(screen.getByTitle('選択した項目をまとめて上へ移動'));
+    expect(await saved()).toBe('- ![[work.md]]\n- [ ] a\n');
+  });
+
   it('shows a notice for a circular embed', async () => {
     const { screen } = await setup({ 'tasks.md': '- ![[tasks.md]]\n' });
     expect(screen.getByText('このファイルはすでに埋め込まれています。循環する埋め込みは表示できません。')).toBeTruthy();

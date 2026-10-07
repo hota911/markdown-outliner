@@ -1,3 +1,4 @@
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 
 // Dragging uses HTML5 drag and drop on the ⠿ handle, which jsdom cannot run (test/ui), so
@@ -56,5 +57,34 @@ test.describe('drag and drop', () => {
     await (await outliner.handle('b')).click({ modifiers: ['Shift'] });
     await outliner.drag('a', 'c', { edge: 'child' });
     await expect.poll(outliner.saved).toBe('- [ ] c\n  - [ ] a\n  - [ ] b\n');
+  });
+});
+
+// The embedded file does not exist, so the embed shows an error, but its line is still moved like an item.
+test.describe('drag and drop of embed lines', () => {
+  const embedLine = (page: Page) => page.locator('.outline-line', { has: page.locator('.embed-title', { hasText: 'other.md' }) });
+
+  async function dragTo(page: Page, handle: Locator, line: Locator, edge: 'before' | 'after') {
+    const source = await handle.boundingBox();
+    const target = await line.boundingBox();
+    if (!source || !target) throw new Error('Element is not visible');
+    await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height * (edge === 'before' ? 0.1 : 0.9), { steps: 10 });
+    await page.mouse.up();
+  }
+
+  test('an embed line is dragged by its handle before an item', async ({ openOutliner, page }) => {
+    const outliner = await openOutliner('- [ ] a\n- [ ] b\n- ![[other.md]]\n');
+    await dragTo(page, embedLine(page).getByTitle('Select, or drag to move'), await outliner.line('a'), 'before');
+    await expect.poll(outliner.saved).toBe('- ![[other.md]]\n- [ ] a\n- [ ] b\n');
+  });
+
+  test('an item is dragged before and after an embed line', async ({ openOutliner, page }) => {
+    const outliner = await openOutliner('- [ ] a\n- ![[other.md]]\n- [ ] b\n');
+    await dragTo(page, await outliner.handle('b'), embedLine(page), 'before');
+    await expect.poll(outliner.saved).toBe('- [ ] a\n- [ ] b\n- ![[other.md]]\n');
+    await dragTo(page, await outliner.handle('a'), embedLine(page), 'after');
+    await expect.poll(outliner.saved).toBe('- [ ] b\n- ![[other.md]]\n- [ ] a\n');
   });
 });
