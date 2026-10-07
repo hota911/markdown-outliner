@@ -367,6 +367,29 @@ test('埋め込み行と不正なファイル名は切り出さない', () => {
   assert.throws(() => core.extractToFile('- [ ] task\n', 0, 'task'), { code: 'invalidFileName' });
 });
 
+test('タスクの状態を外して箇条書きにし、記号と字下げとノートを保つ', () => {
+  assert.deepEqual(core.toBullet('- parent\r\n\t* [/] Task #work\r\n\t  note\r\n', 1), { text: '- parent\r\n\t* Task #work\r\n\t  note\r\n', line: 1 });
+  assert.deepEqual(core.toBullet('- bullet\n', 0), { text: '- bullet\n', line: 0 });
+  assert.deepEqual(core.updateStatus('- bullet\n', 0, 'done'), { text: '- [x] bullet\n', line: 0 });
+  assert.throws(() => core.toBullet('- ![[work.md]]\n', 0), { code: 'embedHasNoStatus' });
+});
+
+test('空の項目を埋め込みに置き換え、それ以外は次の兄弟として埋め込みを追加する', () => {
+  assert.deepEqual(core.embedFile('- parent\n\t- [ ] \n- next\n', 1, 'work.md'), { text: '- parent\n\t- ![[work.md]]\n- next\n', line: 1 });
+  assert.deepEqual(core.embedFile('- [ ] task\n  note\n  - child\n- next\n', 0, '../notes/a b.md'), {
+    text: '- [ ] task\n  note\n  - child\n- ![[../notes/a b.md]]\n- next\n', line: 3,
+  });
+  assert.deepEqual(core.embedFile('- [ ] \n  - child\n', 0, 'work.md'), { text: '- [ ] \n  - child\n- ![[work.md]]\n', line: 2 });
+  assert.deepEqual(core.embedFile('- [ ] \r\n  note\r\n', 0, 'work.md'), { text: '- [ ] \r\n  note\r\n- ![[work.md]]\r\n', line: 2 });
+});
+
+test('埋め込めないファイル名と存在しない行を拒否する', () => {
+  assert.throws(() => core.embedFile('- [ ] \n', 0, 'work'), { code: 'invalidFileName' });
+  assert.throws(() => core.embedFile('- [ ] \n', 0, 'a]]b.md'), { code: 'invalidFileName' });
+  assert.throws(() => core.embedFile('- [ ] \n', 0, 'a#b.md'), { code: 'invalidFileName' });
+  assert.throws(() => core.embedFile('# H\n', 0, 'work.md'), { code: 'noEditableItem' });
+});
+
 test('タイトルからタグと使えない文字を除いてファイル名を作り、重複には番号を付ける', () => {
   assert.equal(core.fileName('[資料] 作成: A/B #work  #urgent', [], 'タスク'), '資料 作成 AB.md');
   assert.equal(core.fileName('a\\b*c?d"e<f>g|h^i', [], 'タスク'), 'abcdefghi.md');
