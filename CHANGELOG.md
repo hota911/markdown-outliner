@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Item titles wrapped after a few characters and the view scrolled horizontally in narrow panes such as an Obsidian tab, because hidden row buttons reserved space on every line. The buttons now float over the line on hover and appear below the line while you edit its title. Hidden buttons can no longer be clicked by accident.
 - The bar for selected items (Not started / In progress / ...) wraps instead of overflowing at narrow widths.
 - The outliner always opened `tasks.md` first, and listed it in the file picker even when the folder or vault had no such file. It now reopens the file shown last, or the first Markdown file in the list if that file is gone, and shows a message when there are no Markdown files. A file opened explicitly, such as an "Open as outline" tab or a single file given to the web server, still opens directly.
+- The web server kept the page and the list of built files from startup, so after `npm run build:web` while it ran, the page loaded deleted files and failed until the server restarted. The page and its files are now read on each request, so reloading the browser picks up a new build. A request for a missing file returns 404 instead of 500.
 
 ## [0.1.2] - 2026-10-07
 
