@@ -1,4 +1,4 @@
-import { outlineItems } from '../e2e/fixtures.ts';
+import { horizontalOverflow, outlineItems } from '../e2e/fixtures.ts';
 import { expect, skipReason, test, type Obsidian } from './fixtures.ts';
 
 test.skip(!!skipReason, skipReason ?? '');
@@ -100,4 +100,15 @@ test('with the Japanese interface language the plugin shows Japanese labels', as
   await obsidian.runCommand(openOutliner);
   await expect(obsidian.page.getByRole('button', { name: '保存', exact: true })).toBeVisible();
   await screenshot(obsidian, 'japanese');
+});
+
+test('item titles use the width of the tab, without a horizontal scrollbar', async ({ obsidian }) => {
+  const { page } = obsidian;
+  await obsidian.runCommand(openOutliner);
+  const items = outlineItems(page);
+  await expect.poll(items.titles).toContain('家の片付けをする #home');
+  await screenshot(obsidian, 'wrap');
+  expect(await items.titleLines('家の片付けをする #home')).toBe(1);
+  expect(await items.titleLines('週報をまとめる #work #priority/high')).toBe(1);
+  expect(await horizontalOverflow(page.locator('.markdown-outliner-container'))).toBeLessThanOrEqual(0);
 });

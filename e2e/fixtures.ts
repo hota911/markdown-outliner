@@ -18,6 +18,8 @@ export interface OutlineItems {
   line: (title: string) => Promise<Locator>;
   /** Drags the item with this title by its handle and drops it on the line of `target`. */
   drag: (title: string, target: string, at: DropPoint) => Promise<void>;
+  /** How many lines the title field of the item with this title takes up. */
+  titleLines: (title: string) => Promise<number>;
 }
 
 export interface Outliner extends OutlineItems {
@@ -45,6 +47,11 @@ async function itemLine(page: Page, title: string) {
   return { field, line: field.locator('xpath=ancestor::div[contains(@class, "outline-line")][1]') };
 }
 
+/** How far the content of the element is wider than the element, in pixels; 0 or less means no horizontal scrollbar. */
+export function horizontalOverflow(locator: Locator) {
+  return locator.evaluate(node => node.scrollWidth - node.clientWidth);
+}
+
 async function box(locator: Locator) {
   const result = await locator.boundingBox();
   if (!result) throw new Error('Element is not visible');
@@ -70,6 +77,11 @@ export function outlineItems(page: Page): OutlineItems {
       await page.mouse.move(x, y, { steps: 10 });
       await page.mouse.up();
     },
+    titleLines: async title => (await itemLine(page, title)).field.evaluate(node => {
+      const style = getComputedStyle(node);
+      const text = node.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      return Math.round(text / parseFloat(style.lineHeight));
+    }),
   };
 }
 

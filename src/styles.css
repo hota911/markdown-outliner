@@ -38,7 +38,7 @@
 .outliner .quiet { border-color: transparent; background: transparent; color: var(--text-muted); }
 .outliner .icon { width: 22px; height: 24px; padding: 0; border-color: transparent; background: transparent; }
 .outliner .zoom-bar { display: flex; align-items: center; gap: 12px; margin: 8px 0 2px; color: var(--text-muted); font-size: 12px; }
-.outliner .outline { padding: 12px 0 24px; min-height: 280px; }
+.outliner .outline { padding: 12px 0 24px; min-height: 280px; container-type: inline-size; }
 .outliner .zoom-heading { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--background-modifier-border); }
 .outliner .zoom-heading .zoom-title { width: 100%; font-size: 24px; font-weight: 600; line-height: 32px; }
 .outliner .zoom-heading select, .outliner .zoom-heading button { margin-top: 6px; font-size: 11px; }
@@ -54,9 +54,23 @@
 .outliner .title-input { display: block; border: 0; border-radius: 0; background: transparent; padding: 2px 0; flex: 1; min-width: 100px; min-height: 28px; height: var(--title-height, 28px); line-height: 24px; font-size: 15px; box-shadow: none; resize: none; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 .outliner .title-input:focus, .outliner .title-input:focus-visible { background: transparent; outline: none; border: 0; box-shadow: none; }
 .outliner .is-done > .outline-line .title-input { color: var(--text-faint); text-decoration: line-through; }
-.outliner .row-actions { display: flex; align-items: center; gap: 2px; opacity: 0; padding-right: 2px; }
-.outliner .outline-line:hover .row-actions, .outliner .outline-line:focus-within .row-actions { opacity: 1; }
+/* On hover the row buttons float over the right end of the line, so the title keeps the full width when they are hidden. */
+.outliner .row-actions { position: absolute; top: 0; right: 0; height: 28px; display: flex; align-items: center; gap: 2px; padding: 0 2px 0 6px; background: var(--background-primary); visibility: hidden; }
+.outliner .outline-line:hover .row-actions, .outliner .outline-line:focus-within .row-actions { visibility: visible; }
+.outliner .outline-line:hover .row-actions { background: var(--background-primary-alt); }
+.outliner .is-selected > .outline-line .row-actions { background: linear-gradient(var(--text-selection), var(--text-selection)), var(--background-primary); }
 .outliner .row-actions .quiet { font-size: 11px; padding: 2px 4px; }
+/* While the title is being edited, floating buttons would cover its end and the caret, so they hang just
+   below the line instead, over whatever follows. They stay out of the flow: if they pushed the next lines
+   down, those lines would jump back up when the title loses focus, between the press and the release of
+   a click on them. They stay below while one of them takes the focus from the title, for the same reason;
+   a focused handle does not count. */
+.outliner .outline-line:has(.title-input:focus, .row-actions :focus) .row-actions,
+.outliner .is-selected > .outline-line:has(.title-input:focus, .row-actions :focus) .row-actions { top: 100%; z-index: 1; background: var(--background-primary); }
+/* Too narrow to float the buttons over the title without covering the handle: they always hang below. */
+@container (max-width: 360px) {
+  .outliner .row-actions, .outliner .outline-line:hover .row-actions, .outliner .is-selected > .outline-line .row-actions { top: 100%; z-index: 1; background: var(--background-primary); }
+}
 .outliner .fold { color: var(--text-faint); flex: 0 0 18px; width: 18px; }
 .outliner .drag-handle { width: 14px; flex: 0 0 14px; cursor: grab; color: var(--text-faint); opacity: .25; }
 .outliner .outline-line:hover .drag-handle, .outliner .is-selected .drag-handle { opacity: 1; }
@@ -76,7 +90,7 @@
 .outliner .is-done > .outline-line .title-display { color: var(--text-faint); text-decoration: line-through; }
 .outliner .auto-save, .outliner .selection-bar { display: flex; align-items: center; gap: 5px; }
 .outliner .auto-save input { margin: 0; }
-.outliner .selection-bar { width: 100%; }
+.outliner .selection-bar { width: 100%; flex-wrap: wrap; }
 .outliner .bullet { width: 22px; min-width: 22px; color: var(--text-faint); text-align: center; }
 .outliner .note-input { margin: 0 0 3px 66px; width: calc(100% - 70px); resize: none; background: transparent; color: var(--text-muted); line-height: 1.4; font-size: 13px; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
 .outliner .note-input:focus, .outliner .note-input:focus-visible { outline: none; background: transparent; border: 0; box-shadow: none; }
@@ -98,5 +112,5 @@
 .outliner .local-copy { width: 100%; min-height: 140px; font-family: var(--font-monospace); font-size: 12px; }
 .outliner .empty { padding: 24px 16px; text-align: center; color: var(--text-faint); }
 .outliner .help { border-top: 1px solid var(--background-modifier-border); padding: 10px 0; color: var(--text-faint); font-size: 11px; }
-@media (max-width: 900px) { .outliner { margin: 12px auto; padding: 0 16px; } .outliner .outline-item { padding-left: calc(var(--depth) * 18px); } .outliner .row-actions { max-width: 128px; gap: 0; } .outliner .note-input { margin-left: 44px; width: calc(100% - 48px); } }
+@media (max-width: 900px) { .outliner { margin: 12px auto; padding: 0 16px; } .outliner .outline-item { padding-left: calc(var(--depth) * 18px); } .outliner .row-actions { gap: 0; } .outliner .note-input { margin-left: 44px; width: calc(100% - 48px); } }
 @media (max-width: 600px) { .outliner .outliner-workspace { gap: 12px; } .outliner .bookmarks:not(.is-collapsed) { flex-basis: 120px; padding-right: 8px; } .outliner .tag-filter { min-width: 100px; } }
