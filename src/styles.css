@@ -5,6 +5,9 @@
 .outliner .outliner-editor { flex: 1; min-width: 0; }
 .outliner .bookmarks { flex: 0 0 180px; padding-right: 16px; border-right: 1px solid var(--background-modifier-border); }
 .outliner .bookmarks.is-collapsed { flex-basis: 24px; padding-right: 0; }
+/* 150ms, the same as the item transitions in src/ui/motion.ts. */
+.outliner .bookmarks { transition: flex-basis 150ms ease-out, padding-right 150ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .outliner .bookmarks { transition: none; } }
 .outliner .bookmarks-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .outliner .bookmarks-heading { margin: 0; font-size: 13px; font-weight: 600; }
 .outliner .search-box { display: flex; align-items: center; position: relative; }

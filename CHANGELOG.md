@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A command menu opened by typing `/` at the start of an item's text or after a space. It sets the status, turns a task into a bullet or back, opens the note, zooms in, moves the item to a file, or embeds an existing Markdown file picked from a list. Typing filters the commands in English or Japanese; Up/Down, Enter, Tab, Escape, clicks and taps work. A `/` inside a word, a full-width `／`, IME input and notes do not open it.
 - Tag suggestions: typing `#` at the start of an item's text or after a space opens the same menu with the tags in use, filtered by what follows the `#`. In Obsidian these are the tags of the whole vault; in the web version, the tags in the files the outliner has read. Choosing one inserts the tag and a space.
 - At 600px wide or narrower, the bookmarks stack above the outline instead of sitting beside it.
+- Short animations (150ms): a new item, and the children shown by expanding an item or an embedded file, slide open; the bookmarks sidebar changes its width smoothly when collapsed or expanded. Opening a file or zooming does not animate the items, the new item has the focus at once, and with the system's reduced-motion setting nothing animates.
 
 ### Changed
 
