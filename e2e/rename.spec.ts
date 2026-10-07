@@ -31,12 +31,26 @@ async function open(page: Page) {
   await expect(page.getByRole('textbox', { name: 'Item text' }).nth(1)).toHaveValue('job');
 }
 
-const nameInput = (page: Page) => page.getByRole('textbox', { name: 'New name of the embedded file, without .md' });
+const nameInput = (page: Page) => page.getByRole('textbox', { name: 'New name for sub/work.md, without .md' });
 
 test('renames the embedded file on disk and updates the embed line', async ({ page }) => {
   await open(page);
+  const heading = page.locator('.embed-title');
+  const embedItem = page.locator('.outline-item', { has: heading });
+  const shownNames = async () => (await embedItem.innerText()).split('work').length - 1;
+  const before = await heading.boundingBox();
+  expect(await shownNames()).toBe(1);
   await page.getByRole('button', { name: 'Rename' }).click();
+  // The heading turns into the field in place: the name shows only in the field, and the
+  // heading stays where it was.
+  await expect(heading.getByRole('textbox')).toBeFocused();
   await expect(nameInput(page)).toHaveValue('work');
+  await expect(heading).toHaveText('sub/.md');
+  expect(await shownNames()).toBe(0);
+  const during = await heading.boundingBox();
+  expect(during!.x).toBe(before!.x);
+  expect(Math.abs(during!.y - before!.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(during!.height - before!.height)).toBeLessThanOrEqual(1);
   await nameInput(page).fill('done jobs');
   await nameInput(page).press('Enter');
   await expect(page.getByText('Renamed the file to done jobs.md.')).toBeVisible();

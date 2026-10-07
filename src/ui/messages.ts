@@ -120,7 +120,7 @@ const en = {
     openEmbedded: 'Open this file',
     renameTitle: 'Rename the embedded file',
     rename: 'Rename',
-    renameLabel: 'New name of the embedded file, without .md',
+    renameLabel: (embed: string) => `New name for ${embed}, without .md`,
     renameHint: 'Enter: rename · Esc: cancel',
     zoomTitlePlaceholder: 'Enter a title',
     zoomTitle: 'Title of the zoomed item',
@@ -135,7 +135,6 @@ const en = {
 
   item: {
     fold: 'Collapse or expand children',
-    embedSource: (path: string) => `File: ${path}`,
     dragHandle: 'Select, or drag to move',
     taskPlaceholder: 'Enter a task',
     bulletPlaceholder: 'Enter a bullet',
@@ -363,7 +362,7 @@ const ja: Messages = {
     openEmbedded: 'このファイルを開く',
     renameTitle: '埋め込み先のファイル名を変更',
     rename: '名前を変更',
-    renameLabel: '埋め込み先の新しいファイル名（.md を除く）',
+    renameLabel: embed => embed + ' の新しいファイル名（.md を除く）',
     renameHint: 'Enter: 変更 · Esc: 取り消し',
     zoomTitlePlaceholder: 'タイトルを入力',
     zoomTitle: 'ズーム対象のタイトル',
@@ -378,7 +377,6 @@ const ja: Messages = {
 
   item: {
     fold: '子項目を折りたたむ／開く',
-    embedSource: path => 'ファイル: ' + path,
     dragHandle: '項目を選択／ドラッグして移動',
     taskPlaceholder: 'タスクを入力',
     bulletPlaceholder: '箇条書きを入力',

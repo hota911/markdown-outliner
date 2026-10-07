@@ -21,9 +21,11 @@
     ctrl.dragOver(item.path, event.currentTarget as HTMLElement, event, destination);
   }
 
-  // Inline rename of the embedded file: only the base name is edited; the folder and .md stay.
+  // The embed heading itself turns into the rename field: only the base name is edited; the folder
+  // and .md stay as text around it.
   let renaming = $state(false);
-  const baseName = (embed: string) => embed.replace(/^.*[/\\]/, '').replace(/\.md$/, '');
+  const embedFolder = (embed: string) => /^.*[/\\]/.exec(embed)?.[0] ?? '';
+  const baseName = (embed: string) => embed.slice(embedFolder(embed).length).replace(/\.md$/, '');
   const focusAll = (node: HTMLInputElement) => { node.focus(); node.select(); };
 
   function renameKey(event: KeyboardEvent) {
@@ -50,35 +52,33 @@
   {#if item.embed}
     <div class="outline-line">
       <button type="button" class="icon fold" title={ctrl.t.item.fold} onclick={() => ctrl.toggleFold(item.path, item.row.line)}>{item.collapsed ? '▸' : '▾'}</button>
-      <span class="embed-title">{item.row.embed}</span>
+      {#if renaming}
+        {@const embed = item.row.embed!}
+        <span class="embed-title is-renaming">{embedFolder(embed)}<input
+            class="embed-rename"
+            aria-label={ctrl.t.outline.renameLabel(embed)}
+            title={ctrl.t.outline.renameHint}
+            value={baseName(embed)}
+            {@attach focusAll}
+            onkeydown={renameKey}
+            onblur={() => { renaming = false; }}
+          /><span class="rename-suffix">.md</span></span>
+      {:else}
+        <span class="embed-title">{item.row.embed}</span>
+      {/if}
     </div>
     {#if !item.collapsed}
       <div class="embedded">
-        <div class="source-label">{ctrl.t.item.embedSource(item.row.embed!)}</div>
         {#if item.embed.error !== null}
           <div class="notice">{item.embed.error}</div>
         {:else}
           {@const target = item.embed.target!}
-          {#if renaming}
-            <div class="rename-embed">
-              <input
-                class="rename-input"
-                aria-label={ctrl.t.outline.renameLabel}
-                value={baseName(item.row.embed!)}
-                {@attach focusAll}
-                onkeydown={renameKey}
-                onblur={() => { renaming = false; }}
-              /><span class="rename-suffix">.md</span>
-              <span class="rename-hint">{ctrl.t.outline.renameHint}</span>
-            </div>
-          {:else}
-            <div class="embed-actions">
-              <button type="button" class="quiet" title={ctrl.t.outline.openEmbeddedTitle} onclick={() => ctrl.openFile(target)}>{ctrl.t.outline.openEmbedded}</button>
-              {#if ctrl.canRename && item.embed.outline?.kind === 'outline'}
-                <button type="button" class="quiet" title={ctrl.t.outline.renameTitle} onclick={() => { renaming = true; }}>{ctrl.t.outline.rename}</button>
-              {/if}
-            </div>
-          {/if}
+          <div class="embed-actions">
+            <button type="button" class="quiet" title={ctrl.t.outline.openEmbeddedTitle} onclick={() => ctrl.openFile(target)}>{ctrl.t.outline.openEmbedded}</button>
+            {#if ctrl.canRename && item.embed.outline?.kind === 'outline'}
+              <button type="button" class="quiet" title={ctrl.t.outline.renameTitle} onclick={() => { renaming = true; }}>{ctrl.t.outline.rename}</button>
+            {/if}
+          </div>
           <Outline {ctrl} outline={item.embed.outline!} />
         {/if}
       </div>

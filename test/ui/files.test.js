@@ -12,7 +12,7 @@ describe('extract to file', () => {
     await waitFor(() => expect(screen.getByText('Plan trip 2.md を作成しました。Undo の履歴は消去しました。')).toBeTruthy());
     expect(adapter.files.get('notes/Plan trip 2.md')).toBe('- [ ] Plan trip #travel\n  - [ ] book hotel\n');
     expect(adapter.files.get('notes/tasks.md')).toBe('- ![[Plan trip 2.md]]\n- [ ] other\n');
-    expect(screen.getByText('ファイル: Plan trip 2.md')).toBeTruthy();
+    expect(screen.getByText('Plan trip 2.md', { selector: '.embed-title' })).toBeTruthy();
   });
 
   it('explains that a new file cannot be made when the adapter cannot create files', async () => {
@@ -24,9 +24,10 @@ describe('extract to file', () => {
 });
 
 describe('rename an embedded file', () => {
-  const startRename = async ({ user, screen }) => {
+  const nameInput = (screen, embed) => screen.queryByRole('textbox', { name: embed + ' の新しいファイル名（.md を除く）' });
+  const startRename = async ({ user, screen }, embed = 'work.md') => {
     await user.click(screen.getByRole('button', { name: '名前を変更' }));
-    return screen.getByRole('textbox', { name: '埋め込み先の新しいファイル名（.md を除く）' });
+    return nameInput(screen, embed);
   };
 
   it('renames the file within its folder and points the embed at the new name', async () => {
@@ -34,8 +35,10 @@ describe('rename an embedded file', () => {
       'notes/tasks.md': '- [ ] host\n- ![[sub/work.md]]\n',
       'notes/sub/work.md': '- [ ] job\n',
     }, { initialFile: 'notes/tasks.md' });
-    const input = await startRename(env);
+    const input = await startRename(env, 'sub/work.md');
     expect(input.value).toBe('work');
+    // The heading itself becomes the field, with the folder and .md kept as text around it.
+    expect(input.closest('.embed-title').textContent).toBe('sub/.md');
     await env.user.clear(input);
     await env.user.type(input, 'done jobs{Enter}');
     await waitFor(() => expect(env.screen.getByText('done jobs.md に名前を変更しました。Undo の履歴は消去しました。')).toBeTruthy());
@@ -90,7 +93,8 @@ describe('rename an embedded file', () => {
     const env = await setup({ 'tasks.md': '- ![[work.md]]\n', 'work.md': '- [ ] job\n' });
     await env.user.type(await startRename(env), '{Control>}a{/Control}jobs{Escape}');
     await flush();
-    expect(env.screen.queryByRole('textbox', { name: '埋め込み先の新しいファイル名（.md を除く）' })).toBeNull();
+    expect(nameInput(env.screen, 'work.md')).toBeNull();
+    expect(env.screen.getByText('work.md', { selector: '.embed-title' })).toBeTruthy();
     expect(Object.fromEntries(env.adapter.files)).toEqual({ 'tasks.md': '- ![[work.md]]\n', 'work.md': '- [ ] job\n' });
   });
 
@@ -106,7 +110,7 @@ describe('rename an embedded file', () => {
   it('updates the embed line that moved while the file was renamed', async () => {
     const env = await setup({ 'tasks.md': '- ![[a.md]]\n- ![[work.md]]\n', 'a.md': '- [ ] a\n', 'work.md': '- [ ] job\n' });
     await env.user.click(env.screen.getAllByRole('button', { name: '名前を変更' })[1]);
-    const input = env.screen.getByRole('textbox', { name: '埋め込み先の新しいファイル名（.md を除く）' });
+    const input = nameInput(env.screen, 'work.md');
     changeDuringRename(env.adapter, 'tasks.md', '- [ ] new\n- ![[a.md]]\n- ![[work.md]]\n');
     await env.user.type(input, '{Control>}a{/Control}jobs{Enter}');
     await waitFor(() => expect(env.screen.getByText('jobs.md に名前を変更しました。Undo の履歴は消去しました。')).toBeTruthy());
