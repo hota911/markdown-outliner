@@ -6,7 +6,7 @@ import { mountOutliner } from '../../src/ui/mount.ts';
 
 // In-memory stand-in for the web server / Obsidian vault adapters.
 // Revisions are counters so that any external write, even with equal text, is detected.
-export function memoryAdapter(initial, { canCreate = true } = {}) {
+export function memoryAdapter(initial, { canCreate = true, tags } = {}) {
   const files = new Map(Object.entries(initial));
   const revisions = new Map([...files.keys()].map(path => [path, 1]));
   const saves = [];
@@ -31,6 +31,8 @@ export function memoryAdapter(initial, { canCreate = true } = {}) {
       bump(path);
     },
   };
+  // Like Obsidian, a host may list the tags of all its files.
+  if (tags) adapter.tags = tags;
   if (canCreate) {
     adapter.create = async (path, text) => {
       if (files.has(path)) throw new Error('すでにあります: ' + path);
@@ -52,9 +54,9 @@ afterEach(() => {
 // Mounts the UI on an in-memory vault and waits until the initial file is shown.
 // Existing tests are written against the Japanese UI, so Japanese is the default here.
 // `initialFile: null` mounts without an initial file, as the Obsidian view and a folder server do.
-export async function setup(initial, { initialFile = 'tasks.md', canCreate, language = 'ja', preferences = { bookmarks: [] }, savePreferences } = {}) {
+export async function setup(initial, { initialFile = 'tasks.md', canCreate, tags, language = 'ja', preferences = { bookmarks: [] }, savePreferences } = {}) {
   const t = messages[language];
-  const adapter = memoryAdapter(initial, { canCreate });
+  const adapter = memoryAdapter(initial, { canCreate, tags });
   const container = document.createElement('div');
   document.body.append(container);
   const app = mountOutliner(container, { adapter, initialFile: initialFile ?? undefined, language, preferences, savePreferences });

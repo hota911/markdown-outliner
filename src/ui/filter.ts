@@ -43,7 +43,8 @@ export function matchRanges(title: string, query: TextQuery): [number, number][]
   return merged;
 }
 
-export interface Piece { text: string; mark: boolean }
+// `start` is the offset of the piece in the title, like the start of the part it was split from.
+export interface Piece { text: string; start: number; mark: boolean }
 
 // Splits `text`, which starts at offset `start` of the title, into marked and unmarked pieces.
 export function markPieces(text: string, start: number, ranges: [number, number][]): Piece[] {
@@ -52,10 +53,10 @@ export function markPieces(text: string, start: number, ranges: [number, number]
   for (const [from, to] of ranges) {
     const begin = Math.max(from - start, position), end = Math.min(to - start, text.length);
     if (begin >= end) continue;
-    if (begin > position) pieces.push({ text: text.slice(position, begin), mark: false });
-    pieces.push({ text: text.slice(begin, end), mark: true });
+    if (begin > position) pieces.push({ text: text.slice(position, begin), start: start + position, mark: false });
+    pieces.push({ text: text.slice(begin, end), start: start + begin, mark: true });
     position = end;
   }
-  if (position < text.length) pieces.push({ text: text.slice(position), mark: false });
+  if (position < text.length) pieces.push({ text: text.slice(position), start: start + position, mark: false });
   return pieces;
 }

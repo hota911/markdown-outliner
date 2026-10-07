@@ -1,4 +1,4 @@
-import { FileView, ItemView, MarkdownView, Notice, Plugin, Scope, TFile, getLanguage, normalizePath, requireApiVersion, type Menu, type WorkspaceLeaf } from 'obsidian';
+import { FileView, ItemView, MarkdownView, Notice, Plugin, Scope, TFile, getAllTags, getLanguage, normalizePath, requireApiVersion, type Menu, type WorkspaceLeaf } from 'obsidian';
 import { languageOf, messages, type Language, type Messages } from '../ui/messages.ts';
 import { mountOutliner } from '../ui/mount.ts';
 import type { Doc, Mounted, Preferences } from '../ui/types.ts';
@@ -45,6 +45,11 @@ function mountInView(view: ItemView, plugin: MarkdownOutlinerPlugin, drafts: Map
     savePreferences: value => plugin.saveData(value),
     adapter: {
       list: async () => vault.getMarkdownFiles().map(file => file.path).sort(),
+      // getAllTags covers tags in the text and in the frontmatter, and writes them with `#`.
+      tags: async () => vault.getMarkdownFiles().flatMap(file => {
+        const cache = view.app.metadataCache.getFileCache(file);
+        return (cache && getAllTags(cache)) ?? [];
+      }).map(tag => tag.replace(/^#/, '')),
       read: async relative => {
         const text = await vault.read(resolve(relative));
         return { text, revision: text };

@@ -24,28 +24,74 @@ export interface Drop {
   offset?: number;
 }
 
+type SlashCommand = keyof Messages['slash']['command'];
+// The `/` or `#` menu of a title. `start` is the offset of the `/` or `#`, and the text after it up
+// to the caret is `query`. The 'files' step lists the files to embed, filtered by the same query.
+// The 'tags' step, opened by `#`, lists the tags in use (`tags`, sorted).
+interface Slash { path: string; line: number; start: number; query: string; step: 'commands' | 'files' | 'tags'; index: number; files: string[]; tags: string[] }
+export interface SlashMenu { id: string; label: string; options: { id: string; label: string }[]; index: number }
+// Gives each outliner its own option ids; Obsidian can show several outliners in one document.
+let slashMenus = 0;
+
+// Folds text for matching commands: full-width and half-width forms (NFKC), case, and katakana to
+// hiragana, so `ノート`, `のーと` and `ﾉｰﾄ` match each other.
+function foldKana(text: string) {
+  return text.normalize('NFKC').toLowerCase().replace(/[ァ-ヶ]/g, char => String.fromCharCode(char.charCodeAt(0) - 0x60));
+}
+
+const trigger = (slash: Slash) => slash.step === 'tags' ? '#' : '/';
+const sortTags = (tags: Iterable<string>) => [...new Set(tags)].sort((a, b) => a.localeCompare(b));
+
+// The path of `target` relative to the folder of `from`, as embeds are written (see normalize).
+function relativePath(from: string, target: string) {
+  const folder = from.split('/').slice(0, -1), parts = target.split('/');
+  let common = 0;
+  while (common < folder.length && common < parts.length - 1 && folder[common] === parts[common]) common++;
+  return [...folder.slice(common).map(() => '..'), ...parts.slice(common)].join('/');
+}
+
 export const statuses: Status[] = ['todo', 'in-progress', 'done'];
 export const filters: StatusFilter[] = ['all', 'not-done', ...statuses];
 export const statusIcons: Record<Status, string> = { todo: '○', 'in-progress': '◐', done: '✓' };
+// Icons of the status filter options; 'all' has none since it is not narrowed to any status.
+export const filterIcons: Record<StatusFilter, string> = { all: '', 'not-done': '◌', ...statusIcons };
 const nextStatus = (status: Status | null) => statuses[(statuses.indexOf(status!) + 1) % statuses.length];
 
 // Only http(s) targets become anchors; any other Markdown link stays plain text.
 const markdownLink = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/;
-// `start` is the offset of the shown text in the title, so that filter matches can be marked in it.
-export interface LinkPart { text: string; start: number; href?: string }
-export function linkParts(title: string): LinkPart[] | null {
-  if (!markdownLink.test(title)) return null;
-  const parts: LinkPart[] = [];
-  let rest = title, offset = 0, match;
-  while ((match = markdownLink.exec(rest))) {
-    if (match.index) parts.push({ text: rest.slice(0, match.index), start: offset });
-    // The link text follows the opening bracket.
-    parts.push({ text: match[1], start: offset + match.index + 1, href: match[2] });
-    offset += match.index + match[0].length;
-    rest = rest.slice(match.index + match[0].length);
+// A tag is a whole whitespace-separated word, the same rule the search box uses.
+// The leading space is captured rather than looked behind for, which iOS before 16.4 lacks.
+const tagWord = /(^|\s)(#[^#\s]+)(?=\s|$)/g;
+// `start` is the offset of the shown text in the title, so that a click on the rendered text can
+// put the caret there and filter matches can be marked in it.
+export interface TitlePart { text: string; start: number; href?: string; tag?: string }
+
+// The title split into http(s) links, #tags and plain text; null when it has neither links nor tags.
+export function titleParts(title: string): TitlePart[] | null {
+  const links = [...title.matchAll(new RegExp(markdownLink, 'g'))]
+    // The shown link text follows the opening bracket.
+    .map(match => ({ start: match.index, end: match.index + match[0].length, part: { text: match[1], start: match.index + 1, href: match[2] } }));
+  const tags = [...title.matchAll(tagWord)]
+    .map(match => ({ start: match.index + match[1].length, end: match.index + match[0].length, tag: match[2] }))
+    .map(({ start, end, tag }) => ({ start, end, part: { text: tag, start, tag: tag.slice(1) } }))
+    .filter(tag => !links.some(link => tag.start < link.end && link.start < tag.end));
+  if (!links.length && !tags.length) return null;
+  const parts: TitlePart[] = [];
+  let offset = 0;
+  for (const token of [...links, ...tags].sort((a, b) => a.start - b.start)) {
+    if (token.start > offset) parts.push({ text: title.slice(offset, token.start), start: offset });
+    parts.push(token.part);
+    offset = token.end;
   }
-  if (rest) parts.push({ text: rest, start: offset });
+  if (offset < title.length) parts.push({ text: title.slice(offset), start: offset });
   return parts;
+}
+
+// The tag (without `#`) of the whitespace-separated word around `offset`, or null when that word
+// is not a tag. A word counts as a tag exactly when the search box would treat it as one.
+export function tagAt(text: string, offset: number): string | null {
+  const word = text.slice(0, offset).match(/\S*$/)![0] + text.slice(offset).match(/^\S*/)![0];
+  return /^#[^#\s]+$/.test(word) ? word.slice(1) : null;
 }
 
 // Attachment that writes the model value into an input on every render. A `value` attribute
@@ -67,7 +113,7 @@ export interface ItemView {
   hasChildren: boolean;
   showNote: boolean;
   status: { icon: string; label: string; next: Status } | null;
-  links: LinkPart[] | null;
+  titleParts: TitlePart[] | null;
   // Shown only because a descendant matches the active filter; rendered dimmed.
   context: boolean;
   // The search box words and #tags to mark in the title; null without a text filter and for context rows.
@@ -135,6 +181,8 @@ export class Controller {
   notice = $state('');
   saveState = $state({ text: '', dirty: false });
   searchSaved = $state(false);
+  private slash = $state<Slash | null>(null);
+  private readonly slashId = 'outliner-slash-' + ++slashMenus;
 
   // Messages in the display language chosen by the host (see MountOptions.language).
   readonly t: Messages;
@@ -523,14 +571,20 @@ export class Controller {
     return {
       onfocus: (event: FocusEvent) => this.focusField(path, row().line, field, event.currentTarget as HTMLTextAreaElement),
       oncompositionstart: () => { this.composing = true; },
-      oncompositionend: () => { this.composing = false; this.scheduleSave(); },
-      oninput: (event: Event) => this.inputField(path, row().line, field, event.currentTarget as HTMLTextAreaElement),
+      oncompositionend: (event: CompositionEvent) => {
+        this.composing = false;
+        // Some browsers send no input event after the composition ends; check the menu against
+        // the committed text here.
+        if (field === 'title') this.slashInput(path, row().line, event.currentTarget as HTMLTextAreaElement, null);
+        this.scheduleSave();
+      },
+      oninput: (event: Event) => this.inputField(path, row().line, field, event.currentTarget as HTMLTextAreaElement, event as InputEvent),
       onblur: () => this.blurField(),
       onkeydown: (event: KeyboardEvent) => this.keydownField(path, row(), field, event.currentTarget as HTMLTextAreaElement, event),
     };
   }
 
-  private inputField(path: string, line: number, field: Field, node: HTMLTextAreaElement) {
+  private inputField(path: string, line: number, field: Field, node: HTMLTextAreaElement, event: InputEvent | null) {
     if (field === 'title' && /[\r\n]/.test(node.value)) {
       const position = node.selectionStart;
       const prefix = node.value.slice(0, position).replace(/[\r\n]+/g, ' ');
@@ -544,11 +598,15 @@ export class Controller {
     }
     this.inputEdit(path, line, field, node.value);
     if (field === 'note') node.rows = Math.max(1, Math.min(8, node.value.split('\n').length));
-    else this.fitTitle(node);
+    else {
+      this.fitTitle(node);
+      this.slashInput(path, line, node, event);
+    }
   }
 
   private blurField() {
     if (this.rendering) return;
+    this.slash = null;
     this.active = null;
     this.composing = false;
     this.deferred = true;
@@ -563,6 +621,7 @@ export class Controller {
   private keydownField(path: string, row: KeyedRow, field: Field, node: HTMLTextAreaElement, event: KeyboardEvent) {
     // keyCode 229 is the only IME signal some browsers give for the key that ends composition.
     if (event.isComposing || this.composing || event.keyCode === 229) return;
+    if (field === 'title' && this.slash?.path === path && this.slash.line === row.line && this.slashKey(node, event)) return;
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
       this.completeActive();
@@ -670,6 +729,191 @@ export class Controller {
     const status = row.kind === 'task' ? row.status : null;
     if (status) this.mutate(path, text => core.updateStatus(text, row.line, nextStatus(status)), field);
   });
+
+  // --- The `/` and `#` menus -----------------------------------------------------------------
+
+  // Opens, filters or closes the menu after input in a title. Only an ASCII `/` or `#` typed at
+  // the start or after whitespace opens it, so `A/B`, URLs and paths do not, and never an IME:
+  // neither its full-width `／` or `＃` nor the input events that commit a composition.
+  private slashInput(path: string, line: number, node: HTMLTextAreaElement, event: InputEvent | null) {
+    const value = node.value, caret = node.selectionStart;
+    const slash = this.slash;
+    if (slash?.path === path && slash.line === line && (this.composing || event?.isComposing)) {
+      // While an IME converts, the clause being converted is selected, so the caret rules below do
+      // not hold. The query runs to the end of the selection; the menu is checked again when the
+      // composition ends.
+      const end = node.selectionEnd, query = value.slice(slash.start + 1, end);
+      if (value[slash.start] === trigger(slash) && end > slash.start && !/\s/.test(query) && query !== slash.query) {
+        slash.query = query;
+        slash.index = 0;
+      }
+      return;
+    }
+    if (slash?.path === path && slash.line === line) {
+      const query = value.slice(slash.start + 1, caret);
+      if (value[slash.start] === trigger(slash) && caret > slash.start && node.selectionEnd === caret && !/\s/.test(query)) {
+        if (query !== slash.query) { slash.query = query; slash.index = 0; }
+        return;
+      }
+      this.slash = null;
+    }
+    if (event?.inputType !== 'insertText' || (event.data !== '/' && event.data !== '#') || event.isComposing || this.composing) return;
+    if (value[caret - 1] === event.data && (caret === 1 || /\s/.test(value[caret - 2]))) {
+      const start = caret - 1;
+      if (event.data === '/') {
+        this.slash = { path, line, start, query: '', step: 'commands', index: 0, files: [], tags: [] };
+        return;
+      }
+      // Without the `#` just typed, so that text right after it (`#|word`) is not offered as a tag.
+      const typed = core.updateTitle(this.docs.get(path)!.text, line, value.slice(0, start) + value.slice(caret)).text;
+      const loaded = [...this.docs].flatMap(([key, doc]) => core.tagsIn(key === path ? typed : doc.text));
+      this.slash = { path, line, start, query: '', step: 'tags', index: 0, files: [], tags: sortTags(loaded) };
+      this.adapter.tags?.().then(tags => {
+        const current = this.slash;
+        if (current?.step === 'tags' && current.path === path && current.line === line && current.start === start) current.tags = sortTags([...current.tags, ...tags]);
+      }).catch((error: unknown) => this.showToast(this.describe(error)));
+    }
+  }
+
+  private slashOptions(slash: Slash) {
+    if (slash.step === 'tags') {
+      // Tags starting with the query come first, then the ones containing it, each alphabetically.
+      const query = foldKana(slash.query);
+      const folded = slash.tags.map(tag => ({ tag, folded: foldKana(tag) }));
+      const matches = [
+        ...folded.filter(({ folded }) => folded.startsWith(query)),
+        ...folded.filter(({ folded }) => !folded.startsWith(query) && folded.includes(query)),
+      ].map(({ tag }) => tag);
+      // A tag typed out in full is no suggestion on its own: the menu closes and Enter stays Enter.
+      if (matches.length === 1 && matches[0] === slash.query) return [];
+      return matches.map(tag => ({ id: tag, label: '#' + tag }));
+    }
+    const query = slash.step === 'files' ? slash.query.toLowerCase() : foldKana(slash.query);
+    if (slash.step === 'files') {
+      return slash.files.filter(file => file !== slash.path && file.toLowerCase().includes(query)).map(file => ({ id: file, label: file }));
+    }
+    const row = this.rows(slash.path).find(value => value.line === slash.line);
+    if (!row) return [];
+    const zoomed = this.zoomRoot(slash.path)?.line === row.line;
+    // Status commands also turn a bullet into a task, as core.updateStatus does.
+    const commands = (Object.keys(this.t.slash.command) as SlashCommand[]).filter(command =>
+      !(command === 'task' && row.kind === 'task' || command === 'bullet' && row.kind !== 'task' || command === 'zoom' && zoomed));
+    return commands
+      .filter(command => [messages.en, messages.ja].some(({ slash }) => foldKana(slash.command[command].label + ' ' + slash.command[command].keywords).includes(query)))
+      .map(command => ({ id: command, label: this.t.slash.command[command].label }));
+  }
+
+  // The open menu of a title, or null. A menu without matches is not shown, and Enter stays Enter.
+  slashMenu(path: string, line: number): SlashMenu | null {
+    const slash = this.slash;
+    if (slash?.path !== path || slash.line !== line) return null;
+    const options = this.slashOptions(slash);
+    if (!options.length) return null;
+    const label = slash.step === 'files' ? this.t.slash.files : slash.step === 'tags' ? this.t.slash.tags : this.t.slash.commands;
+    return { id: this.slashId, label, options, index: Math.min(slash.index, options.length - 1) };
+  }
+
+  // Returns whether the key was used by the menu.
+  private slashKey(node: HTMLTextAreaElement, event: KeyboardEvent) {
+    const slash = this.slash!;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      // The typed text stays; from the file list Escape goes back to the commands.
+      if (slash.step === 'files') { slash.step = 'commands'; slash.index = 0; }
+      else this.slash = null;
+      return true;
+    }
+    const options = this.slashOptions(slash);
+    if (!options.length || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      slash.index = (Math.min(slash.index, options.length - 1) + (event.key === 'ArrowDown' ? 1 : options.length - 1)) % options.length;
+      return true;
+    }
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault();
+      void this.runSlash(options[Math.min(slash.index, options.length - 1)].id, node);
+      return true;
+    }
+    return false;
+  }
+
+  private titleNode(path: string, line: number) {
+    return [...this.container!.querySelectorAll<HTMLTextAreaElement>('[data-field="title"]')]
+      .find(node => node.dataset.path === path && Number(node.dataset.line) === line) ?? null;
+  }
+
+  // Runs a command of the menu on its item. The `/query` text is removed in the same undo step as
+  // the command where the command edits the text; zoom and the note do not, and extracting to a
+  // file clears the undo history anyway.
+  runSlash = async (id: string, node = this.slash && this.titleNode(this.slash.path, this.slash.line)) => {
+    const slash = this.slash;
+    if (!slash || !node) return;
+    const { path, line, start } = slash;
+    // A tap during an IME composition commits the word first, as the touch bar does.
+    if (this.composing) node.blur();
+    const value = node.value, end = Math.max(start + 1, node.selectionStart);
+    if (value[start] !== trigger(slash)) { this.slash = null; return; }
+    if (slash.step === 'tags') {
+      // `#query` becomes `#tag` and a space, unless whitespace follows already; the caret goes after it.
+      const rest = value.slice(end), tag = '#' + id + (/^\s/.test(rest) ? '' : ' ');
+      const caret = start + tag.length + (/^\s/.test(rest) ? 1 : 0);
+      // mutate does not render when the text stays the same (the tag was typed out before a space).
+      this.slash = null;
+      this.mutate(path, text => core.updateTitle(text, line, value.slice(0, start) + tag + rest), 'title');
+      const focused = this.activeElement instanceof HTMLTextAreaElement && this.activeElement.dataset.field === 'title' ? this.activeElement : node;
+      if (focused.isConnected) {
+        if (this.activeElement !== focused) focused.focus();
+        focused.setSelectionRange(caret, caret);
+      }
+      return;
+    }
+    // At the end of the text, the space typed before the `/` goes too.
+    const title = value.slice(end) ? value.slice(0, start) + value.slice(end) : value.slice(0, start).trimEnd();
+    const strip = (text: string) => core.updateTitle(text, line, title).text;
+    const mutateTitle = (fn: (text: string) => core.EditResult) => {
+      this.mutate(path, fn, 'title');
+      const focused = this.activeElement;
+      if (focused instanceof HTMLTextAreaElement && focused.dataset.field === 'title') focused.setSelectionRange(start, start);
+    };
+    if (slash.step === 'files') {
+      const name = relativePath(path, id);
+      let replaced = false;
+      this.mutate(path, text => {
+        const result = core.embedFile(strip(text), line, name);
+        replaced = result.line === line;
+        return result;
+      }, null);
+      if (!replaced) this.active = { path, line, field: 'title' };
+      await this.loadEmbeds(path);
+      this.render();
+      return;
+    }
+    const command = id as SlashCommand;
+    if (command === 'embed') {
+      // The file list is filtered by what is typed after the same `/`.
+      node.value = value.slice(0, start + 1) + value.slice(end);
+      node.setSelectionRange(start + 1, start + 1);
+      this.inputField(path, line, 'title', node, null);
+      if (!node.isConnected) return;
+      if (this.activeElement !== node) node.focus();
+      this.slash = { ...slash, step: 'files', query: '', index: 0, files: [...this.fileList] };
+      this.adapter.list().then(list => { if (this.slash?.step === 'files' && this.slash.path === path && this.slash.line === line) this.slash.files = list; })
+        .catch((error: unknown) => this.showToast(this.describe(error)));
+      return;
+    }
+    if (command === 'todo' || command === 'in-progress' || command === 'done') mutateTitle(text => core.updateStatus(strip(text), line, command));
+    else if (command === 'task') mutateTitle(text => core.updateStatus(strip(text), line, 'todo'));
+    else if (command === 'bullet') mutateTitle(text => core.toBullet(strip(text), line));
+    else {
+      mutateTitle(text => core.updateTitle(text, line, title));
+      if (command === 'note') this.focusNote(path, line);
+      else if (command === 'zoom') this.zoomTo(path, line);
+      else await this.extractToFile(path, line);
+    }
+    if (node.isConnected && !(this.activeElement instanceof HTMLTextAreaElement)) node.focus();
+  };
 
   // --- Row actions --------------------------------------------------------------------------
 
@@ -897,6 +1141,11 @@ export class Controller {
     this.render();
   };
 
+  // Adds a tag to the search as if typed and applied; a tag already in the search is left as is.
+  filterByTag = (tag: string) => {
+    if (!this.tagList().includes(tag)) this.applySearch(this.searchValue() + ' #' + tag);
+  };
+
   reset = () => {
     this.filter = 'all';
     this.tags = '';
@@ -1058,6 +1307,8 @@ export class Controller {
     if (this.destroyed) return;
     if (this.composing) { this.deferred = true; return; }
     this.deferred = false;
+    // Every command ends in a render; any other render may move or remove the line the menu is on.
+    this.slash = null;
     const focus = this.active && { ...this.active };
     const focusRoot = this.focusRootAfterRender;
     this.focusRootAfterRender = false;
@@ -1166,7 +1417,7 @@ export class Controller {
         hasChildren: rows.some(child => child.parentLine === row.line),
         showNote: row.kind !== 'embed' && (!!row.note || this.isActive(path, row.line, 'note')),
         status: this.statusView(row, false),
-        links: row.kind === 'embed' ? null : linkParts(row.title),
+        titleParts: row.kind === 'embed' ? null : titleParts(row.title),
         context: visible.get(row.line) === false,
         // Context rows did not match, so any words they share with the query are not marked.
         highlight: visible.get(row.line) ? highlight : null,

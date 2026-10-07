@@ -1,8 +1,10 @@
 <script lang="ts">
   import Outline from './Outline.svelte';
+  import SlashMenu from './SlashMenu.svelte';
   import type { Controller, Drop, ItemView } from './controller.svelte.ts';
-  import { linkParts, syncValue } from './controller.svelte.ts';
+  import { syncValue, tagAt, titleParts } from './controller.svelte.ts';
   import { markPieces, matchRanges, type Piece } from './filter.ts';
+  import { grow } from './motion.ts';
 
   let { ctrl, item }: { ctrl: Controller; item: ItemView } = $props();
   const uid = $props.id();
@@ -11,13 +13,14 @@
   // The links and marks follow the textarea when it loses focus, before the next render updates the row.
   let shownTitle = $derived(item.row.title);
   const marks = $derived(item.highlight ? matchRanges(shownTitle, item.highlight) : []);
-  // The rendered title is laid over the textarea while it is not edited, for links and filter matches.
-  const overlay = $derived(item.links !== null || marks.length > 0);
-  const display = $derived((linkParts(shownTitle) ?? [{ text: shownTitle, start: 0 }])
+  // The rendered title is laid over the textarea while it is not edited, for links, tags and filter matches.
+  const overlay = $derived(item.titleParts !== null || marks.length > 0);
+  const display = $derived((titleParts(shownTitle) ?? [{ text: shownTitle, start: 0 }])
     .map(part => ({ ...part, pieces: markPieces(part.text, part.start, marks) })));
   let titleNode: HTMLTextAreaElement | undefined = $state();
 
   const titleEvents = $derived(ctrl.fieldEvents(item.path, () => item.row, 'title'));
+  const slashMenu = $derived(ctrl.slashMenu(item.path, item.row.line));
   const noteEvents = $derived(ctrl.fieldEvents(item.path, () => item.row, 'note'));
 
   const lineDrop = (node: HTMLElement) => (event: DragEvent) => ctrl.lineDrop(item.path, item.row.line, item.rootLine, node, event);
@@ -27,23 +30,51 @@
     ctrl.dragOver(item.path, event.currentTarget as HTMLElement, event, destination);
   }
 
+  // ⌘/Ctrl-click on a #tag adds it to the search. A plain click keeps placing the caret.
+  function filterTag(event: MouseEvent, text: string, offset: number) {
+    const tag = event.metaKey || event.ctrlKey ? tagAt(text, offset) : null;
+    if (tag === null) return false;
+    event.preventDefault();
+    ctrl.filterByTag(tag);
+    return true;
+  }
+
+  function titleClick(event: MouseEvent & { currentTarget: HTMLTextAreaElement }) {
+    // The click has already put the caret where the pointer is.
+    const node = event.currentTarget;
+    if (node.selectionStart === node.selectionEnd && filterTag(event, node.value, node.selectionStart)) node.blur();
+  }
+
+  // The rendered text covers the textarea while it is not edited: a tag adds itself to the search,
+  // and other text starts editing with the caret where it was clicked.
   function displayClick(event: MouseEvent) {
-    if ((event.target as Element).closest('a') || !titleNode) return;
+    const target = event.target as Element;
+    if (target.closest('a') || !titleNode) return;
+    const tag = target.closest<HTMLElement>('[data-tag]');
+    if (tag) {
+      ctrl.filterByTag(tag.dataset.tag!);
+      return;
+    }
+    // Engines without caretPositionFromPoint (Safari before 18.4) put the caret at the end.
+    const clicked = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+    const part = clicked?.offsetNode.parentElement?.closest<HTMLElement>('[data-start]');
+    const position = clicked && part ? Number(part.dataset.start) + clicked.offset : titleNode.value.length;
     titleNode.focus();
-    titleNode.setSelectionRange(titleNode.value.length, titleNode.value.length);
+    titleNode.setSelectionRange(position, position);
   }
 </script>
 
-{#snippet marked(pieces: Piece[])}{#each pieces as piece, index (index)}{#if piece.mark}<mark>{piece.text}</mark>{:else}{piece.text}{/if}{/each}{/snippet}
+<!-- Plain text pieces carry their offset in the title, so a click on them, marked or not, can put the caret there. -->
+{#snippet marked(pieces: Piece[], plain: boolean)}{#each pieces as piece, index (index)}{#if piece.mark}<mark data-start={plain ? piece.start : undefined}>{piece.text}</mark>{:else if plain}<span data-start={piece.start}>{piece.text}</span>{:else}{piece.text}{/if}{/each}{/snippet}
 
-<div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} class:is-context={item.context} style:--depth={item.depth}>
+<div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} class:is-context={item.context} style:--depth={item.depth} in:grow>
   {#if item.embed}
     <div class="outline-line">
       <button type="button" class="icon fold" title={ctrl.t.item.fold} onclick={() => ctrl.toggleFold(item.path, item.row.line)}>{item.collapsed ? '▸' : '▾'}</button>
       <span class="embed-title">{item.row.embed}</span>
     </div>
     {#if !item.collapsed}
-      <div class="embedded">
+      <div class="embedded" in:grow>
         <div class="source-label">{ctrl.t.item.embedSource(item.row.embed!)}</div>
         {#if item.embed.error !== null}
           <div class="notice">{item.embed.error}</div>
@@ -93,18 +124,24 @@
           data-path={item.path}
           data-line={item.row.line}
           data-field="title"
+          aria-controls={slashMenu?.id}
+          aria-activedescendant={slashMenu ? slashMenu.id + '-' + slashMenu.index : undefined}
           {...titleEvents}
+          onclick={titleClick}
           onfocus={event => { titleEvents.onfocus(event); editing = true; }}
           onblur={event => { editing = false; shownTitle = event.currentTarget.value; titleEvents.onblur(); }}
         ></textarea>
         {#if item.context}
           <span id={uid + '-context'} class="visually-hidden">{ctrl.t.item.filterContext}</span>
         {/if}
+        {#if slashMenu}
+          <SlashMenu {ctrl} menu={slashMenu} />
+        {/if}
         {#if overlay}
           <!-- The textarea stays the keyboard target; clicking the rendered text only forwards focus. -->
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
           <div class="title-display" onclick={displayClick}>
-            {#each display as part, index (index)}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{@render marked(part.pieces)}</a>{:else}{@render marked(part.pieces)}{/if}{/each}
+            {#each display as part, index (index)}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{@render marked(part.pieces, false)}</a>{:else if part.tag}<span class="tag" data-tag={part.tag}>{@render marked(part.pieces, false)}</span>{:else}{@render marked(part.pieces, true)}{/if}{/each}
           </div>
         {/if}
       </div>
