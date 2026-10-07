@@ -101,6 +101,9 @@
 .outliner .conflict { margin-top: 16px; padding: 16px; border: 1px solid rgba(var(--color-yellow-rgb), .5); border-radius: 10px; background: rgba(var(--color-yellow-rgb), .06); }
 .outliner .conflict p { margin: 0 0 10px; line-height: 1.7; }
 .outliner .conflict button { margin: 8px 8px 0 0; }
+.outliner .conflict-hunk { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.outliner .conflict-hunk span { font-size: 11px; color: var(--text-muted); }
+.outliner .conflict-hunk pre { margin: 2px 0 0; padding: 6px 8px; max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 6px; background: var(--background-secondary); font-family: var(--font-monospace); font-size: 12px; }
 .outliner .local-copy { width: 100%; min-height: 140px; font-family: var(--font-monospace); font-size: 12px; }
 .outliner .empty { padding: 24px 16px; text-align: center; color: var(--text-faint); }
 .outliner .help { border-top: 1px solid var(--background-modifier-border); padding: 10px 0; color: var(--text-faint); font-size: 11px; }

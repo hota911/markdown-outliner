@@ -1,9 +1,10 @@
 import { flushSync } from 'svelte';
 import * as core from '../core.ts';
 import type { Status } from '../core.ts';
+import { merge3, type Side } from '../three-way-merge.ts';
 import { RowKeys, type KeyedRow } from './keys.ts';
 import { errorText, messages, type Messages } from './messages.ts';
-import type { Adapter, Bookmark, Doc, MountOptions, Preferences, StatusFilter } from './types.ts';
+import type { Adapter, Bookmark, Doc, MountOptions, Preferences, Revision, StatusFilter } from './types.ts';
 
 export type Field = 'title' | 'note';
 type RowKind = 'task' | 'bullet';
@@ -90,7 +91,8 @@ export interface View {
   autoSave: boolean;
   selectionCount: number;
   zoomPath: string | null;
-  conflicts: { path: string; text: string }[];
+  // `hunks` is null when the save failed without a conflicting external version.
+  conflicts: { path: string; text: string; hunks: { ours: string | null; theirs: string | null }[] | null }[];
   outline: OutlineView | null;
   sidebarCollapsed: boolean;
   bookmarksValid: boolean;
@@ -105,6 +107,12 @@ function validBookmark(bookmark: unknown): bookmark is Bookmark {
     && Array.isArray(value.tags) && value.tags.every(tag => typeof tag === 'string')
     && (value.searchText === undefined || typeof value.searchText === 'string');
 }
+
+// Saves of one file per save request, when external changes keep merging cleanly in between.
+const SAVE_ATTEMPTS = 3;
+
+// The lines of one side of a conflict for display; null when that side removed them.
+const shownLines = (lines: string[]) => lines.length ? lines.join('\n') : null;
 
 // One line of title text, matching the textarea's minimum height in styles.css.
 const MIN_TITLE_HEIGHT = 28;
@@ -294,7 +302,7 @@ export class Controller {
     const existing = this.docs.get(path);
     if (existing) return existing;
     const result = await this.adapter.read(path);
-    const doc: Doc = { text: result.text, baseRevision: result.revision, dirty: false, conflict: false };
+    const doc: Doc = { text: result.text, baseText: result.text, baseRevision: result.revision, dirty: false, conflict: false };
     this.docs.set(path, doc);
     return doc;
   }
@@ -464,7 +472,7 @@ export class Controller {
       this.showToast(this.t.edit.extractChanged(name));
       return;
     }
-    this.docs.set(relative, { text: result.extracted, baseRevision: created.revision, dirty: false, conflict: false });
+    this.docs.set(relative, { text: result.extracted, baseText: result.extracted, baseRevision: created.revision, dirty: false, conflict: false });
     if (!this.fileList.includes(relative)) this.fileList.push(relative);
     this.mutate(path, () => result, null);
     // Undo cannot remove the created file, so restoring older snapshots would duplicate the item.
@@ -829,12 +837,23 @@ export class Controller {
     try {
       const result = await this.adapter.read(path);
       this.remember();
-      this.docs.set(path, { text: result.text, baseRevision: result.revision, dirty: false, conflict: false });
+      this.docs.set(path, { text: result.text, baseText: result.text, baseRevision: result.revision, dirty: false, conflict: false });
       this.clearSelection();
       this.message = '';
       this.active = null;
       this.render();
     } catch (error) { this.message = this.describe(error); this.render(); }
+  };
+
+  // Takes one side for every conflicting line and keeps the changes of both sides that merged
+  // cleanly. The result is saved like any edit, against the revision of the external version.
+  resolveConflict = (path: string, side: Side) => {
+    const doc = this.docs.get(path)!;
+    const external = doc.external!;
+    this.replaceText(path, doc, merge3(doc.baseText, doc.text, external.text).text(side), external);
+    this.message = '';
+    this.scheduleSave();
+    this.render();
   };
 
   // --- Bookmarks ----------------------------------------------------------------------------
@@ -996,7 +1015,11 @@ export class Controller {
       autoSave: this.autoSave,
       selectionCount: this.selectedLines.size,
       zoomPath: this.zoom ? this.zoom.path : null,
-      conflicts: [...this.docs].filter(([, doc]) => doc.conflict).map(([path, doc]) => ({ path, text: doc.text })),
+      conflicts: [...this.docs].filter(([, doc]) => doc.conflict).map(([path, doc]) => ({
+        path,
+        text: doc.text,
+        hunks: doc.external?.conflicts.map(conflict => ({ ours: shownLines(conflict.ours), theirs: shownLines(conflict.theirs) })) ?? null,
+      })),
       outline,
       sidebarCollapsed: this.preferences.sidebarCollapsed === true,
       bookmarksValid: Array.isArray(this.preferences.bookmarks),
@@ -1109,45 +1132,76 @@ export class Controller {
     this.busy = true;
     this.message = '';
     this.updateStatus();
+    let rerender = false;
     for (const [path, doc] of this.docs) {
       if (!doc.dirty || automatic === true && doc.conflict) continue;
-      const savingText = doc.text;
-      try {
-        const result = await this.adapter.save(path, savingText, doc.baseRevision);
-        doc.baseRevision = result.revision;
-        doc.dirty = doc.text !== savingText;
-        doc.conflict = false;
-      } catch (error) {
-        doc.conflict = true;
-        this.message = this.t.edit.saveFailed(this.describe(error));
+      // A save rejected because the file changed elsewhere is retried after a clean merge. Each
+      // retry checks the revision that was merged, so a further change in between is merged too,
+      // up to SAVE_ATTEMPTS saves.
+      for (let attempt = 1; attempt <= SAVE_ATTEMPTS; attempt++) {
+        const savingText = doc.text;
+        try {
+          const result = await this.adapter.save(path, savingText, doc.baseRevision);
+          doc.baseText = savingText;
+          doc.baseRevision = result.revision;
+          doc.dirty = doc.text !== savingText;
+          doc.conflict = false;
+          doc.external = undefined;
+          break;
+        } catch (error) {
+          if (attempt < SAVE_ATTEMPTS && await this.mergeOnRejection(path, doc)) { rerender = true; continue; }
+          doc.conflict = true;
+          rerender = true;
+          this.message = this.t.edit.saveFailed(this.describe(error));
+          break;
+        }
       }
     }
     this.busy = false;
     if (this.message) this.notice = this.message;
     this.scheduleSave();
-    if (this.active || this.composing) { this.deferred = true; this.updateStatus(); }
+    // A merge moves lines and a conflict needs a decision, so either is rendered even while a field
+    // is being edited; render() keeps the focus and the caret on the edited item.
+    if (this.composing || this.active && !rerender) { this.deferred = true; this.updateStatus(); }
     else this.render();
   };
+
+  // Merges the external version after a rejected save. Returns whether it merged cleanly.
+  private async mergeOnRejection(path: string, doc: Doc) {
+    let external: { text: string; revision: Revision };
+    try { external = await this.adapter.read(path); }
+    catch { return false; }
+    // Merging under an IME composition would move the line being composed.
+    if (!this.externalChange(doc, external) || this.composing) return false;
+    return this.mergeExternal(path, doc, external);
+  }
 
   reload = async () => {
     if (this.busy) return;
     this.message = '';
+    let rerender = false;
     for (const [path, doc] of this.docs) {
       try {
         const result = await this.adapter.read(path);
         if (doc.dirty) {
-          if (result.revision !== doc.baseRevision) doc.conflict = true;
+          if (this.externalChange(doc, result) && !this.composing) { this.mergeExternal(path, doc, result); rerender = true; }
           this.message = this.t.edit.reloadKeptInput;
         } else {
           if (doc.text !== result.text) this.clearSelection();
           doc.text = result.text;
+          doc.baseText = result.text;
           doc.baseRevision = result.revision;
         }
       } catch (error) { this.message = this.describe(error); }
     }
     await this.loadEmbeds(this.current);
-    if (this.active || this.composing) { this.deferred = true; this.updateStatus(); } else this.render();
+    if (this.composing || this.active && !rerender) { this.deferred = true; this.updateStatus(); } else this.render();
   };
+
+  // Whether `result` is an external version not yet applied, merged or shown as a conflict.
+  private externalChange(doc: Doc, result: { revision: Revision }) {
+    return result.revision !== doc.baseRevision && result.revision !== doc.external?.revision;
+  }
 
   // Whether the user may be typing: a field is being edited or a control of the outliner has focus.
   private editing() {
@@ -1165,21 +1219,41 @@ export class Controller {
     void this.poll();
   };
 
-  // Replaces an unedited file with its external version, keeping the edited item across lines
-  // added or removed above it.
-  private applyExternal(path: string, doc: Doc, result: { text: string; revision: Doc['baseRevision'] }) {
+  // Sets the text of a file after an external change, on top of the external version `base`,
+  // keeping the edited item across lines added or removed above it. The undo history is cleared:
+  // its snapshots lack the external lines, so undoing would silently remove them from the file.
+  private replaceText(path: string, doc: Doc, text: string, base: { text: string; revision: Revision }) {
     const active = this.active;
     const activeRow = active?.path === path ? this.rows(path, doc.text).find(row => row.line === active.line) : undefined;
     this.clearSelection();
     this.undo.length = 0;
     this.redo.length = 0;
     if (this.zoom?.path === path) this.zoom = null;
-    doc.text = result.text;
-    doc.baseRevision = result.revision;
+    doc.text = text;
+    doc.baseText = base.text;
+    doc.baseRevision = base.revision;
+    doc.dirty = text !== base.text;
+    doc.conflict = false;
+    doc.external = undefined;
     if (active && activeRow) {
       const row = this.rows(path, doc.text).find(value => value.key === activeRow.key);
       this.active = row ? { ...active, line: row.line } : null;
     }
+  }
+
+  // Merges an external version into a file with unsaved input. Changes to different lines are
+  // combined and left unsaved, so the next save checks the revision of the external version.
+  // Returns false when both sides changed the same lines; those are then shown as a conflict.
+  private mergeExternal(path: string, doc: Doc, result: { text: string; revision: Revision }) {
+    const merged = merge3(doc.baseText, doc.text, result.text);
+    if (merged.conflicts.length) {
+      doc.conflict = true;
+      doc.external = { ...result, conflicts: merged.conflicts };
+      return false;
+    }
+    this.replaceText(path, doc, merged.text('ours'), result);
+    this.showToast(this.t.conflict.merged(path));
+    return true;
   }
 
   private async poll() {
@@ -1189,16 +1263,22 @@ export class Controller {
     const resume = this.resumeRequested;
     this.resumeRequested = false;
     let changed = false;
+    let rerender = false;
     let pending = false;
     try {
       for (const [path, doc] of this.docs) {
         try {
           const result = await this.adapter.read(path);
-          if (result.revision === doc.baseRevision) continue;
-          if (doc.dirty) { if (!doc.conflict) changed = true; doc.conflict = true; }
-          else if (this.composing || !resume && this.editing()) pending = true;
+          if (!this.externalChange(doc, result)) continue;
+          if (this.composing) pending = true;
+          // Unsaved input is merged right away: waiting would only let the next save fail.
+          else if (doc.dirty) {
+            this.mergeExternal(path, doc, result);
+            rerender = true;
+            changed = true;
+          } else if (!resume && this.editing()) pending = true;
           else {
-            this.applyExternal(path, doc, result);
+            this.replaceText(path, doc, result.text, result);
             changed = true;
           }
         } catch (error) { if (this.message !== this.describe(error)) changed = true; this.message = this.describe(error); }
@@ -1207,8 +1287,9 @@ export class Controller {
       const editing = this.editing();
       if (changed || this.deferred && !editing) {
         await this.loadEmbeds(this.current);
-        // render() puts the focus and the caret back on the edited item.
-        if (this.composing || editing && !resume) { this.deferred = true; } else this.render();
+        // render() puts the focus and the caret back on the edited item. A merge moves lines and a
+        // conflict needs a decision, so either is rendered even while a field is being edited.
+        if (this.composing || editing && !resume && !rerender) { this.deferred = true; } else this.render();
       }
     } finally { this.polling = false; this.updateStatus(); }
   }
