@@ -83,17 +83,22 @@
 .outliner.is-dragging .children-end { background: var(--background-primary-alt); }
 .outliner .title-area { position: relative; flex: 1; min-width: 100px; }
 .outliner .title-area .title-input { width: 100%; }
-.outliner .title-area.has-links:not(.is-editing) .title-input { position: absolute; inset: 0; opacity: 0; }
-.outliner .title-area.is-editing .title-display { display: none; }
+/* Titles and notes with inline Markdown show it rendered over a transparent textarea until they are edited. */
+.outliner :is(.title-area, .note-area).has-markup:not(.is-editing) :is(.title-input, .note-input) { position: absolute; inset: 0; opacity: 0; }
+.outliner :is(.title-area, .note-area).is-editing :is(.title-display, .note-display) { display: none; }
 .outliner .title-display { position: relative; min-height: 28px; padding: 2px 0; line-height: 24px; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
-.outliner .title-display a { color: var(--text-accent); text-decoration: underline; cursor: pointer; }
+.outliner :is(.title-display, .note-display) a { color: var(--text-accent); text-decoration: underline; cursor: pointer; }
+.outliner :is(.title-display, .note-display) code { font-family: var(--font-monospace); font-size: .9em; padding: 0 3px; border-radius: 3px; background: var(--code-background, var(--background-modifier-border)); }
 .outliner .is-done > .outline-line .title-display { color: var(--text-faint); text-decoration: line-through; }
 .outliner .auto-save, .outliner .selection-bar { display: flex; align-items: center; gap: 5px; }
 .outliner .auto-save input { margin: 0; }
 .outliner .selection-bar { width: 100%; flex-wrap: wrap; }
 .outliner .bullet { width: 22px; min-width: 22px; color: var(--text-faint); text-align: center; }
-.outliner .note-input { margin: 0 0 3px 66px; width: calc(100% - 70px); resize: none; background: transparent; color: var(--text-muted); line-height: 1.4; font-size: 13px; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
+.outliner .note-input { resize: none; background: transparent; color: var(--text-muted); line-height: 1.4; font-size: 13px; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
 .outliner .note-input:focus, .outliner .note-input:focus-visible { outline: none; background: transparent; border: 0; box-shadow: none; }
+.outliner .note-area { position: relative; margin: 0 0 3px 66px; width: calc(100% - 70px); }
+.outliner .note-area .note-input { display: block; width: 100%; }
+.outliner .note-display { position: relative; color: var(--text-muted); line-height: 1.4; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
 .outliner .embedded { margin: 2px 0 8px 22px; padding: 2px 0 2px 12px; background: transparent; border: 0; border-left: 1px solid var(--background-modifier-border); border-radius: 0; }
 .outliner .embed-title { font-weight: 600; color: var(--text-accent); }
 .outliner .source-label { font-size: 11px; color: var(--text-faint); margin-bottom: 2px; }
@@ -112,7 +117,7 @@
 .outliner .local-copy { width: 100%; min-height: 140px; font-family: var(--font-monospace); font-size: 12px; }
 .outliner .empty { padding: 24px 16px; text-align: center; color: var(--text-faint); }
 .outliner .help { border-top: 1px solid var(--background-modifier-border); padding: 10px 0; color: var(--text-faint); font-size: 11px; }
-@media (max-width: 900px) { .outliner { margin: 12px auto; padding: 0 16px; } .outliner .outline-item { padding-left: calc(var(--depth) * 18px); } .outliner .row-actions { gap: 0; } .outliner .note-input { margin-left: 44px; width: calc(100% - 48px); } }
+@media (max-width: 900px) { .outliner { margin: 12px auto; padding: 0 16px; } .outliner .outline-item { padding-left: calc(var(--depth) * 18px); } .outliner .row-actions { gap: 0; } .outliner .note-area { margin-left: 44px; width: calc(100% - 48px); } }
 /* Phones: the bookmarks go above the editor instead of taking width from it, and the file picker and the
    search get a row of their own. */
 @media (max-width: 600px) {
@@ -135,7 +140,7 @@
   .outliner .outline-line { min-height: 36px; }
   .outliner .bullet { width: 32px; min-width: 32px; line-height: 36px; }
   /* Fold, handle and status button with their gaps, so the note starts under the title. */
-  .outliner .note-input { margin-left: 92px; width: calc(100% - 92px); }
+  .outliner .note-area { margin-left: 92px; width: calc(100% - 92px); }
   .outliner .title-input, .outliner .title-display { min-height: 36px; padding: 6px 0; }
   /* The handle only selects: HTML5 drag and drop does not work reliably with touch, and the touch bar
      moves items instead. */

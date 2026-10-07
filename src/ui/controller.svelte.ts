@@ -28,22 +28,6 @@ export const filters: StatusFilter[] = ['all', 'not-done', ...statuses];
 export const statusIcons: Record<Status, string> = { todo: '○', 'in-progress': '◐', done: '✓' };
 const nextStatus = (status: Status | null) => statuses[(statuses.indexOf(status!) + 1) % statuses.length];
 
-// Only http(s) targets become anchors; any other Markdown link stays plain text.
-const markdownLink = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/;
-export interface LinkPart { text: string; href?: string }
-export function linkParts(title: string): LinkPart[] | null {
-  if (!markdownLink.test(title)) return null;
-  const parts: LinkPart[] = [];
-  let rest = title, match;
-  while ((match = markdownLink.exec(rest))) {
-    if (match.index) parts.push({ text: rest.slice(0, match.index) });
-    parts.push({ text: match[1], href: match[2] });
-    rest = rest.slice(match.index + match[0].length);
-  }
-  if (rest) parts.push({ text: rest });
-  return parts;
-}
-
 // Attachment that writes the model value into an input on every render. A `value` attribute
 // is not enough: Svelte compares with the previously rendered value, not with what the user
 // typed since, so undo back to that value would leave the typed text in place.
@@ -63,7 +47,6 @@ export interface ItemView {
   hasChildren: boolean;
   showNote: boolean;
   status: { icon: string; label: string; next: Status } | null;
-  links: LinkPart[] | null;
   embed: { target: string | null; error: string | null; outline: OutlineView | null } | null;
   // Drop targets after the last shown descendant of each ancestor that ends here, innermost first.
   ends: { key: string; parentLine: number; depth: number; label: string }[];
@@ -1138,7 +1121,6 @@ export class Controller {
         hasChildren: rows.some(child => child.parentLine === row.line),
         showNote: row.kind !== 'embed' && (!!row.note || this.isActive(path, row.line, 'note')),
         status: this.statusView(row, false),
-        links: row.kind === 'embed' ? null : linkParts(row.title),
         embed: null,
         ends: [],
       };

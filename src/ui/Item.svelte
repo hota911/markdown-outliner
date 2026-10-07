@@ -1,15 +1,21 @@
 <script lang="ts">
+  import InlineText from './InlineText.svelte';
   import Outline from './Outline.svelte';
   import type { Controller, Drop, ItemView } from './controller.svelte.ts';
-  import { linkParts, syncValue } from './controller.svelte.ts';
+  import { syncValue } from './controller.svelte.ts';
+  import { parseInline } from './inline.ts';
 
   let { ctrl, item }: { ctrl: Controller; item: ItemView } = $props();
 
   let editing = $state(false);
-  // The links follow the textarea when it loses focus, before the next render updates the row.
+  let noteEditing = $state(false);
+  // The rendered text follows the textarea when it loses focus, before the next render updates the row.
   let shownTitle = $derived(item.row.title);
-  const display = $derived(linkParts(shownTitle) ?? [{ text: shownTitle }]);
+  let shownNote = $derived(item.row.note);
+  const display = $derived(parseInline(shownTitle));
+  const noteDisplay = $derived(parseInline(shownNote));
   let titleNode: HTMLTextAreaElement | undefined = $state();
+  let noteNode: HTMLTextAreaElement | undefined = $state();
 
   const titleEvents = $derived(ctrl.fieldEvents(item.path, () => item.row, 'title'));
   const noteEvents = $derived(ctrl.fieldEvents(item.path, () => item.row, 'note'));
@@ -21,10 +27,16 @@
     ctrl.dragOver(item.path, event.currentTarget as HTMLElement, event, destination);
   }
 
-  function displayClick(event: MouseEvent) {
-    if ((event.target as Element).closest('a') || !titleNode) return;
-    titleNode.focus();
-    titleNode.setSelectionRange(titleNode.value.length, titleNode.value.length);
+  // The rendered text covers its textarea, so a click on it starts editing with the caret at the
+  // clicked character. Links keep their own click. Where the engine has no caretPositionFromPoint
+  // (Safari before 18.4), or the click is not on text, the caret goes to the end.
+  function displayClick(event: MouseEvent, field: HTMLTextAreaElement | undefined) {
+    if ((event.target as Element).closest('a') || !field) return;
+    const caret = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+    const leaf = caret?.offsetNode.nodeType === Node.TEXT_NODE ? caret.offsetNode.parentElement?.closest<HTMLElement>('[data-start]') : null;
+    const offset = caret && leaf ? Number(leaf.dataset.start) + caret.offset : field.value.length;
+    field.focus();
+    field.setSelectionRange(offset, offset);
   }
 </script>
 
@@ -72,7 +84,7 @@
       {:else}
         <span class="bullet">•</span>
       {/if}
-      <div class="title-area" class:has-links={item.links !== null} class:is-editing={editing}>
+      <div class="title-area" class:has-markup={display !== null} class:is-editing={editing}>
         <textarea
           bind:this={titleNode}
           class="title-input"
@@ -88,12 +100,10 @@
           onfocus={event => { titleEvents.onfocus(event); editing = true; }}
           onblur={event => { editing = false; shownTitle = event.currentTarget.value; titleEvents.onblur(); }}
         ></textarea>
-        {#if item.links !== null}
+        {#if display !== null}
           <!-- The textarea stays the keyboard target; clicking the rendered text only forwards focus. -->
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <div class="title-display" onclick={displayClick}>
-            {#each display as part, index (index)}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else}{part.text}{/if}{/each}
-          </div>
+          <div class="title-display" onclick={event => displayClick(event, titleNode)}><InlineText nodes={display} /></div>
         {/if}
       </div>
       <div class="row-actions">
@@ -107,17 +117,26 @@
       </div>
     </div>
     {#if item.showNote}
-      <textarea
-        class="note-input"
-        {@attach syncValue(() => item.row.note)}
-        placeholder={ctrl.t.item.notePlaceholder}
-        rows={Math.max(1, Math.min(8, item.row.note.split('\n').length))}
-        aria-label={ctrl.t.item.noteLabel}
-        data-path={item.path}
-        data-line={item.row.line}
-        data-field="note"
-        {...noteEvents}
-      ></textarea>
+      <div class="note-area" class:has-markup={noteDisplay !== null} class:is-editing={noteEditing}>
+        <textarea
+          bind:this={noteNode}
+          class="note-input"
+          {@attach syncValue(() => item.row.note)}
+          placeholder={ctrl.t.item.notePlaceholder}
+          rows={Math.max(1, Math.min(8, item.row.note.split('\n').length))}
+          aria-label={ctrl.t.item.noteLabel}
+          data-path={item.path}
+          data-line={item.row.line}
+          data-field="note"
+          {...noteEvents}
+          onfocus={event => { noteEvents.onfocus(event); noteEditing = true; }}
+          onblur={event => { noteEditing = false; shownNote = event.currentTarget.value; noteEvents.onblur(); }}
+        ></textarea>
+        {#if noteDisplay !== null}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <div class="note-display" onclick={event => displayClick(event, noteNode)}><InlineText nodes={noteDisplay} /></div>
+        {/if}
+      </div>
     {/if}
   {/if}
 </div>

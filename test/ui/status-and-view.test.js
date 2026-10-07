@@ -88,6 +88,74 @@ describe('Markdown links in titles', () => {
     expect(document.activeElement).toBe(title('read [docs](https://example.com)'));
     expect(display.closest('.title-area').classList.contains('is-editing')).toBe(true);
   });
+
+  it('renders emphasis, code and bare URLs in titles', async () => {
+    const { container } = await setup({ 'tasks.md': '- [ ] **bold** *em* `code` ~~gone~~ https://example.com\n' });
+    const display = container.querySelector('.title-display');
+    expect(display.querySelector('strong').textContent).toBe('bold');
+    expect(display.querySelector('em').textContent).toBe('em');
+    expect(display.querySelector('code').textContent).toBe('code');
+    expect(display.querySelector('del').textContent).toBe('gone');
+    expect(display.querySelector('a').getAttribute('href')).toBe('https://example.com');
+  });
+});
+
+describe('inline Markdown in notes', () => {
+  const note = '  see [docs](https://example.com/docs) or https://example.org.\n  **bold** _em_ `code` ~~gone~~\n';
+  const noteDisplay = container => container.querySelector('.note-display');
+
+  it('renders each syntax and keeps the line breaks', async () => {
+    const { container } = await setup({ 'tasks.md': '- [ ] a\n' + note });
+    const display = noteDisplay(container);
+    expect(display.textContent).toBe('see docs or https://example.org.\nbold em code gone');
+    expect([...display.querySelectorAll('a')].map(link => [link.textContent, link.getAttribute('href'), link.target, link.rel])).toEqual([
+      ['docs', 'https://example.com/docs', '_blank', 'noopener noreferrer'],
+      ['https://example.org', 'https://example.org', '_blank', 'noopener noreferrer'],
+    ]);
+    expect(['strong', 'em', 'code', 'del'].map(tag => display.querySelector(tag).textContent)).toEqual(['bold', 'em', 'code', 'gone']);
+  });
+
+  it('shows the raw text while the note is edited', async () => {
+    const { user, screen, container, saved } = await setup({ 'tasks.md': '- [ ] a\n  **bold**\n' });
+    const area = container.querySelector('.note-area');
+    await user.click(noteDisplay(container).querySelector('strong'));
+    const field = screen.getByRole('textbox', { name: '項目のノート' });
+    expect(document.activeElement).toBe(field);
+    expect(area.classList.contains('is-editing')).toBe(true);
+    expect(field.value).toBe('**bold**');
+    // Without caretPositionFromPoint (jsdom), the caret goes to the end.
+    expect([field.selectionStart, field.selectionEnd]).toEqual([8, 8]);
+    await user.keyboard(' and *more*');
+    field.blur();
+    await flush();
+    expect(area.classList.contains('is-editing')).toBe(false);
+    expect(noteDisplay(container).querySelector('em').textContent).toBe('more');
+    expect(await saved()).toBe('- [ ] a\n  **bold** and *more*\n');
+  });
+
+  it('clicking a link opens it instead of editing the note', async () => {
+    const { user, container } = await setup({ 'tasks.md': '- [ ] a\n  [docs](https://example.com)\n' });
+    const link = noteDisplay(container).querySelector('a');
+    const opened = [];
+    link.addEventListener('click', event => { opened.push(link.href); event.preventDefault(); });
+    await user.click(link);
+    expect(opened).toEqual(['https://example.com/']);
+    expect(document.activeElement).toBe(link);
+    expect(container.querySelector('.note-area').classList.contains('is-editing')).toBe(false);
+  });
+
+  it('keeps other link targets and HTML as plain text', async () => {
+    const { container } = await setup({ 'tasks.md': '- [ ] a\n  [bad](javascript:alert(1)) <img src=x onerror=alert(1)> `<b>`\n' });
+    const display = noteDisplay(container);
+    expect(display.querySelector('a, img, b')).toBeNull();
+    expect(display.textContent).toBe('[bad](javascript:alert(1)) <img src=x onerror=alert(1)> <b>');
+  });
+
+  it('a plain note stays a plain textarea', async () => {
+    const { container } = await setup({ 'tasks.md': '- [ ] a\n  just a note\n' });
+    expect(noteDisplay(container)).toBeNull();
+    expect(container.querySelector('.note-area').classList.contains('has-markup')).toBe(false);
+  });
 });
 
 describe('filtering', () => {

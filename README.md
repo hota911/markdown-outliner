@@ -7,6 +7,7 @@ The user interface is available in English and Japanese. The Obsidian plugin fol
 ## Features
 
 - Edit `- [ ]` / `- [/]` / `- [x]` tasks and plain bullets as an outline, with notes indented under each item.
+- Item texts and notes show basic inline Markdown while you are not editing them: `[text](url)` links (http, https, and mailto), bare http(s) URLs, `**bold**`, `*italic*` / `_italic_`, `` `code` ``, and `~~strikethrough~~`. Links open in a new tab, and clicking elsewhere on the text edits the raw Markdown with the cursor at the clicked character.
 - Filter by status, tags, and title text, and keep adding tasks, children, and notes while a filter is active. New tasks get the current status and tags.
 - Change hierarchy with Tab / Shift+Tab, move items with Alt+Up/Down or drag and drop, and select several siblings to move or update them together.
 - Zoom into an item, collapse items and embeds, and bookmark files and searches.
