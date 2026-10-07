@@ -13,8 +13,9 @@
       field,
     );
   }
-  const zoomTitleEvents = zoomEvents('title');
-  const zoomNoteEvents = zoomEvents('note');
+  // Derived so that the handlers follow `outline.path` when this component is reused for another file.
+  const zoomTitleEvents = $derived(zoomEvents('title'));
+  const zoomNoteEvents = $derived(zoomEvents('note'));
 
   function append() {
     if (outline.kind !== 'outline') return;
