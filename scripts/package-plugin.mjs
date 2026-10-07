@@ -1,26 +1,24 @@
-import { mkdir, copyFile, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, copyFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { build } from 'vite';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const source = path.join(root, 'src');
 export const defaultOutput = path.join(root, 'dist');
 export const releaseAssets = ['main.js', 'manifest.json', 'styles.css'];
 
-// Bundles src/main.js with its local dependencies so the release main.js only requires 'obsidian'.
-export async function packagePlugin(output = defaultOutput) {
+// Builds main.js with vite.config.ts and puts the release assets next to it.
+export async function packagePlugin(output = defaultOutput, { quiet = false } = {}) {
   if (!path.isAbsolute(output)) throw new Error('Specify an absolute output directory.');
-  let main = await readFile(path.join(source, 'main.js'), 'utf8');
-  for (const name of ['core', 'ui']) {
-    const code = await readFile(path.join(source, name + '.js'), 'utf8');
-    const dependency = `const ${name} = require('./${name}.js');`;
-    if (!main.includes(dependency)) throw new Error(`Missing package dependency: ${name}`);
-    main = main.replace(dependency, () => `const ${name} = (() => { const module = { exports: {} };\n${code}\nreturn module.exports; })();`);
-  }
   await mkdir(output, { recursive: true });
-  await writeFile(path.join(output, 'main.js'), main);
+  await build({
+    configFile: path.join(root, 'vite.config.ts'),
+    root,
+    logLevel: quiet ? 'warn' : 'info',
+    build: { outDir: output },
+  });
   await copyFile(path.join(root, 'manifest.json'), path.join(output, 'manifest.json'));
-  await copyFile(path.join(source, 'styles.css'), path.join(output, 'styles.css'));
+  await copyFile(path.join(root, 'src', 'styles.css'), path.join(output, 'styles.css'));
   return output;
 }
 
