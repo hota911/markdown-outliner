@@ -21,4 +21,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      # In this job rather than a separate one, so the required `test` check covers dragging too.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
       - run: npm run build

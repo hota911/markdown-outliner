@@ -158,5 +158,5 @@ describe('outline view', () => {
     expect(stored.at(-1).bookmarks).toMatchObject([{ kind: 'file', file: 'tasks.md', status: 'all', tags: [] }]);
   });
 
-  it.todo('drag and drop reorders and reparents items (jsdom has no layout or DataTransfer, so drop positions cannot be computed)');
+  // Drag and drop needs layout and DataTransfer, which jsdom lacks; it is tested in e2e/drag.spec.ts.
 });
