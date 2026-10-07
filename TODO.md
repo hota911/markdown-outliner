@@ -4,8 +4,8 @@
   Make the plugin installable with BRAT from a GitHub Release first, then submit it to the community directory.
   - [ ] Follow the Plugin guidelines #P1
     Switching to getFileByPath and moving the title height into a CSS variable are done. createEl is not yet used. Theme variables are covered by "Match the theme colors".
-  - [ ] Create a GitHub Release #P1
-    The tag is exactly the version in manifest.json, without a `v` prefix. Attach main.js, manifest.json, and styles.css.
+  - [x] Create a GitHub Release #P1
+    [0.1.0](https://github.com/hota911/markdown-outliner/releases/tag/0.1.0), published on 2026-10-07 by the Release workflow from a pushed tag.
   - [ ] Submit to the community directory
     Add the plugin on community.obsidian.md after linking the GitHub account, and address the automated review.
 - [ ] Apply external changes in a tab whose input has focus
