@@ -102,6 +102,17 @@ describe('filtering', () => {
     expect(titleValues()).toEqual(['parent', 'open child #work', 'doing #home']);
   });
 
+  it('status options show the same icon as the items with that status and are named without it', async () => {
+    const { screen, container } = await setup({ 'tasks.md': text });
+    const select = screen.getByRole('combobox', { name: '表示する状態' });
+    const iconOf = status => container.querySelector(`.task-status[data-status="${status}"]`).textContent;
+    const shown = ['すべて', '◌ 完了以外', `${iconOf('todo')} 未着手`, `${iconOf('in-progress')} 進行中`, `${iconOf('done')} 完了`];
+    expect(within(select).getAllByRole('option').map(option => option.textContent)).toEqual(shown);
+    for (const name of ['すべて', '完了以外', '未着手', '進行中', '完了']) {
+      expect(within(select).getByRole('option', { name })).toBeTruthy();
+    }
+  });
+
   it('filters by words and #tags from the search box on Enter', async () => {
     const { user, screen, titleValues } = await setup({ 'tasks.md': text });
     await user.type(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }), '#work{Enter}');

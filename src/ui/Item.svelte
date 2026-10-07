@@ -1,7 +1,9 @@
 <script lang="ts">
   import Outline from './Outline.svelte';
+  import SlashMenu from './SlashMenu.svelte';
   import type { Controller, Drop, ItemView } from './controller.svelte.ts';
   import { linkParts, syncValue, tagAt } from './controller.svelte.ts';
+  import { grow } from './motion.ts';
 
   let { ctrl, item }: { ctrl: Controller; item: ItemView } = $props();
 
@@ -12,6 +14,7 @@
   let titleNode: HTMLTextAreaElement | undefined = $state();
 
   const titleEvents = $derived(ctrl.fieldEvents(item.path, () => item.row, 'title'));
+  const slashMenu = $derived(ctrl.slashMenu(item.path, item.row.line));
   const noteEvents = $derived(ctrl.fieldEvents(item.path, () => item.row, 'note'));
 
   const lineDrop = (node: HTMLElement) => (event: DragEvent) => ctrl.lineDrop(item.path, item.row.line, item.rootLine, node, event);
@@ -55,14 +58,14 @@
   }
 </script>
 
-<div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} style:--depth={item.depth}>
+<div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} style:--depth={item.depth} in:grow>
   {#if item.embed}
     <div class="outline-line">
       <button type="button" class="icon fold" title={ctrl.t.item.fold} onclick={() => ctrl.toggleFold(item.path, item.row.line)}>{item.collapsed ? '▸' : '▾'}</button>
       <span class="embed-title">{item.row.embed}</span>
     </div>
     {#if !item.collapsed}
-      <div class="embedded">
+      <div class="embedded" in:grow>
         <div class="source-label">{ctrl.t.item.embedSource(item.row.embed!)}</div>
         {#if item.embed.error !== null}
           <div class="notice">{item.embed.error}</div>
@@ -111,11 +114,16 @@
           data-path={item.path}
           data-line={item.row.line}
           data-field="title"
+          aria-controls={slashMenu?.id}
+          aria-activedescendant={slashMenu ? slashMenu.id + '-' + slashMenu.index : undefined}
           {...titleEvents}
           onclick={titleClick}
           onfocus={event => { titleEvents.onfocus(event); editing = true; }}
           onblur={event => { editing = false; shownTitle = event.currentTarget.value; titleEvents.onblur(); }}
         ></textarea>
+        {#if slashMenu}
+          <SlashMenu {ctrl} menu={slashMenu} />
+        {/if}
         {#if item.links !== null}
           <!-- The textarea stays the keyboard target; clicking the rendered text only forwards focus. -->
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
