@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Short animations (150ms): a new item, and the children shown by expanding an item or an embedded file, slide open; the bookmarks sidebar changes its width smoothly when collapsed or expanded. Opening a file or zooming does not animate the items, the new item has the focus at once, and with the system's reduced-motion setting nothing animates.
 - `#tags` in an item's text and note are shown like links (in Obsidian, with the theme's tag colors), also inside bold, italic or strikethrough text. A tag is a whole word, as in the search box, so `**#tag**` stays plain bold text. Clicking or tapping a tag adds it to the search box filter, which applies right away; a tag already in the filter is not added again. Clicking elsewhere in the text starts editing with the caret where you clicked. While the text or note is being edited, ⌘-click (Ctrl-click on Windows and Linux) on a tag does the same.
 - While the search box filters by words or `#tags`, the matched words and tags are highlighted in item titles, including inside bold, link and tag text. The highlight disappears while you edit the title.
+- Experimental: a macOS desktop app built with Tauri 2 (`npm run build:tauri`). It opens a folder and edits its Markdown files with the same checks as the web server. It is unsupported and may change or be removed; it is built from source only and not attached to releases.
 
 ### Changed
 

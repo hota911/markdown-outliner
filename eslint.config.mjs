@@ -20,7 +20,7 @@ const obsidianTypeScriptConfigs = obsidianmd.configs.recommended
   .map(config => ({ ...config, files: svelteFiles }));
 
 export default defineConfig([
-  globalIgnores(['dist/', 'node_modules/', 'package-lock.json']),
+  globalIgnores(['dist/', 'node_modules/', 'package-lock.json', 'src-tauri/target/', 'src-tauri/gen/']),
   ...obsidianmd.configs.recommended,
   // Turns off the core rules that TypeScript already checks, as obsidianmd does for .ts files.
   { ...tseslint.configs.eslintRecommended, files: svelteFiles },

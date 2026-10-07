@@ -37,6 +37,7 @@
   - [ ] Switch a .md file to the outline automatically
     How to switch automatically when a .md file is opened (for example by frontmatter) has not been investigated.
 - [ ] Mac app
+  Two prototypes: a Swift app (PR #26) and a Tauri 2 app (`src-tauri/`, see "Desktop app (experimental)" in the README). Tauri could later build the same app for Windows, Linux and Android. Choose one and drop the other.
   - [ ] Add a Mac app version
   - [ ] Distribute the Mac app
 - [ ] Future features
