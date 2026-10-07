@@ -1,6 +1,6 @@
 {
   "name": "markdown-outliner",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Outliner for Markdown task lists, as an Obsidian plugin and a local web app.",
   "license": "MIT",
   "author": "hota911",
@@ -36,7 +36,7 @@
     "eslint-plugin-svelte": "^3.23.0",
     "globals": "^17.13.0",
     "jsdom": "^29.1.1",
-    "obsidian": "1.8.7",
+    "obsidian": "1.13.1",
     "svelte": "^5.57.2",
     "svelte-check": "^4.7.6",
     "typescript": "~6.0.3",

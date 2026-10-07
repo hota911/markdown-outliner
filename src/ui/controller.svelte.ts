@@ -142,6 +142,8 @@ export class Controller {
   private saveTimer: number | undefined;
   private toastTimer: number | undefined;
   private pollTimer: number | undefined;
+  // Timer IDs belong to the window that created them, and the view may live in a popout window.
+  private pollWindow: Window | null = null;
   private selectedPath: string | null = null;
   private selectedLines = new Set<number>();
   private selectionAnchor: number | null = null;
@@ -181,6 +183,7 @@ export class Controller {
       });
       this.resizeObserver.observe(container);
     }
+    this.pollWindow = view;
     this.pollTimer = view.setInterval(() => { void this.poll(); }, 3000);
     this.render();
     this.adapter.list().then(list => {
@@ -191,7 +194,7 @@ export class Controller {
 
   destroy() {
     this.destroyed = true;
-    window.clearInterval(this.pollTimer);
+    this.pollWindow?.clearInterval(this.pollTimer);
     this.resizeObserver?.disconnect();
     window.clearTimeout(this.saveTimer);
     this.clearToast();

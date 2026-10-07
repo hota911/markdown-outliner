@@ -1,8 +1,8 @@
 {
   "id": "markdown-outliner",
   "name": "Markdown Outliner",
-  "version": "0.1.1",
-  "minAppVersion": "1.5.7",
+  "version": "0.1.2",
+  "minAppVersion": "1.7.2",
   "description": "Edit Markdown task lists as an outline, keep adding and restructuring tasks while filtering, and write changes back to embedded files.",
   "author": "hota911",
   "authorUrl": "https://github.com/hota911",
