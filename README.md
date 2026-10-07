@@ -34,36 +34,48 @@ Open the outliner from the ribbon icon or the command "アウトライナーを�
 
 ## Web version
 
-Requires Node.js (no dependencies to install).
+Requires Node.js 24 or later.
 
 ```sh
+npm ci
+npm run build:web
 node server.mjs [folder-or-file] [port]
 ```
 
-Then open `http://127.0.0.1:<port>/` (default port 4317). Without arguments the server edits the bundled `samples/` folder in place, so copy it first if you want to keep the originals. Passing a single `.md` file restricts the server to that file. The server only listens on 127.0.0.1, and bookmarks are stored in the browser's local storage. `npm start` runs the server with the defaults.
+Then open `http://127.0.0.1:<port>/` (default port 4317). Without arguments the server edits the bundled `samples/` folder in place, so copy it first if you want to keep the originals. Passing a single `.md` file restricts the server to that file. The server only listens on 127.0.0.1, serves the built app from `dist/web/`, and bookmarks are stored in the browser's local storage. `npm start` builds the web app and runs the server with the defaults.
 
 ## Development
 
+The UI is written in Svelte 5 and TypeScript and built with Vite.
+
 ```sh
-npm ci          # install the test tools (Vitest, jsdom, Testing Library)
-npm test        # run test:node and test:ui
-npm run test:node  # core, server, Obsidian adapter and packaging tests with node --test
-npm run test:ui    # screen tests of the shared UI with Vitest and jsdom (test/ui/)
-npm run build   # write main.js, manifest.json, styles.css to dist/
+npm ci              # install the development tools
+npm run dev         # Vite dev server with hot reload and the file API on http://127.0.0.1:5173/
+npm run lint        # ESLint with eslint-plugin-obsidianmd and eslint-plugin-svelte
+npm run typecheck   # svelte-check over src/ and the Vite configs
+npm test            # run test:node and test:ui
+npm run test:node   # core, row key, server and packaging tests with node --test
+npm run test:ui     # screen tests (test/ui/) and Obsidian adapter tests with Vitest and jsdom
+npm run build       # write dist/web/ and the plugin files dist/main.js, manifest.json, styles.css
 ```
 
-The screen tests drive the rendered DOM with keyboard and pointer events against an in-memory file adapter, and check the saved Markdown. They pin the current UI behaviour so that a rewrite of `src/ui.js` can be checked against them. CI runs `npm test` and `npm run build` on pull requests and on pushes to `main`.
+`npm run dev` edits `samples/` by default; set `OUTLINER_WORKSPACE` to a folder or a single Markdown file to edit something else.
+
+The screen tests drive the rendered DOM with keyboard and pointer events against an in-memory file adapter, and check the saved Markdown. CI runs lint, typecheck, `npm test` and `npm run build` on pull requests and on pushes to `main`.
 
 Source layout:
 
-- `src/core.js`: Markdown parsing and editing operations, shared by both versions.
-- `src/ui.js`: the outliner UI, shared by both versions.
-- `src/main.js`: the Obsidian plugin entry point.
+- `src/core.ts`: Markdown parsing and editing operations, shared by both versions.
+- `src/ui/`: the outliner UI, shared by both versions. `controller.svelte.ts` holds the editing state and operations, the `.svelte` files render it, and `mount.ts` mounts it into an element.
+- `src/main.ts`: the Obsidian plugin entry point.
+- `src/web/`: the standalone web page.
 - `src/styles.css`: styles for both versions.
-- `server.mjs`: the local web server.
-- `scripts/package-plugin.mjs`: bundles the plugin into `dist/`.
+- `server.mjs`: the local web server and file API, also mounted by the dev server.
+- `vite.config.ts`: the plugin build (a single CommonJS `main.js`).
+- `vite.web.config.ts`: the web app build and dev server.
+- `scripts/package-plugin.mjs`: builds the plugin and copies `manifest.json` and `styles.css` into `dist/`.
 
-The build inlines `core.js` and `ui.js` into `main.js`, so the released `main.js` only requires `obsidian`.
+The plugin build bundles Svelte and the shared code into `main.js`, so the released `main.js` only requires `obsidian`.
 
 ## Release
 
