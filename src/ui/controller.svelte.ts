@@ -547,24 +547,21 @@ export class Controller {
     if (field === 'note') {
       if (event.key === 'Enter' && event.shiftKey) {
         event.preventDefault();
-        this.active = { path, line: row.line, field: 'title' };
-        this.render();
+        this.toggleNote(path, row.line, field);
       }
       return;
     }
     const collapsedSelection = node.selectionStart === node.selectionEnd;
     const atStart = event.key === 'Backspace' && node.selectionStart === 0;
     const atEnd = event.key === 'Delete' && node.selectionEnd === node.value.length;
-    const zoom = this.zoom;
-    const zoomRoot = zoom?.path === path ? this.rows(path).find(value => value.line === zoom.line) : null;
+    const zoomRoot = this.zoomRoot(path);
     if (zoomRoot && row.line === zoomRoot.line) {
       if (event.key === 'Enter') {
         event.preventDefault();
-        if (event.shiftKey) this.focusNote(path, row.line);
+        if (event.shiftKey) this.toggleNote(path, row.line, field);
         else this.add(path, row.line, true);
         return;
       }
-      if (event.key === 'Tab' || event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key)) { event.preventDefault(); return; }
       if (collapsedSelection && (atStart || atEnd)) return;
     }
     if (collapsedSelection && (atStart || atEnd) && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
@@ -577,15 +574,14 @@ export class Controller {
       this.merge(path, row, atStart);
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      if (event.shiftKey) this.focusNote(path, row.line);
+      if (event.shiftKey) this.toggleNote(path, row.line, field);
       else this.add(path, row.line, false);
     } else if (event.key === 'Tab') {
       event.preventDefault();
-      if (zoomRoot && event.shiftKey && row.parentLine === zoomRoot.line) return;
-      this.mutate(path, text => event.shiftKey ? core.outdent(text, row.line) : core.indent(text, row.line), 'title');
+      this.shift(path, row, event.shiftKey, field);
     } else if (event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key)) {
       event.preventDefault();
-      this.mutate(path, text => core.move(text, row.line, event.key === 'ArrowUp' ? 'up' : 'down'), 'title');
+      this.moveItem(path, row, event.key === 'ArrowUp' ? 'up' : 'down', field);
     } else if (['ArrowUp', 'ArrowDown'].includes(event.key) && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
       event.preventDefault();
       const titles = [...this.container!.querySelectorAll<HTMLTextAreaElement>('[data-field="title"]')];
@@ -598,6 +594,57 @@ export class Controller {
       }
     }
   }
+
+  // --- Item commands shared by the keyboard and the touch bar --------------------------------
+
+  private zoomRoot(path: string) {
+    const zoom = this.zoom;
+    return zoom?.path === path ? this.rows(path).find(value => value.line === zoom.line) ?? null : null;
+  }
+
+  // Tab / Shift+Tab. The zoomed item and its direct children keep their level.
+  private shift(path: string, row: KeyedRow, outdent: boolean, field: Field) {
+    const zoomRoot = this.zoomRoot(path);
+    if (zoomRoot && (row.line === zoomRoot.line || outdent && row.parentLine === zoomRoot.line)) return;
+    this.mutate(path, text => outdent ? core.outdent(text, row.line) : core.indent(text, row.line), field);
+  }
+
+  // Alt+Up / Alt+Down. The zoomed item stays in place.
+  private moveItem(path: string, row: KeyedRow, direction: 'up' | 'down', field: Field) {
+    if (this.zoomRoot(path)?.line === row.line) return;
+    this.mutate(path, text => core.move(text, row.line, direction), field);
+  }
+
+  // Shift+Enter: from the title to the note of the same item and back.
+  private toggleNote(path: string, line: number, field: Field) {
+    if (field === 'title') { this.focusNote(path, line); return; }
+    this.active = { path, line, field: 'title' };
+    this.render();
+  }
+
+  // Runs a touch bar command on the item whose field has focus. A soft keyboard keeps the word
+  // being typed in IME composition, and render() waits for the composition to end; blurring the
+  // field commits the word first. The field gets the focus back unless the command's render()
+  // already focused it.
+  private fromTouchBar(command: (path: string, row: KeyedRow, field: Field) => void) {
+    const focus = this.active;
+    const node = this.activeElement;
+    if (!focus || !(node instanceof HTMLTextAreaElement)) return;
+    if (this.composing) node.blur();
+    const row = this.rows(focus.path).find(value => value.line === focus.line);
+    if (row) command(focus.path, row, focus.field);
+    if (node.isConnected && !(this.activeElement instanceof HTMLTextAreaElement)) node.focus();
+  }
+
+  indentActive = (outdent: boolean) => this.fromTouchBar((path, row, field) => this.shift(path, row, outdent, field));
+  moveActive = (direction: 'up' | 'down') => this.fromTouchBar((path, row, field) => this.moveItem(path, row, direction, field));
+  toggleActiveNote = () => this.fromTouchBar((path, row, field) => this.toggleNote(path, row.line, field));
+  historyFromTouchBar = (back: boolean) => this.fromTouchBar(() => this.history(back));
+  // Same order as the status button: not started → in progress → done → not started.
+  cycleActiveStatus = () => this.fromTouchBar((path, row, field) => {
+    const status = row.kind === 'task' ? row.status : null;
+    if (status) this.mutate(path, text => core.updateStatus(text, row.line, nextStatus(status)), field);
+  });
 
   // --- Row actions --------------------------------------------------------------------------
 

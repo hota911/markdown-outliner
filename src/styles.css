@@ -113,4 +113,41 @@
 .outliner .empty { padding: 24px 16px; text-align: center; color: var(--text-faint); }
 .outliner .help { border-top: 1px solid var(--background-modifier-border); padding: 10px 0; color: var(--text-faint); font-size: 11px; }
 @media (max-width: 900px) { .outliner { margin: 12px auto; padding: 0 16px; } .outliner .outline-item { padding-left: calc(var(--depth) * 18px); } .outliner .row-actions { gap: 0; } .outliner .note-input { margin-left: 44px; width: calc(100% - 48px); } }
-@media (max-width: 600px) { .outliner .outliner-workspace { gap: 12px; } .outliner .bookmarks:not(.is-collapsed) { flex-basis: 120px; padding-right: 8px; } .outliner .tag-filter { min-width: 100px; } }
+/* Phones: the bookmarks go above the editor instead of taking width from it, and the file picker and the
+   search get a row of their own. */
+@media (max-width: 600px) {
+  .outliner { padding: 0 12px; }
+  .workspace-leaf-content .markdown-outliner-container.outliner { padding: 12px; }
+  .outliner .outliner-workspace { flex-direction: column; align-items: stretch; gap: 12px; }
+  .outliner .bookmarks, .outliner .bookmarks.is-collapsed { flex: none; padding: 0 0 8px; border-right: 0; border-bottom: 1px solid var(--background-modifier-border); }
+  .outliner .bookmarks-header { margin-bottom: 4px; }
+  .outliner .file-select { flex: 1 1 100%; max-width: none; }
+  .outliner .search-box { flex: 1 1 100%; }
+  .outliner .title-search { width: 100%; }
+}
+.outliner .touch-bar { display: none; }
+/* Touch screens (`pointer: coarse` rather than the host platform, so the web version on a phone gets this too). */
+@media (pointer: coarse) {
+  .outliner button, .outliner select, .outliner input:not([type=checkbox]) { min-height: 36px; }
+  .outliner .icon, .outliner .task-status { width: 32px; min-width: 32px; flex-basis: 32px; height: 36px; }
+  .outliner .fold, .outliner .drag-handle { width: 24px; min-width: 24px; flex-basis: 24px; }
+  .outliner .search-star { min-height: 0; }
+  .outliner .outline-line { min-height: 36px; }
+  .outliner .bullet { width: 32px; min-width: 32px; line-height: 36px; }
+  /* Fold, handle and status button with their gaps, so the note starts under the title. */
+  .outliner .note-input { margin-left: 92px; width: calc(100% - 92px); }
+  .outliner .title-input, .outliner .title-display { min-height: 36px; padding: 6px 0; }
+  /* The handle only selects: HTML5 drag and drop does not work reliably with touch, and the touch bar
+     moves items instead. */
+  .outliner .drag-handle { -webkit-user-drag: none; user-select: none; opacity: .5; }
+  /* A tap leaves :hover on the line and a tapped handle keeps the focus, so the row buttons show only
+     while the title is edited, where they hang below it, and those the touch bar offers are left out. */
+  .outliner .outline-line:not(:has(.title-input:focus, .row-actions :focus)) .row-actions { visibility: hidden; }
+  .outliner .row-actions { height: 36px; }
+  .outliner .row-actions .in-touch-bar { display: none; }
+  .outliner .help { display: none; }
+  /* Soft keyboards lack Tab, Alt+arrows and Shift+Enter, so while an item field has focus a bar of buttons
+     for them sticks to the bottom of the view, which sits above the keyboard. */
+  .outliner .outliner-editor:has([data-field]:focus) .touch-bar { position: sticky; bottom: 0; z-index: 2; display: flex; gap: 4px; padding: 6px 0; border-top: 1px solid var(--background-modifier-border); background: var(--background-primary); }
+  .outliner .touch-bar button { flex: 1 1 0; min-width: 0; height: 40px; padding: 0; font-size: 18px; }
+}

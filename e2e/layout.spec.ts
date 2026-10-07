@@ -61,6 +61,12 @@ test.describe('item titles use the width of the page', () => {
     await expect(page.getByRole('textbox', { name: 'Item note' })).toBeVisible();
   });
 
+  test('with a mouse, the touch bar stays hidden while a title is edited', async ({ openOutliner, page }) => {
+    const outliner = await openOutliner(markdown);
+    await (await outliner.line(title)).getByRole('textbox', { name: 'Item text' }).click();
+    await expect(page.getByRole('toolbar', { name: 'Edit the item' })).toBeHidden();
+  });
+
   test('while a title is edited, a click on the next line lands there', async ({ openOutliner, page }) => {
     const outliner = await openOutliner('- [ ] a\n- [ ] b\n');
     await page.getByRole('textbox', { name: 'Item text' }).first().fill('a edited');
