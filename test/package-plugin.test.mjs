@@ -13,7 +13,7 @@ test('packaged plugin loads with only the Obsidian external module', async () =>
   const commands = [];
   const views = [];
   class Plugin {
-    app = { workspace: { on: () => ({}) } };
+    app = { workspace: { on: () => ({}) }, vault: { on: () => ({}) } };
     async loadData() { return null; }
     registerEvent() {}
     registerView(type) { views.push(type); }

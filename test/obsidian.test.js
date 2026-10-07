@@ -25,6 +25,7 @@ vi.mock('obsidian', async () => {
     file = null;
     getDisplayText() { return this.file ? this.file.basename : ''; }
     getState() { return this.file ? { file: this.file.path } : {}; }
+    async onRename() {}
     async setState(viewState) {
       const file = this.app.vault.getFileByPath(viewState.file);
       if (this.file) await this.onUnloadFile(this.file);
@@ -32,7 +33,7 @@ vi.mock('obsidian', async () => {
       await this.onLoadFile(file);
     }
   }
-  class MarkdownView extends FileView {}
+  class MarkdownView extends FileView { getViewType() { return 'markdown'; } }
   class Plugin {
     constructor(app) { this.app = app; this.views = new Map(); this.commands = []; this.ribbons = []; }
     registerView(type, factory) { this.views.set(type, factory); }
@@ -87,7 +88,19 @@ async function fixture({ language = 'ja' } = {}) {
   const reads = [], writes = [], mounts = [], notices = [];
   state.mounts = mounts;
   state.notices = notices;
+  const renames = [];
   const vault = {
+    on: (name, callback) => { if (name === 'rename') renames.push(callback); },
+    // Like Vault#rename: moves the content, updates the TFile, then notifies views and listeners.
+    rename: async (file, newPath, views) => {
+      const oldPath = file.path;
+      files.set(newPath, files.get(oldPath));
+      files.delete(oldPath);
+      file.path = newPath;
+      file.basename = newPath.split('/').at(-1).replace(/\.md$/, '');
+      for (const view of views) await view.onRename(file);
+      for (const callback of renames) callback(file, oldPath);
+    },
     getFileByPath: path => files.has(path) ? new TFile(path) : null,
     getFolderByPath: path => folders.has(path) ? { path } : null,
     getMarkdownFiles: () => [...files.keys()].filter(path => path.endsWith('.md')).map(path => new TFile(path)),
@@ -392,4 +405,69 @@ test('未保存の入力はタブを閉じても保持して次に開いたタ�
   await second.setViewState({ type: 'markdown-outliner-file', state: { file: 'TODO.md' } });
   assert.equal(f.mounts.at(-1).options.drafts.has('TODO.md'), false);
   assert.equal(f.files.get('TODO.md'), '- ![[work.md]]\n');
+});
+
+test('リンクのメニューから開くとリンク元のタブを残し、タブ自身のメニューからは同じタブを切り替える', async () => {
+  const f = await fixture();
+  const { MarkdownView } = await import('obsidian');
+  const noteLeaf = f.newLeaf();
+  await noteLeaf.setViewState({ type: 'markdown', state: { file: 'TODO.md' } });
+  noteLeaf.view = new MarkdownView(noteLeaf);
+  noteLeaf.view.file = new TFile('TODO.md');
+
+  // Obsidian passes the leaf that contains the link, which shows TODO.md, not work.md.
+  const linkMenu = menu();
+  f.fileMenus[0](linkMenu, new TFile('work.md'), 'link-context-menu', noteLeaf);
+  await linkMenu.items[0].click();
+  assert.equal(noteLeaf.type, 'markdown');
+  assert.deepEqual(f.created, ['tab']);
+  assert.equal(f.existing.at(-1).type, 'markdown-outliner-file');
+  assert.deepEqual(f.existing.at(-1).view.getState(), { file: 'work.md' });
+
+  const tabMenu = menu();
+  f.fileMenus[0](tabMenu, new TFile('TODO.md'), 'tab-header', noteLeaf);
+  await tabMenu.items[0].click();
+  assert.deepEqual(f.created, ['tab']);
+  assert.equal(noteLeaf.type, 'markdown-outliner-file');
+  assert.deepEqual(noteLeaf.view.getState(), { file: 'TODO.md' });
+
+  // The outline tab's own menu has "Open as Markdown" instead.
+  const outlineMenu = menu();
+  f.fileMenus[0](outlineMenu, new TFile('TODO.md'), 'more-options', noteLeaf);
+  assert.deepEqual(outlineMenu.items, []);
+});
+
+test('開いているファイルの名前を変えても未保存の入力を表示したまま新しいパスへ保存できる', async () => {
+  const f = await fixture();
+  const leaf = f.newLeaf();
+  await leaf.setViewState({ type: 'markdown-outliner-file', state: { file: 'TODO.md' } });
+  const before = f.mounts.at(-1);
+  const read = await before.options.adapter.read('TODO.md');
+  const draft = { text: '- [ ] unsaved\n', baseRevision: read.revision, dirty: true, conflict: false };
+  before.options.drafts.set('TODO.md', draft);
+
+  await f.plugin.app.vault.rename(leaf.view.file, 'projects/renamed.md', [leaf.view]);
+  const after = f.mounts.at(-1);
+  assert.equal(before.destroyed, 1);
+  assert.equal(after.options.initialFile, 'projects/renamed.md');
+  assert.equal(after.options.drafts.get('projects/renamed.md'), draft);
+  assert.equal(after.options.drafts.has('TODO.md'), false);
+  assert.deepEqual(leaf.view.getState(), { file: 'projects/renamed.md' });
+  await after.options.adapter.save('projects/renamed.md', draft.text, draft.baseRevision);
+  assert.equal(f.files.get('projects/renamed.md'), '- [ ] unsaved\n');
+});
+
+test('閉じたタブの未保存の入力は名前を変えたファイルを開き直したタブへ渡す', async () => {
+  const f = await fixture();
+  const leaf = f.newLeaf();
+  await leaf.setViewState({ type: 'markdown-outliner-file', state: { file: 'TODO.md' } });
+  const draft = { text: '- [ ] unsaved\n', dirty: true };
+  f.mounts.at(-1).options.drafts.set('TODO.md', draft);
+  const file = leaf.view.file;
+  await leaf.view.onClose();
+
+  await f.plugin.app.vault.rename(file, 'renamed.md', []);
+  const reopened = f.newLeaf();
+  await reopened.setViewState({ type: 'markdown-outliner-file', state: { file: 'renamed.md' } });
+  assert.equal(f.mounts.at(-1).options.drafts.get('renamed.md'), draft);
 });

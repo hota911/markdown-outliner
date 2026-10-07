@@ -75,6 +75,14 @@ function mountInView(view: ItemView, plugin: MarkdownOutlinerPlugin, drafts: Map
 
 const hasUnsaved = (drafts: Map<string, Doc>) => [...drafts.values()].some(doc => doc.dirty);
 
+// Renaming keeps the content, so the draft's base revision (the text) still matches the file.
+function moveDraft(drafts: Map<string, Doc>, oldPath: string, newPath: string) {
+  const doc = drafts.get(oldPath);
+  if (!doc) return;
+  drafts.delete(oldPath);
+  drafts.set(newPath, doc);
+}
+
 class OutlinerView extends ItemView {
   private mounted: Mounted | null = null;
   private readonly plugin: MarkdownOutlinerPlugin;
@@ -109,6 +117,8 @@ class OutlinerView extends ItemView {
 // navigation history and workspace restore work as they do for the regular editor.
 class OutlinerFileView extends FileView {
   private mounted: Mounted | null = null;
+  // The path the outliner was mounted on; `file.path` already holds the new path in onRename.
+  private mountedPath: string | null = null;
   // The drafts of this tab and of the files it embeds; not shared with other open views, so two
   // views of one file detect each other's saves as external changes.
   private drafts = new Map<string, Doc>();
@@ -133,9 +143,12 @@ class OutlinerFileView extends FileView {
     this.unmount(file.path);
   }
 
-  // The outliner was mounted on the old path. Drafts stay keyed by the old path, so unsaved input
-  // there fails to save as a conflict instead of disappearing.
+  // Called for every renamed file. When it is this tab's file, the outliner is remounted on the
+  // new path with its draft moved there, so unsaved input stays on screen and saves to the new path.
   async onRename(file: TFile) {
+    await super.onRename(file);
+    if (file !== this.file || !this.mountedPath || this.mountedPath === file.path) return;
+    moveDraft(this.drafts, this.mountedPath, file.path);
     this.mount(file);
   }
 
@@ -157,6 +170,7 @@ class OutlinerFileView extends FileView {
   private mount(file: TFile) {
     this.mounted?.destroy();
     this.mounted = mountInView(this, this.plugin, this.drafts, file.path);
+    this.mountedPath = file.path;
   }
 
   // Unsaved drafts are kept on the plugin under `path` until the file is opened as an outline again.
@@ -164,6 +178,7 @@ class OutlinerFileView extends FileView {
     if (!this.mounted) return;
     this.mounted.destroy();
     this.mounted = null;
+    this.mountedPath = null;
     if (hasUnsaved(this.drafts)) {
       this.plugin.fileDrafts.set(path, this.drafts);
       new Notice(this.plugin.t.obsidian.closedWithUnsaved);
@@ -201,12 +216,28 @@ export default class MarkdownOutlinerPlugin extends Plugin {
         return true;
       },
     });
+    // Obsidian 1.14.4 passes the leaf for several sources: a FileView's own pane menu ('tab-header'
+    // or 'more-options', the sources typed on View#onPaneMenu) but also 'link-context-menu' and
+    // 'graph-context-menu', where the leaf shows another file. Only the pane menu of a view of the
+    // same file switches that leaf; every other menu opens a new tab.
     this.registerEvent(this.app.workspace.on('file-menu', (menu, file, source, leaf) => {
       if (!(file instanceof TFile) || file.extension !== 'md') return;
+      const view = leaf?.view;
+      const ownPane = (source === 'tab-header' || source === 'more-options') && view instanceof FileView && view.file?.path === file.path;
+      // The outline tab's own pane menu offers "Open as Markdown" instead.
+      if (ownPane && view.getViewType() === FILE_VIEW_TYPE) return;
       menu.addItem(item => item
         .setTitle(t.openAsOutline)
         .setIcon('list-tree')
-        .onClick(() => this.openAsOutline(file, leaf ?? this.app.workspace.getLeaf('tab'))));
+        .onClick(() => this.openAsOutline(file, ownPane ? view.leaf : this.app.workspace.getLeaf('tab'))));
+    }));
+    // Unsaved input of a closed outline tab follows its file when the file is renamed.
+    this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
+      const drafts = this.fileDrafts.get(oldPath);
+      if (!drafts) return;
+      this.fileDrafts.delete(oldPath);
+      moveDraft(drafts, oldPath, file.path);
+      this.fileDrafts.set(file.path, drafts);
     }));
     this.addRibbonIcon('list-tree', t.openOutliner, () => this.openView());
   }

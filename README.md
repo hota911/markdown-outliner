@@ -32,7 +32,7 @@ Headings, code blocks, and other non-list content are preserved but not shown.
 
 Open the outliner from the ribbon icon or the command "Open outliner" ("アウトライナーを開く" in Japanese). The plugin edits any `.md` file in the vault. Unsaved input is kept in memory while the plugin is enabled; save before quitting Obsidian or disabling the plugin. The plugin has been used on desktop; mobile has not been tested.
 
-Experimental: a single file can also open as an outline in its own tab. Choose "Open as outline" ("アウトラインで開く") from a `.md` file's menu, or run the command of the same name to switch the active Markdown editor to the outline. The tab is titled with the file name, works with back and forward navigation, and is restored when Obsidian restarts. "Open as Markdown" in the tab's menu switches it back to the regular editor. The file picker in the toolbar still lists the whole vault, so it can show another file inside the same tab.
+Experimental: a single file can also open as an outline in its own tab. Choose "Open as outline" ("アウトラインで開く") from a `.md` file's menu, or run the command of the same name to switch the active Markdown editor to the outline. From a tab's own menu it switches that tab; from the file explorer or a link's menu it opens a new tab. The tab is titled with the file name, works with back and forward navigation, and is restored when Obsidian restarts. "Open as Markdown" in the tab's menu switches it back to the regular editor. The file picker in the toolbar still lists the whole vault, so it can show another file inside the same tab.
 
 ## Web version
 
