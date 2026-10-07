@@ -48,7 +48,7 @@ test.describe('with motion', () => {
     await expect(sidebar).toHaveAttribute('data-ran', 'true');
     await expect.poll(() => sidebar.evaluate(node => node.getBoundingClientRect().width)).toBe(24);
     await page.getByRole('button', { name: 'Expand sidebar' }).click();
-    await expect(page.getByRole('button', { name: 'Add file' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add current view' })).toBeVisible();
   });
 });
 

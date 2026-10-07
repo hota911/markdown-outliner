@@ -144,7 +144,18 @@ async function fixture({ language = 'ja' } = {}) {
       openFile: async file => { opened.push(file.path); } };
     return leaf;
   };
-  const app = { vault, metadataCache, contentEl, workspace: {
+  // Like FileManager#renameFile with "Automatically update internal links": renames the file,
+  // then rewrites links to it, without the .md extension.
+  const fileManager = {
+    renameFile: async (file, newPath) => {
+      const oldName = file.path.split('/').at(-1);
+      await vault.rename(file, newPath, []);
+      for (const [path, text] of files) {
+        files.set(path, text.split('![[' + oldName + ']]').join('![[' + file.basename + ']]'));
+      }
+    },
+  };
+  const app = { vault, metadataCache, contentEl, fileManager, workspace: {
     getLeavesOfType: type => existing.filter(leaf => leaf.type === type),
     getLeaf: mode => {
       created.push(mode);
@@ -261,6 +272,22 @@ test('新しい Markdown を Vault 内に作成し、既存ファイルと Vault
   await assert.rejects(f.adapter.create('notes.md.txt', 'text\n'));
   assert.equal(f.files.get('work.md'), '- [ ] embedded task\n');
   assert.deepEqual(f.writes, ['projects/new task.md']);
+});
+
+test('埋め込み先の名前を FileManager で変更し、既存ファイルと Vault 外への変更は拒否する', async () => {
+  const f = await fixture();
+  await f.adapter.rename('work.md', 'done work.md');
+  assert.equal(f.files.get('done work.md'), '- [ ] embedded task\n');
+  assert.equal(f.files.has('work.md'), false);
+  // FileManager updated the link; the UI then restores .md (see the rename tests in test/ui/files.test.js).
+  assert.equal(f.files.get('TODO.md'), '- ![[done work]]\n');
+  await assert.rejects(f.adapter.rename('done work.md', 'TODO.md'), /同じ名前/);
+  await assert.rejects(f.adapter.rename('done work.md', 'archive.md'), /同じ名前/);
+  await assert.rejects(f.adapter.rename('done work.md', '../outside.md'));
+  await assert.rejects(f.adapter.rename('../outside.md', 'inside.md'));
+  await assert.rejects(f.adapter.rename('missing.md', 'new.md'));
+  assert.equal(f.files.get('TODO.md'), '- ![[done work]]\n');
+  assert.equal(f.files.get('done work.md'), '- [ ] embedded task\n');
 });
 
 test('View の再 Open と Close で以前の UI を破棄し再表示できる', async () => {

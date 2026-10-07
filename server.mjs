@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
-import { readFile, readdir, realpath, writeFile, rename, stat } from 'node:fs/promises';
+import { link, lstat, readFile, readdir, realpath, writeFile, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -11,6 +11,11 @@ const revisionOf = text => createHash('sha256').update(text).digest('hex');
 const contentTypes = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json',
 };
+
+// The same rule as usableBaseName in src/core.ts, which the page checks before asking; repeated
+// here so that the server does not depend on the TypeScript sources.
+const usableBaseName = name => name !== '' && name === name.trim() && !name.startsWith('.')
+  && !/[/\\:*?"<>|#^[\]]/.test(name) && !/\p{Cc}/u.test(name);
 
 // The web page carries this marker; it is replaced with the per-session configuration.
 export const configMarker = '<!--outliner-config-->';
@@ -122,13 +127,48 @@ export async function createOutlinerApi(workspace) {
     return { revision: revisionOf(text) };
   }
 
+  // Renames a file within its folder without overwriting anything. Only the base name changes;
+  // links to the file in other files are left as they are.
+  async function renameFile(from, to) {
+    if (selectedFile) throw new RequestError(403, 'renameInSingleFile');
+    const full = await markdownFile(from);
+    checkRelative(to);
+    if (path.posix.dirname(to) !== path.posix.dirname(from)) throw new RequestError(400, 'renameOtherFolder');
+    const name = path.posix.basename(to);
+    if (!usableBaseName(name.slice(0, -'.md'.length))) throw new RequestError(400, 'invalidName');
+    // `full` is the resolved path, so a symlink would rename its target instead of the link.
+    const directory = await realpath(path.dirname(path.resolve(root, from)));
+    if (path.join(directory, path.posix.basename(from)) !== full) throw new RequestError(400, 'renameSymlink');
+    const destination = path.join(directory, name);
+    if (busy.has(full)) throw new RequestError(409, 'saveBusy');
+    busy.add(full);
+    try {
+      // A hard link fails when anything already exists at the destination, unlike rename().
+      try { await link(full, destination); }
+      catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+        // On a case-insensitive file system a change of case only finds the file itself.
+        const [source, existing] = await Promise.all([stat(full), lstat(destination)]);
+        const sameFile = source.ino === existing.ino && source.dev === existing.dev
+          && name.toLowerCase() === path.posix.basename(from).toLowerCase();
+        if (!sameFile) throw new RequestError(409, 'fileExists');
+        await rename(full, destination);
+        return {};
+      }
+      await unlink(full);
+      return {};
+    } finally { busy.delete(full); }
+  }
+
   async function handleApi(request, response, url, expectedHost) {
     if (request.method === 'GET' && url.pathname === '/api/files') return sendJson(response, 200, selectedFile ? [initialFile] : await filesIn(root));
     if (request.method === 'GET' && url.pathname === '/api/file') {
       const text = await readFile(await markdownFile(url.searchParams.get('path')), 'utf8');
       return sendJson(response, 200, { text, revision: revisionOf(text) });
     }
-    if (['PUT', 'POST'].includes(request.method) && url.pathname === '/api/file') {
+    const write = ['PUT', 'POST'].includes(request.method) && url.pathname === '/api/file'
+      || request.method === 'POST' && url.pathname === '/api/rename';
+    if (write) {
       if (request.headers['x-outliner-token'] !== token) throw new RequestError(403, 'badToken');
       if (request.headers.origin && request.headers.origin !== `http://${expectedHost}`) throw new RequestError(403, 'badOrigin');
       let size = 0;
@@ -142,6 +182,7 @@ export async function createOutlinerApi(workspace) {
       try { data = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
       catch { throw new RequestError(400, 'invalidContent'); }
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new RequestError(400, 'invalidContent');
+      if (url.pathname === '/api/rename') return sendJson(response, 200, await renameFile(data.from, data.to));
       const file = url.searchParams.get('path');
       return sendJson(response, 200, request.method === 'PUT' ? await save(file, data.text, data.revision) : await create(file, data.text));
     }

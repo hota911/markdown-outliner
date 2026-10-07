@@ -5,7 +5,7 @@ import { merge3, type Side } from '../three-way-merge.ts';
 import { RowKeys, type KeyedRow } from './keys.ts';
 import { filterActive, rowMatches, type FilterQuery, type TextQuery } from './filter.ts';
 import { errorText, messages, type Messages } from './messages.ts';
-import type { Adapter, Bookmark, Doc, MountOptions, Preferences, Revision, StatusFilter } from './types.ts';
+import type { Adapter, Bookmark, BookmarkZoom, Doc, MountOptions, Preferences, Revision, StatusFilter } from './types.ts';
 
 export type Field = 'title' | 'note';
 type RowKind = 'task' | 'bullet';
@@ -57,43 +57,6 @@ export const statusIcons: Record<Status, string> = { todo: '○', 'in-progress':
 export const filterIcons: Record<StatusFilter, string> = { all: '', 'not-done': '◌', ...statusIcons };
 const nextStatus = (status: Status | null) => statuses[(statuses.indexOf(status!) + 1) % statuses.length];
 
-// Only http(s) targets become anchors; any other Markdown link stays plain text.
-const markdownLink = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/;
-// A tag is a whole whitespace-separated word, the same rule the search box uses.
-// The leading space is captured rather than looked behind for, which iOS before 16.4 lacks.
-const tagWord = /(^|\s)(#[^#\s]+)(?=\s|$)/g;
-// `start` is the offset of the shown text in the title, so that a click on the rendered text can
-// put the caret there and filter matches can be marked in it.
-export interface TitlePart { text: string; start: number; href?: string; tag?: string }
-
-// The title split into http(s) links, #tags and plain text; null when it has neither links nor tags.
-export function titleParts(title: string): TitlePart[] | null {
-  const links = [...title.matchAll(new RegExp(markdownLink, 'g'))]
-    // The shown link text follows the opening bracket.
-    .map(match => ({ start: match.index, end: match.index + match[0].length, part: { text: match[1], start: match.index + 1, href: match[2] } }));
-  const tags = [...title.matchAll(tagWord)]
-    .map(match => ({ start: match.index + match[1].length, end: match.index + match[0].length, tag: match[2] }))
-    .map(({ start, end, tag }) => ({ start, end, part: { text: tag, start, tag: tag.slice(1) } }))
-    .filter(tag => !links.some(link => tag.start < link.end && link.start < tag.end));
-  if (!links.length && !tags.length) return null;
-  const parts: TitlePart[] = [];
-  let offset = 0;
-  for (const token of [...links, ...tags].sort((a, b) => a.start - b.start)) {
-    if (token.start > offset) parts.push({ text: title.slice(offset, token.start), start: offset });
-    parts.push(token.part);
-    offset = token.end;
-  }
-  if (offset < title.length) parts.push({ text: title.slice(offset), start: offset });
-  return parts;
-}
-
-// The tag (without `#`) of the whitespace-separated word around `offset`, or null when that word
-// is not a tag. A word counts as a tag exactly when the search box would treat it as one.
-export function tagAt(text: string, offset: number): string | null {
-  const word = text.slice(0, offset).match(/\S*$/)![0] + text.slice(offset).match(/^\S*/)![0];
-  return /^#[^#\s]+$/.test(word) ? word.slice(1) : null;
-}
-
 // Attachment that writes the model value into an input on every render. A `value` attribute
 // is not enough: Svelte compares with the previously rendered value, not with what the user
 // typed since, so undo back to that value would leave the typed text in place.
@@ -101,6 +64,25 @@ export const syncValue = (value: () => string) => (node: HTMLInputElement | HTML
   const next = value();
   if (node.value !== next) node.value = next;
 };
+
+// Blank lines at the end of a note cannot be kept in the Markdown: they would separate the note
+// from what follows rather than belong to it. They are left out of the file, and the textarea
+// being typed in keeps them, so Enter at the end of a note starts a new line.
+export const noteText = (value: string) => value.replace(/(?:\n[ \t]*)+$/, '');
+
+// syncValue for a note textarea; the focused one keeps the blank lines typed at its end.
+export const syncNote = (value: () => string) => (node: HTMLTextAreaElement) => {
+  const next = value();
+  if (node === node.ownerDocument.activeElement && noteText(node.value) === next) return;
+  if (node.value !== next) node.value = next;
+};
+
+// The tag (without `#`) of the whitespace-separated word around `offset`, or null when that word
+// is not a tag. A word counts as a tag exactly when the search box would treat it as one.
+export function tagAt(text: string, offset: number): string | null {
+  const word = text.slice(0, offset).match(/\S*$/)![0] + text.slice(offset).match(/^\S*/)![0];
+  return /^#[^#\s]+$/.test(word) ? word.slice(1) : null;
+}
 
 export interface ItemView {
   key: string;
@@ -113,7 +95,6 @@ export interface ItemView {
   hasChildren: boolean;
   showNote: boolean;
   status: { icon: string; label: string; next: Status } | null;
-  titleParts: TitlePart[] | null;
   // Shown only because a descendant matches the active filter; rendered dimmed.
   context: boolean;
   // The search box words and #tags to mark in the title; null without a text filter and for context rows.
@@ -134,7 +115,8 @@ export type OutlineView =
   | { kind: 'missing' }
   | { kind: 'outline'; path: string; zoom: ZoomView | null; items: ItemView[]; addKind: RowKind; appendLine: number | null; appendChild: boolean };
 
-export interface BookmarkView { bookmark: unknown; label: string; title: string }
+// `defaultLabel` is the label derived from the view, shown while renaming; empty for an unreadable bookmark.
+export interface BookmarkView { bookmark: unknown; label: string; title: string; defaultLabel: string }
 
 export interface View {
   fileList: string[];
@@ -157,12 +139,27 @@ export interface View {
 
 function validBookmark(bookmark: unknown): bookmark is Bookmark {
   const value = bookmark as Bookmark | null;
-  return !!value && typeof value.id === 'string' && ['file', 'search'].includes(value.kind)
+  const zoom = value?.zoom;
+  return !!value && typeof value.id === 'string' && ['file', 'search', 'view'].includes(value.kind)
     && typeof value.file === 'string' && value.file.length > 0
-    && ['all', ...statuses].includes(value.status)
+    && filters.includes(value.status)
     && Array.isArray(value.tags) && value.tags.every(tag => typeof tag === 'string')
-    && (value.searchText === undefined || typeof value.searchText === 'string');
+    && (value.searchText === undefined || typeof value.searchText === 'string')
+    && (zoom === undefined || !!zoom && typeof zoom.path === 'string' && Number.isInteger(zoom.line) && typeof zoom.title === 'string')
+    && (value.name === undefined || typeof value.name === 'string');
 }
+
+// What a bookmark restores. A 'file' bookmark of 0.1.x shows the file without filters.
+interface SavedView { file: string; status: StatusFilter; tags: string[]; searchText: string; zoom: BookmarkZoom | null }
+
+const savedView = (bookmark: Bookmark): SavedView => bookmark.kind === 'file'
+  ? { file: bookmark.file, status: 'all', tags: [], searchText: '', zoom: null }
+  : { file: bookmark.file, status: bookmark.status, tags: bookmark.tags, searchText: bookmark.searchText || '', zoom: bookmark.zoom ?? null };
+
+// The zoomed item is compared by title, the same way openBookmark() finds it again.
+const sameView = (a: SavedView, b: SavedView) => a.file === b.file && a.status === b.status
+  && JSON.stringify(a.tags) === JSON.stringify(b.tags) && a.searchText === b.searchText
+  && (a.zoom === null ? b.zoom === null : b.zoom !== null && a.zoom.path === b.zoom.path && a.zoom.title === b.zoom.title);
 
 // Saves of one file per save request, when external changes keep merging cleanly in between.
 const SAVE_ATTEMPTS = 3;
@@ -241,6 +238,10 @@ export class Controller {
     this.initialFile = initialFile;
     this.preferences = preferences;
     this.savePreferences = savePreferences;
+  }
+
+  get canRename() {
+    return !!this.adapter.rename;
   }
 
   private describe(error: unknown) {
@@ -456,7 +457,7 @@ export class Controller {
   private inputEdit(path: string, line: number, field: Field, value: string) {
     const doc = this.docs.get(path)!;
     let result: core.EditResult;
-    try { result = field === 'note' ? core.updateNote(doc.text, line, value) : core.updateTitle(doc.text, line, value); }
+    try { result = field === 'note' ? core.updateNote(doc.text, line, noteText(value)) : core.updateTitle(doc.text, line, value); }
     catch (error) {
       this.message = this.describe(error);
       this.notice = this.message;
@@ -554,6 +555,111 @@ export class Controller {
     this.showToast(this.t.edit.extracted(name));
   };
 
+  // Renames the file embedded at `line` of `path` within its folder, then points the embed at
+  // the new name. Other files that embed or link the old name are left to the host.
+  renameEmbed = async (path: string, line: number, baseName: string) => {
+    const row = this.rows(path).find(value => value.line === line);
+    if (row?.kind !== 'embed' || !row.embed) return;
+    const name = baseName.trim();
+    if (name === row.embed.replace(/^.*[/\\]/, '').replace(/\.md$/, '')) return;
+    if (!core.usableBaseName(name)) { this.showToast(this.t.edit.renameInvalidName); return; }
+    // The button is shown only when the host can rename.
+    const rename = this.adapter.rename?.bind(this.adapter);
+    if (!rename) return;
+    if (this.busy || this.polling) { this.showToast(this.t.edit.renameBusy); return; }
+    let target: string, embed: string, newTarget: string;
+    try {
+      target = this.normalize(path, row.embed);
+      embed = core.renamedEmbed(row.embed, name);
+      newTarget = this.normalize(path, embed);
+    } catch (error) { this.showToast(this.t.edit.renameFailed(this.describe(error))); return; }
+    // The host renames the file on disk, so unsaved input is saved first.
+    await this.saveAll();
+    if ([path, target].some(file => this.docs.get(file)?.dirty || this.docs.get(file)?.conflict)) {
+      this.showToast(this.t.edit.renameUnsaved);
+      return;
+    }
+    if (this.busy || this.polling) { this.showToast(this.t.edit.renameBusy); return; }
+    this.busy = true;
+    this.updateStatus();
+    try {
+      await rename(target, newTarget);
+    } catch (error) {
+      this.busy = false;
+      this.updateStatus();
+      this.showToast(this.t.edit.renameFailed(this.describe(error)));
+      return;
+    }
+    this.moveFile(target, newTarget);
+    // Obsidian may already have rewritten the embed while updating links, so the embedding file
+    // is read again before the line is changed.
+    let containing: { text: string; revision: Revision } | null = null;
+    try { containing = await this.adapter.read(path); } catch { /* Without it, the embed line is updated on the text already loaded. */ }
+    this.busy = false;
+    this.updateStatus();
+    const doc = this.docs.get(path)!;
+    const fileName = newTarget.split('/').pop()!;
+    if (containing && containing.revision !== doc.baseRevision && !doc.dirty) this.replaceText(path, doc, containing.text, containing);
+    // Snapshots hold the old path, and undo cannot rename the file back.
+    this.undo.length = 0;
+    this.redo.length = 0;
+    // Lines may have moved since Enter, through typing or an external change, so the line is
+    // found again rather than trusted.
+    const current = this.embedLineOf(path, line, [target, newTarget]);
+    if (current === null) {
+      this.render();
+      this.showToast(this.t.edit.renameEmbedNotFound(fileName));
+      return;
+    }
+    const id = this.key(path, current);
+    const folded = this.collapsed.has(id);
+    this.mutate(path, text => core.retargetEmbed(text, current, embed), null);
+    if (folded) this.collapsed.add(id);
+    this.render();
+    await this.saveAll();
+    this.showToast(this.t.edit.renamed(fileName));
+  };
+
+  // Moves every piece of state keyed by a file path after the host renamed that file.
+  private moveFile(from: string, to: string) {
+    const doc = this.docs.get(from);
+    if (doc) { this.docs.delete(from); this.docs.set(to, doc); }
+    this.fileList = [...this.fileList.filter(file => file !== from && file !== to), to].sort();
+    for (const id of [...this.collapsed]) {
+      if (!id.startsWith(from + ':')) continue;
+      this.collapsed.delete(id);
+      this.collapsed.add(to + id.slice(from.length));
+    }
+    const kept = this.kept.get(from);
+    if (kept) { this.kept.delete(from); this.kept.set(to, kept); }
+    if (this.current === from) this.current = to;
+    if (this.zoom?.path === from) this.zoom = { ...this.zoom, path: to };
+    if (this.active?.path === from) this.active = { ...this.active, path: to };
+    if (this.selectedPath === from) this.selectedPath = to;
+    let changed = false;
+    if (this.preferences.lastFile === from) { this.preferences.lastFile = to; changed = true; }
+    if (Array.isArray(this.preferences.bookmarks)) {
+      for (const bookmark of this.preferences.bookmarks) {
+        if (validBookmark(bookmark) && bookmark.file === from) { bookmark.file = to; changed = true; }
+      }
+    }
+    if (changed) this.persistPreferences();
+  }
+
+  // The line of `path` whose `![[...]]` item resolves to one of `targets`: `line` when it still
+  // does, else the only such line. Null when there is none or more than one, so nothing is guessed.
+  // A link without `.md` counts, as Obsidian writes it that way when it updates links.
+  private embedLineOf(path: string, line: number, targets: string[]) {
+    const lines = this.rows(path).filter(row => {
+      const link = /^!\[\[([^\]]+)\]\]$/.exec(row.title)?.[1];
+      if (!link) return false;
+      try { return targets.includes(this.normalize(path, link.endsWith('.md') ? link : link + '.md')); }
+      catch { return false; }
+    }).map(row => row.line);
+    if (lines.includes(line)) return line;
+    return lines.length === 1 ? lines[0] : null;
+  }
+
   // --- Field events -------------------------------------------------------------------------
 
   private focusField(path: string, line: number, field: Field, node: HTMLTextAreaElement) {
@@ -579,7 +685,14 @@ export class Controller {
         this.scheduleSave();
       },
       oninput: (event: Event) => this.inputField(path, row().line, field, event.currentTarget as HTMLTextAreaElement, event as InputEvent),
-      onblur: () => this.blurField(),
+      onblur: (event: FocusEvent) => {
+        // The blank lines kept at the end of a note while it was typed in are not in the file.
+        if (field === 'note') {
+          const node = event.currentTarget as HTMLTextAreaElement;
+          node.value = noteText(node.value);
+        }
+        this.blurField();
+      },
       onkeydown: (event: KeyboardEvent) => this.keydownField(path, row(), field, event.currentTarget as HTMLTextAreaElement, event),
     };
   }
@@ -1036,6 +1149,29 @@ export class Controller {
     }, 'title');
   };
 
+  // Alt+Up / Alt+Down on a focused handle. This is how an embed line, which has no text field, moves
+  // from the keyboard. A selection that includes the row moves as a whole.
+  handleKeydown = (path: string, row: KeyedRow, event: KeyboardEvent) => {
+    if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+    event.preventDefault();
+    const down = event.key === 'ArrowDown';
+    const sortedSelection = () => [...this.selectedLines].sort((a, b) => a - b);
+    let line = row.line;
+    if (this.selectedPath === path && this.selectedLines.has(row.line)) {
+      const index = sortedSelection().indexOf(row.line);
+      this.moveSelection(down);
+      line = sortedSelection()[index];
+    } else {
+      this.mutate(path, text => {
+        const result = core.move(text, row.line, down ? 'down' : 'up');
+        line = result.line;
+        return result;
+      }, null);
+    }
+    // The re-render may have moved or replaced the focused handle.
+    [...this.container!.querySelectorAll<HTMLElement>('.drag-handle')].find(node => node.dataset.path === path && Number(node.dataset.line) === line)?.focus();
+  };
+
   clearSelectionAndRender = () => {
     this.clearSelection();
     this.render();
@@ -1072,8 +1208,10 @@ export class Controller {
     const hasChildren = rows.some(child => child.parentLine === row.line);
     const bounds = node.getBoundingClientRect();
     const fraction = (event.clientY - bounds.top) / bounds.height;
-    const titleLeft = node.querySelector('.title-input')!.getBoundingClientRect().left;
-    if (!hasChildren && fraction >= .25 && fraction <= .75 && event.clientX >= titleLeft) {
+    // An embed line has no text field; the embed's name starts where an item's title would.
+    const titleLeft = node.querySelector('.title-input, .embed-title')!.getBoundingClientRect().left;
+    // Nothing goes under an embed line (core.reparent refuses it), so it only takes drops before and after.
+    if (row.kind !== 'embed' && !hasChildren && fraction >= .25 && fraction <= .75 && event.clientX >= titleLeft) {
       return { parentLine: row.line, beforeLine: null, indicator: 'drop-child', offset: 24 };
     }
     const position = fraction < .5 ? 'before' : 'after';
@@ -1208,44 +1346,65 @@ export class Controller {
     });
   }
 
-  addBookmark = (kind: 'file' | 'search') => {
+  addBookmark = () => {
     if (this.current === null) return;
     if (!Array.isArray(this.preferences.bookmarks)) {
       this.showToast(this.t.bookmarks.listUnreadable);
       return;
     }
-    const bookmark: Bookmark = {
-      id: crypto.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(36).slice(2), kind, file: this.current,
-      status: kind === 'file' ? 'all' : this.filter, tags: kind === 'file' ? [] : this.tagList(), searchText: kind === 'file' ? '' : this.textSearch.trim(),
-    };
-    if (this.preferences.bookmarks.some(saved => validBookmark(saved) && saved.kind === kind && saved.file === bookmark.file
-      && saved.status === bookmark.status && JSON.stringify(saved.tags) === JSON.stringify(bookmark.tags)
-      && (saved.searchText || '') === bookmark.searchText)) {
+    const view = this.currentView()!;
+    // One bookmark per view: the star in the search box shows and removes the bookmark of the
+    // current view, which would be ambiguous with duplicates.
+    if (this.currentViewBookmark()) {
       this.showToast(this.t.bookmarks.exists);
       return;
     }
+    const bookmark: Bookmark = {
+      id: crypto.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(36).slice(2), kind: 'view',
+      file: view.file, status: view.status, tags: view.tags, searchText: view.searchText, ...(view.zoom ? { zoom: view.zoom } : {}),
+    };
     this.preferences.bookmarks.push(bookmark);
     this.persistPreferences();
     this.render();
   };
 
-  private currentSearchBookmark() {
-    return Array.isArray(this.preferences.bookmarks) ? this.preferences.bookmarks.find(saved => validBookmark(saved)
-      && saved.kind === 'search' && saved.file === this.current && saved.status === this.filter
-      && JSON.stringify(saved.tags) === JSON.stringify(this.tagList()) && (saved.searchText || '') === this.textSearch.trim()) : undefined;
+  private currentView(): SavedView | null {
+    if (this.current === null) return null;
+    const zoom = this.zoom;
+    const zoomRow = zoom && this.docs.has(zoom.path) ? this.rows(zoom.path).find(row => row.line === zoom.line) : undefined;
+    return {
+      file: this.current, status: this.filter, tags: this.tagList(), searchText: this.textSearch.trim(),
+      zoom: zoom && zoomRow ? { path: zoom.path, line: zoom.line, title: zoomRow.title } : null,
+    };
+  }
+
+  private currentViewBookmark() {
+    const view = this.currentView();
+    return view && Array.isArray(this.preferences.bookmarks)
+      ? this.preferences.bookmarks.find(saved => validBookmark(saved) && sameView(savedView(saved), view)) : undefined;
   }
 
   private updateStar() {
-    this.searchSaved = !!this.currentSearchBookmark();
+    this.searchSaved = !!this.currentViewBookmark();
   }
 
   toggleSearchBookmark = () => {
-    const existing = this.currentSearchBookmark();
+    const existing = this.currentViewBookmark();
     if (existing) {
       this.preferences.bookmarks.splice(this.preferences.bookmarks.indexOf(existing), 1);
       this.persistPreferences();
       this.render();
-    } else this.addBookmark('search');
+    } else this.addBookmark();
+  };
+
+  // An empty name removes the custom name, so the label is derived from the view again.
+  renameBookmark = (bookmark: unknown, name: string) => {
+    if (!validBookmark(bookmark)) { this.showToast(this.t.bookmarks.invalid); return; }
+    const trimmed = name.trim();
+    if (trimmed) bookmark.name = trimmed;
+    else delete bookmark.name;
+    this.persistPreferences();
+    this.render();
   };
 
   removeBookmark = (bookmark: unknown) => {
@@ -1265,21 +1424,31 @@ export class Controller {
     try { await this.loadEmbeds(bookmark.file); }
     catch (error) { this.showToast(this.t.bookmarks.openFailed(this.describe(error))); return; }
     if (this.destroyed) return;
-    this.filter = bookmark.kind === 'file' ? 'all' : bookmark.status;
-    this.tags = bookmark.kind === 'file' ? '' : bookmark.tags.map(tag => '#' + tag).join(' ');
-    this.textSearch = bookmark.kind === 'file' ? '' : bookmark.searchText || '';
+    const view = savedView(bookmark);
+    this.filter = view.status;
+    this.tags = view.tags.map(tag => '#' + tag).join(' ');
+    this.textSearch = view.searchText;
     this.kept.clear();
-    await this.openFile(bookmark.file);
+    await this.openFile(view.file);
+    if (this.destroyed || !view.zoom || this.current !== view.file) return;
+    const zoom = view.zoom;
+    const rows = this.docs.has(zoom.path) ? this.rows(zoom.path).filter(row => row.title === zoom.title) : [];
+    const nearest = rows.sort((a, b) => Math.abs(a.line - zoom.line) - Math.abs(b.line - zoom.line)).at(0);
+    if (!nearest) { this.showToast(this.t.bookmarks.zoomMissing(zoom.title)); return; }
+    this.zoomTo(zoom.path, nearest.line);
   };
 
   private bookmarkViews(): BookmarkView[] {
     return this.preferences.bookmarks.map(bookmark => {
-      const valid = validBookmark(bookmark);
-      const filename = valid ? bookmark.file.split('/').pop()! : this.t.bookmarks.unreadableLabel;
-      const label = valid && bookmark.kind === 'search'
-        ? this.t.bookmarks.searchLabel(this.t.filter[bookmark.status], bookmark.tags.map(tag => '#' + tag).join(' '), bookmark.searchText || '', filename)
+      if (!validBookmark(bookmark)) return { bookmark, label: this.t.bookmarks.unreadableLabel, title: this.t.bookmarks.unreadableLabel, defaultLabel: '' };
+      const view = savedView(bookmark);
+      const filename = view.file.split('/').pop()!;
+      const filtered = view.status !== 'all' || view.tags.length > 0 || view.searchText !== '';
+      const base = filtered || bookmark.kind === 'search'
+        ? this.t.bookmarks.searchLabel(this.t.filter[view.status], view.tags.map(tag => '#' + tag).join(' '), view.searchText, filename)
         : filename;
-      return { bookmark, label, title: valid ? bookmark.file : label };
+      const defaultLabel = view.zoom ? this.t.bookmarks.zoomLabel(base, view.zoom.title) : base;
+      return { bookmark, label: bookmark.name ?? defaultLabel, title: view.file, defaultLabel };
     });
   }
 
@@ -1417,7 +1586,6 @@ export class Controller {
         hasChildren: rows.some(child => child.parentLine === row.line),
         showNote: row.kind !== 'embed' && (!!row.note || this.isActive(path, row.line, 'note')),
         status: this.statusView(row, false),
-        titleParts: row.kind === 'embed' ? null : titleParts(row.title),
         context: visible.get(row.line) === false,
         // Context rows did not match, so any words they share with the query are not marked.
         highlight: visible.get(row.line) ? highlight : null,
@@ -1432,7 +1600,8 @@ export class Controller {
             item.embed.outline = this.outlineView(item.embed.target, [...chain, path]);
           } catch (error) { item.embed.error = this.describe(error); }
         }
-      } else itemByLine.set(row.line, item);
+      }
+      itemByLine.set(row.line, item);
       items.push(item);
     }
     for (const row of rows) {

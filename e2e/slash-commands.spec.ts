@@ -88,7 +88,7 @@ test.describe('embedding a file', () => {
     await expect(option(page, 'notes/work.md')).toBeVisible();
     await expect(option(page, 'inbox.md')).toHaveCount(0);
     await option(page, 'notes/work.md').click();
-    await expect(page.getByText('File: notes/work.md')).toBeVisible();
+    await expect(page.locator('.embed-title')).toHaveText('notes/work.md');
     await expect(page.getByRole('textbox', { name: 'Item text' }).nth(1)).toHaveValue('Work task');
     await expect.poll(() => readFile(path.join(workspace, 'inbox.md'), 'utf8')).toBe('- [ ] Plan\n- ![[notes/work.md]]\n');
   });

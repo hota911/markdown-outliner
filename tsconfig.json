@@ -13,5 +13,5 @@
     "checkJs": false,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts", "vite.web.config.ts", "playwright.config.ts", "e2e/**/*.ts", "obsidian-e2e/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts", "vite.web.config.ts", "vite.tauri.config.ts", "playwright.config.ts", "e2e/**/*.ts", "obsidian-e2e/**/*.ts"]
 }

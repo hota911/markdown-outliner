@@ -1,0 +1,32 @@
+[package]
+name = "markdown-outliner"
+# The app's version comes from package.json (see "version" in tauri.conf.json).
+version = "0.0.0"
+description = "Outliner for Markdown task lists (Tauri desktop prototype)"
+license = "MIT"
+edition = "2021"
+publish = false
+
+[lib]
+name = "markdown_outliner_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+getrandom = { version = "0.3", features = ["std"] }
+
+# Used only by the page snapshot of debug builds (src/debug.rs). wry already depends on these crates.
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSBitmapImageRep", "NSImage", "NSImageRep"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData", "NSDictionary", "NSError"] }
+objc2-web-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-app-kit", "WKSnapshotConfiguration", "WKWebView"] }
+
+[dev-dependencies]
+tempfile = "3"

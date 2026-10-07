@@ -34,7 +34,7 @@ describe('English UI', () => {
   it('renders every label, status, toast and help text in English', async () => {
     const outliner = await setup(files, { language: 'en', preferences: preferences() });
     const { screen, row, user, container, adapter } = outliner;
-    await waitFor(() => expect(screen.getByText('File: work.md')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Open this file')).toBeTruthy());
 
     expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy();
@@ -62,7 +62,7 @@ describe('Japanese UI', () => {
   it('keeps the Japanese wording', async () => {
     const outliner = await setup(files, { language: 'ja', preferences: preferences() });
     const { screen, row, user, container, adapter } = outliner;
-    await waitFor(() => expect(screen.getByText('ファイル: work.md')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('このファイルを開く')).toBeTruthy());
 
     expect(screen.getByRole('button', { name: '保存' })).toBeTruthy();
     expect(screen.getByRole('option', { name: '完了以外' })).toBeTruthy();

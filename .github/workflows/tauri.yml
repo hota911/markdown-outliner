@@ -1,0 +1,31 @@
+name: Tauri
+
+# The desktop prototype's Rust tests (src-tauri/), kept out of the required `test` check in ci.yml:
+# a macOS runner is slower to start and a cold build of Tauri takes minutes, so this runs only when
+# the Rust side or its config changes, and a failure here does not block merging web or plugin work.
+on:
+  push:
+    branches: [main]
+    paths: [src-tauri/**, package.json, .github/workflows/tauri.yml]
+  pull_request:
+    paths: [src-tauri/**, package.json, .github/workflows/tauri.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The runner image has a stable Rust toolchain. Caching the crates and build output cuts a
+      # rerun from minutes to well under one.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: tauri-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: tauri-${{ runner.os }}-
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
