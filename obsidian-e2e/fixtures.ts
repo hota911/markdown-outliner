@@ -21,8 +21,6 @@ export const skipReason = process.platform !== 'darwin'
 export interface Obsidian {
   /** The window of the running Obsidian; a new page after relaunch(). */
   readonly page: Page;
-  /** Absolute path of the test vault. */
-  vault: string;
   /** Console errors and uncaught exceptions of the window since the last launch. */
   readonly errors: string[];
   /** Reads a file of the vault from disk. */
@@ -33,8 +31,6 @@ export interface Obsidian {
   openFile: (relative: string) => Promise<void>;
   /** The view type and file of the active tab. */
   activeView: () => Promise<{ type: string; file: string | null; title: string }>;
-  /** Sets the view state of the active tab, as Obsidian's own view switches do. */
-  setActiveViewState: (state: { type: string; state?: Record<string, unknown> }) => Promise<void>;
   /** Switches Obsidian's base color scheme. */
   setTheme: (scheme: 'light' | 'dark') => Promise<void>;
   /** Sets Obsidian's interface language and reloads the app, as the language setting does. */
@@ -47,12 +43,11 @@ export interface Obsidian {
 export type VaultFiles = Record<string, string>;
 
 // The parts of Obsidian's global `app` that the tests use; commands, plugins, changeTheme and
-// the workspace's activeLeaf internals are not all in the public API typings.
+// the workspace's leaf internals are not all in the public API typings.
 interface ViewLeaf {
   view: { getViewType: () => string; getDisplayText: () => string; file?: { path: string } | null };
-  setViewState: (state: { type: string; state?: Record<string, unknown>; active?: boolean }) => Promise<void>;
 }
-type AppWindow = Window & {
+interface AppWindow {
   app: {
     workspace: {
       layoutReady: boolean;
@@ -65,7 +60,7 @@ type AppWindow = Window & {
     commands: { executeCommandById: (id: string) => boolean };
     changeTheme: (theme: 'obsidian' | 'moonstone') => void;
   };
-};
+}
 
 async function waitForFile(file: string) {
   for (let attempt = 0; attempt < 150; attempt++) {
@@ -78,7 +73,7 @@ async function waitForFile(file: string) {
 // Waits until the workspace is ready and this plugin has loaded, after a launch or a reload.
 async function waitForPlugin(page: Page) {
   await page.waitForFunction(id => {
-    const { app } = window as Partial<AppWindow>;
+    const { app } = window as unknown as Partial<AppWindow>;
     return !!app?.workspace?.layoutReady && !!app.plugins?.plugins[id];
   }, pluginId, { timeout: 30_000 });
 }
@@ -164,29 +159,25 @@ export const test = base.extend<{ vaultFiles: VaultFiles; obsidian: Obsidian }>(
       await use({
         get page() { return session.page; },
         get errors() { return session.errors; },
-        vault,
         readFile: relative => readFile(path.join(vault, relative), 'utf8'),
         runCommand: async id => {
-          const found = await session.page.evaluate(id => (window as AppWindow).app.commands.executeCommandById(id), id);
+          const found = await session.page.evaluate(id => (window as unknown as AppWindow).app.commands.executeCommandById(id), id);
           if (!found) throw new Error(`Command ${id} is missing or unavailable`);
         },
         openFile: async relative => {
           await session.page.evaluate(async relative => {
-            const { app } = window as AppWindow;
+            const { app } = window as unknown as AppWindow;
             const file = app.vault.getFileByPath(relative);
             if (!file) throw new Error(`No file ${relative}`);
             await app.workspace.getLeaf('tab').openFile(file);
           }, relative);
         },
         activeView: () => session.page.evaluate(() => {
-          const { view } = (window as AppWindow).app.workspace.getMostRecentLeaf()!;
+          const { view } = (window as unknown as AppWindow).app.workspace.getMostRecentLeaf()!;
           return { type: view.getViewType(), file: view.file?.path ?? null, title: view.getDisplayText() };
         }),
-        setActiveViewState: async state => {
-          await session.page.evaluate(state => (window as AppWindow).app.workspace.getMostRecentLeaf()!.setViewState({ ...state, active: true }), state);
-        },
         setTheme: async scheme => {
-          await session.page.evaluate(theme => (window as AppWindow).app.changeTheme(theme), scheme === 'dark' ? 'obsidian' : 'moonstone');
+          await session.page.evaluate(theme => (window as unknown as AppWindow).app.changeTheme(theme), scheme === 'dark' ? 'obsidian' as const : 'moonstone' as const);
           await expect(session.page.locator('body')).toHaveClass(new RegExp(`\\btheme-${scheme}\\b`));
         },
         setLanguage: async language => {
@@ -194,13 +185,13 @@ export const test = base.extend<{ vaultFiles: VaultFiles; obsidian: Obsidian }>(
           await page.evaluate(language => localStorage.setItem('language', language), language);
           await Promise.all([
             page.waitForEvent('load'),
-            page.evaluate(() => (window as AppWindow).app.commands.executeCommandById('app:reload')),
+            page.evaluate(() => (window as unknown as AppWindow).app.commands.executeCommandById('app:reload')),
           ]);
           await waitForPlugin(page);
         },
         relaunch: async () => {
           // Obsidian writes the layout shortly after it changes; flush it instead of waiting.
-          await session.page.evaluate(() => (window as AppWindow).app.workspace.requestSaveLayout.run());
+          await session.page.evaluate(() => (window as unknown as AppWindow).app.workspace.requestSaveLayout.run());
           await session.close();
           session = await launch(profile);
           await waitForPlugin(session.page);
