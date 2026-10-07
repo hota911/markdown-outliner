@@ -226,42 +226,48 @@ export function injectConfig(html, config) {
   return html.replace(configMarker, () => `<script id="outliner-config" type="application/json">${json}</script>`);
 }
 
-async function webFiles(directory, prefix = '/') {
-  const files = new Map();
-  for (const item of await readdir(directory, { withFileTypes: true })) {
-    const full = path.join(directory, item.name);
-    if (item.isDirectory()) for (const [name, file] of await webFiles(full, prefix + item.name + '/')) files.set(name, file);
-    else if (item.isFile() && contentTypes[path.extname(item.name)]) files.set(prefix + item.name, full);
+/**
+ * Reads a file of the built web app. Resolved per request so that rebuilding `webRoot` while the
+ * server runs takes effect on reload. Missing files and paths outside `webRoot` are 404.
+ */
+async function readWebFile(webRoot, pathname) {
+  try {
+    const root = await realpath(webRoot);
+    const full = await realpath(path.join(root, pathname));
+    if (!full.startsWith(root + path.sep) || !(await stat(full)).isFile()) throw new RequestError(404, 'notFound');
+    return await readFile(full);
+  } catch (error) {
+    if (['ENOENT', 'ENOTDIR'].includes(error.code)) throw new RequestError(404, 'notFound');
+    throw error;
   }
-  return files;
 }
 
 /** Serves the built web app from `webRoot` (see `npm run build:web`) plus the file API. */
 export async function createOutlinerServer(workspace, { webRoot = defaultWebRoot } = {}) {
   const api = await createOutlinerApi(workspace);
-  let files;
-  try { files = await webFiles(webRoot); }
+  let indexHtml;
+  try { indexHtml = await readFile(path.join(webRoot, 'index.html'), 'utf8'); }
   catch (error) {
-    if (error.code === 'ENOENT') throw new Error(`${webRoot} does not exist. Run npm run build:web first.`);
+    if (error.code === 'ENOENT') throw new Error(`${webRoot}/index.html does not exist. Run npm run build:web first.`);
     throw error;
   }
-  const indexFile = files.get('/index.html');
-  if (!indexFile) throw new Error(`${webRoot}/index.html does not exist. Run npm run build:web first.`);
-  const html = api.injectConfig(await readFile(indexFile, 'utf8'));
-  files.delete('/index.html');
+  // Fails fast when the page lacks the configuration marker.
+  api.injectConfig(indexHtml);
 
   return http.createServer(async (request, response) => {
     if (await api.handle(request, response)) return;
     await guarded(request, response, async url => {
-      if (request.method === 'GET' && url.pathname === '/') {
+      if (request.method !== 'GET') throw new RequestError(404, 'notFound');
+      if (url.pathname === '/') {
+        const html = api.injectConfig((await readWebFile(webRoot, '/index.html')).toString('utf8'));
         response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
         return response.end(html);
       }
-      // Only files that existed in the build output at startup are served.
-      const file = request.method === 'GET' ? files.get(url.pathname) : undefined;
-      if (!file) throw new RequestError(404, 'notFound');
-      const content = await readFile(file);
-      response.writeHead(200, { 'Content-Type': contentTypes[path.extname(file)] + '; charset=utf-8' });
+      // index.html is served only through `/`, with the configuration embedded.
+      const contentType = contentTypes[path.extname(url.pathname)];
+      if (!contentType || url.pathname === '/index.html') throw new RequestError(404, 'notFound');
+      const content = await readWebFile(webRoot, url.pathname);
+      response.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8' });
       return response.end(content);
     });
   });
