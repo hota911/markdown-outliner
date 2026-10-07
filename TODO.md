@@ -12,8 +12,8 @@
     `{"id": "markdown-outliner", "name": "Markdown Outliner", "author": "hota911", "description": "Edit Markdown task lists as an outline, keep adding and restructuring tasks while filtering, and write changes back to embedded files.", "repo": "hota911/markdown-outliner"}`
 - [x] Apply external changes in a tab whose input has focus
   The status now says when an external change is waiting. It is applied when the field loses focus, the window gets focus, or the browser tab is shown or hidden, keeping the focus and caret on the same item; files with unsaved input still become save conflicts. Switching Obsidian tabs hides the view, which blurs the field in Chromium, so the existing blur handling covers it (checked by simulation in `e2e/external-change.spec.ts`, not yet in Obsidian itself).
-- [ ] Merge save conflicts automatically
-  Compare the loaded version, the on-screen edits, and the file on disk. Apply non-overlapping changes automatically and show a diff for confirmation only when the same line changed. This requires keeping the full text as loaded.
+- [x] Merge save conflicts automatically
+  `src/three-way-merge.ts` merges the loaded text, the on-screen edits, and the file on disk line by line, both when polling finds an external change to a file with unsaved input and when a save is rejected. Changes to different lines are merged and saved with the usual revision check; the undo history is cleared because its snapshots lack the external lines. When both sides changed the same line, the conflict box shows those lines side by side with buttons to use either version there. Checked with unit, jsdom and Playwright tests, not yet in Obsidian itself.
 - [ ] Check in Obsidian itself
   - [ ] IME composition, save conflicts, dragging an item under another, and editing alongside the regular Markdown editor
   - [ ] The status button in Safari and with touch input
