@@ -417,6 +417,17 @@ export function extractToFile(text: string, line: number, name: string): EditRes
   return { ...result(doc, line), extracted };
 }
 
+// The tags written as `#tag` in a text, without the `#`, in order of first appearance. As in
+// Obsidian, a tag starts at the start of the text or after whitespace, runs over letters, digits,
+// `_`, `-` and `/` (nested tags), and is not only digits.
+export function tagsIn(text: string): string[] {
+  const tags = new Set<string>();
+  for (const [, tag] of text.matchAll(/(?<!\S)#([\p{L}\p{M}\p{N}_/-]+)/gu)) {
+    if (!/^\d+$/.test(tag)) tags.add(tag);
+  }
+  return [...tags];
+}
+
 export function visibleLines(text: string, filter: { status: Status | 'all'; tag?: string }, keepLines: number[] = []): Set<number> {
   const rows = parse(text), visible = new Set<number>();
   if (!['all', ...Object.keys(marks)].includes(filter.status)) throw new CoreError('invalidFilter');

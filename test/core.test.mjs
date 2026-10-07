@@ -398,3 +398,8 @@ test('タイトルからタグと使えない文字を除いてファイル名�
   assert.equal(core.fileName('...hidden', [], 'タスク'), 'hidden.md');
   assert.equal(core.fileName('Plan', ['plan.md', 'Plan 2.md', 'other.md'], 'タスク'), 'Plan 3.md');
 });
+
+test('Obsidian の規則でタグを # なしで出現順に重複なく取り出す', () => {
+  const text = '# Heading\n- [ ] #work Plan #仕事/進行中, #my_tag-2\n  note #work #1984 #y1984\n- a#b https://example.com/#x ![[f.md#h]] ＃全角\n#start';
+  assert.deepEqual(core.tagsIn(text), ['work', '仕事/進行中', 'my_tag-2', 'y1984', 'start']);
+});
