@@ -24,6 +24,9 @@
     "prestart": "npm run build:web",
     "start": "node server.mjs"
   },
+  "overrides": {
+    "moment": "^2.31.0"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@eslint/json": "2.1.0",
