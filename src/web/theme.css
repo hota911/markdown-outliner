@@ -2,6 +2,8 @@
    src/styles.css uses. Imported only by the web entry; the plugin never loads this file. */
 :root {
   color-scheme: light dark;
+  --font-interface: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-monospace: ui-monospace, monospace;
   --background-primary: #fff;
   --background-primary-alt: #fafbf9;
   --background-modifier-border: #e1e6e1;

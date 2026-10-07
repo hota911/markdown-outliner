@@ -69,7 +69,7 @@ Source layout:
 - `src/ui/`: the outliner UI, shared by both versions. `controller.svelte.ts` holds the editing state and operations, the `.svelte` files render it, and `mount.ts` mounts it into an element.
 - `src/obsidian/`: the Obsidian plugin entry point (`main.ts`).
 - `src/web/`: the standalone web page.
-- `src/styles.css`: styles for both versions. Colors use Obsidian's theme variables, so the plugin follows the Obsidian theme; `src/web/theme.css` defines them for the web page in light and dark sets that follow the system setting.
+- `src/styles.css`: styles for both versions. Colors and fonts use Obsidian's theme variables, so the plugin follows the Obsidian theme; `src/web/theme.css` defines them for the web page in light and dark sets that follow the system setting.
 - `server.mjs`: the local web server and file API, also mounted by the dev server.
 - `vite.config.ts`: the plugin build (a single CommonJS `main.js`).
 - `vite.web.config.ts`: the web app build and dev server.
