@@ -46,7 +46,7 @@ Then open `http://127.0.0.1:<port>/` (default port 4317). Without arguments the 
 
 ## Development
 
-The UI is written in Svelte 5 and TypeScript and built with Vite.
+The UI is written in Svelte 5 and TypeScript and built with Vite. Open development tasks are listed in [TODO.md](TODO.md) (in Japanese).
 
 ```sh
 npm ci              # install the development tools
