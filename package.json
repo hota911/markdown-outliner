@@ -1,0 +1,16 @@
+{
+  "name": "markdown-outliner",
+  "version": "0.2.1",
+  "description": "Outliner for Markdown task lists, as an Obsidian plugin and a local web app.",
+  "license": "MIT",
+  "author": "hota911",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hota911/markdown-outliner.git"
+  },
+  "scripts": {
+    "test": "node --test test/core.test.js test/server.test.mjs test/obsidian.test.mjs test/package-plugin.test.mjs",
+    "build": "node scripts/package-plugin.mjs",
+    "start": "node server.mjs"
+  }
+}
