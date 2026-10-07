@@ -112,6 +112,46 @@ describe('filtering', () => {
     expect(titleValues()).toEqual(['done top']);
   });
 
+  const contextNote = '配下の項目が絞り込みに一致するため表示';
+  const contextTitles = screen => screen.queryAllByRole('textbox', { name: '項目の内容', description: contextNote }).map(node => node.value);
+  const depth = node => node.closest('.outline-item').style.getPropertyValue('--depth');
+
+  it('shows a non-matching parent of a match as dimmed context, keeping the child under it', async () => {
+    const { user, screen, titleValues, title } = await setup({ 'tasks.md': '- [ ] A\n- [x] B\n  - [ ] C\n' });
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'todo');
+    expect(titleValues()).toEqual(['A', 'B', 'C']);
+    expect(contextTitles(screen)).toEqual(['B']);
+    expect([depth(title('B')), depth(title('C'))]).toEqual(['0', '1']);
+    expect(title('B').closest('.outline-item').classList.contains('is-context')).toBe(true);
+    expect(title('C').closest('.outline-item').classList.contains('is-context')).toBe(false);
+  });
+
+  it('keeps ancestors of text matches as context and hides non-matching siblings', async () => {
+    const { user, screen, titleValues } = await setup({ 'tasks.md': text });
+    await user.type(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }), '#work{Enter}');
+    expect(titleValues()).toEqual(['parent', 'open child #work']);
+    expect(contextTitles(screen)).toEqual(['parent']);
+  });
+
+  it('shows no context when nothing is filtered', async () => {
+    const { screen, titleValues } = await setup({ 'tasks.md': text });
+    expect(titleValues()).toHaveLength(5);
+    expect(contextTitles(screen)).toEqual([]);
+  });
+
+  it('shows an embed only when something in the embedded file matches, with its ancestors as context', async () => {
+    const { user, screen, titleValues } = await setup({
+      'tasks.md': '- [x] host\n  - ![[work.md]]\n  - ![[home.md]]\n- [ ] other\n',
+      'work.md': '- [x] project\n  - [ ] step\n',
+      'home.md': '- [x] chores\n',
+    });
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'todo');
+    expect(titleValues()).toEqual(['host', 'project', 'step', 'other']);
+    expect(contextTitles(screen)).toEqual(['host', 'project']);
+    expect(screen.getByText('ファイル: work.md')).toBeTruthy();
+    expect(screen.queryByText('ファイル: home.md')).toBeNull();
+  });
+
   it('reset shows everything again', async () => {
     const { user, screen, titleValues } = await setup({ 'tasks.md': text });
     await user.type(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }), 'nothing-matches{Enter}');
@@ -128,6 +168,45 @@ describe('filtering', () => {
     expect(titles().map(node => node.value)).toEqual(['doing #home', '#home']);
     expect(document.activeElement).toBe(titles()[1]);
     expect(await saved()).toBe(text + '- [/] #home\n');
+  });
+});
+
+describe('highlighting filter matches', () => {
+  const marks = row => row.queryAllByText((_, node) => node.tagName === 'MARK').map(node => node.textContent);
+  const search = async (user, screen, value) => user.type(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }), value + '{Enter}');
+
+  it('marks the matched words, ignoring case, and the matched #tags in titles', async () => {
+    const { user, screen, row, title } = await setup({ 'tasks.md': '- [ ] #workshop plan\n  - [ ] Plan the plan #work\n' });
+    await search(user, screen, 'PLAN #work');
+    expect(marks(row('Plan the plan #work'))).toEqual(['Plan', 'plan', '#work']);
+    // `#workshop` is another tag, so the parent is shown only as context and has no marks.
+    expect(marks(row('#workshop plan'))).toEqual([]);
+    expect(title('Plan the plan #work').closest('.title-area').querySelector('.title-display').textContent).toBe('Plan the plan #work');
+  });
+
+  it('marks matches inside link text and keeps the link', async () => {
+    const { user, screen, row } = await setup({ 'tasks.md': '- [ ] read [the docs](https://example.com) docs\n' });
+    await search(user, screen, 'docs');
+    const item = row('read [the docs](https://example.com) docs');
+    expect(marks(item)).toEqual(['docs', 'docs']);
+    expect(item.getByRole('link').textContent).toBe('the docs');
+  });
+
+  it('marks nothing without a text filter', async () => {
+    const { user, screen, container } = await setup({ 'tasks.md': '- [ ] a #work\n- [x] b\n' });
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'todo');
+    expect(container.querySelector('mark')).toBeNull();
+    expect(container.querySelector('.title-display')).toBeNull();
+  });
+
+  it('a highlighted title can still be edited', async () => {
+    const { user, screen, container, title, saved } = await setup({ 'tasks.md': '- [ ] buy milk\n' });
+    await search(user, screen, 'milk');
+    await user.click(container.querySelector('mark'));
+    expect(document.activeElement).toBe(title('buy milk'));
+    await user.keyboard(' today');
+    expect(await saved()).toBe('- [ ] buy milk today\n');
+    expect(marks(screen)).toEqual(['milk']);
   });
 });
 

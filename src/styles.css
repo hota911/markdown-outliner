@@ -83,11 +83,15 @@
 .outliner.is-dragging .children-end { background: var(--background-primary-alt); }
 .outliner .title-area { position: relative; flex: 1; min-width: 100px; }
 .outliner .title-area .title-input { width: 100%; }
-.outliner .title-area.has-links:not(.is-editing) .title-input { position: absolute; inset: 0; opacity: 0; }
+.outliner .title-area.has-overlay:not(.is-editing) .title-input { position: absolute; inset: 0; opacity: 0; }
 .outliner .title-area.is-editing .title-display { display: none; }
 .outliner .title-display { position: relative; min-height: 28px; padding: 2px 0; line-height: 24px; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
 .outliner .title-display a { color: var(--text-accent); text-decoration: underline; cursor: pointer; }
 .outliner .is-done > .outline-line .title-display { color: var(--text-faint); text-decoration: line-through; }
+.outliner .title-display mark { background: var(--text-highlight-bg); color: inherit; border-radius: 2px; }
+/* An ancestor shown only for a matching descendant: the same row, dimmed until it is edited. */
+.outliner .is-context > .outline-line:not(:focus-within) { opacity: .6; }
+.outliner .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .outliner .auto-save, .outliner .selection-bar { display: flex; align-items: center; gap: 5px; }
 .outliner .auto-save input { margin: 0; }
 .outliner .selection-bar { width: 100%; flex-wrap: wrap; }

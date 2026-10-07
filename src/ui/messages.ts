@@ -148,6 +148,7 @@ const en = {
     extractTitle: 'Move the item with its children and notes to a new file and embed it',
     extract: 'Move to file',
     childrenEnd: (title: string) => `End of the children of ${title}`,
+    filterContext: 'Shown because an item under it matches the filter',
   },
 
   // The bar shown above the soft keyboard on touch screens, for the keys a soft keyboard lacks.
@@ -376,6 +377,7 @@ const ja: Messages = {
     extractTitle: '項目を子とノートごと新しいファイルへ移して埋め込みにする',
     extract: 'ファイルにする',
     childrenEnd: title => title + ' の子項目の末尾',
+    filterContext: '配下の項目が絞り込みに一致するため表示',
   },
 
   touchBar: {

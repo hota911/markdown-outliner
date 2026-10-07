@@ -13,12 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Experimental: open a single Markdown file as an outline in its own tab with "Open as outline" in a `.md` file's menu or the command of the same name. The tab is titled with the file name, works with back and forward navigation, and is restored when Obsidian restarts. "Open as Markdown" in the tab's menu switches back to the regular editor. Renaming the open file keeps unsaved input.
 - Touch screen support, in the web version and the Obsidian plugin alike. While an item's text or note has focus, a bar at the bottom of the outliner offers outdent, indent, move up and down, change status, switch between text and note, undo, and redo. Buttons and lines are larger, the row buttons appear only on the item being edited, and tapping the drag handle selects the item. Not yet tested on a real Android or iOS device or in the Obsidian mobile app.
 - At 600px wide or narrower, the bookmarks stack above the outline instead of sitting beside it.
+- While the search box filters by words or `#tags`, the matched words and tags are highlighted in item titles, including inside link text. The highlight disappears while you edit the title.
 
 ### Changed
 
 - The command and ribbon icon are named "Open outliner" in English and "アウトライナーを開く" in Japanese, following the display language.
 - When a file changes on disk while it has unsaved input, changes on different lines are now merged automatically instead of being reported as a save conflict. The merge clears the undo history, and a message says so. If both sides changed the same line, the conflicting lines are listed as "Your input" and "External version", and "Keep my lines" or "Use external lines" picks one version for those lines.
 - Enter with the cursor at the start of an item's text adds the new item above it instead of below, as in WorkFlowy and Logseq. The item keeps its note and children, and the cursor stays at its start. On an empty text, elsewhere in the text, or on the zoomed item, Enter works as before.
+- While a status or search filter is active, an item that does not match but has a matching item under it is shown dimmed, so that the matches keep their place in the outline. Screen readers announce it as shown because an item under it matches. Dimmed items can be edited as usual.
 
 ### Fixed
 
@@ -27,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The bar for selected items (Not started / In progress / ...) wraps instead of overflowing at narrow widths.
 - The outliner always opened `tasks.md` first, and listed it in the file picker even when the folder or vault had no such file. It now reopens the file shown last, or the first Markdown file in the list if that file is gone, and shows a message when there are no Markdown files. A file opened explicitly, such as an "Open as outline" tab or a single file given to the web server, still opens directly.
 - The web server kept the page and the list of built files from startup, so after `npm run build:web` while it ran, the page loaded deleted files and failed until the server restarted. The page and its files are now read on each request, so reloading the browser picks up a new build. A request for a missing file returns 404 instead of 500.
+- While a status or search filter was active, an embedded file was always shown, even with nothing matching inside, and without its parent items when they did not match, so it appeared under the wrong item. An embed is now shown only when something in the embedded file matches, with its parents dimmed.
 
 ## [0.1.2] - 2026-10-07
 
