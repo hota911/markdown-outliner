@@ -1,0 +1,79 @@
+import { defineConfig, globalIgnores } from 'eslint/config';
+import obsidianmd from 'eslint-plugin-obsidianmd';
+import svelte from 'eslint-plugin-svelte';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
+import svelteConfig from './svelte.config.js';
+
+// Code that runs in Node (web server, build scripts, configs, tests), not in the plugin.
+const nodeFiles = ['server.mjs', 'scripts/**', 'test/**', '*.config.{js,mjs,ts}'];
+
+// obsidianmd scopes its type-checked rules (typescript-eslint recommendedTypeChecked,
+// no-unsanitized, the obsidianmd rules and the eslint-comments restrictions) to TypeScript
+// file extensions, so `<script lang="ts">` in components would get none of them. Reapply
+// those blocks to .svelte files. The block that sets the TypeScript parser is skipped:
+// svelte-eslint-parser stays the outer parser and delegates the script to tseslint.parser.
+const svelteFiles = ['**/*.svelte'];
+const obsidianTypeScriptConfigs = obsidianmd.configs.recommended
+  .filter(config => config.files?.some(pattern => typeof pattern === 'string' && pattern.startsWith('**/*.{ts,')))
+  .filter(config => !config.languageOptions?.parser)
+  .map(config => ({ ...config, files: svelteFiles }));
+
+export default defineConfig([
+  globalIgnores(['dist/', 'node_modules/', 'package-lock.json']),
+  ...obsidianmd.configs.recommended,
+  // Turns off the core rules that TypeScript already checks, as obsidianmd does for .ts files.
+  { ...tseslint.configs.eslintRecommended, files: svelteFiles },
+  ...obsidianTypeScriptConfigs,
+  // The Svelte rules need a JavaScript AST, so they must not run on the JSON files.
+  ...svelte.configs.recommended.map(config => ({ files: ['**/*.{js,mjs,ts,svelte}'], ...config })),
+  {
+    languageOptions: {
+      globals: { ...globals.browser },
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+        extraFileExtensions: ['.svelte'],
+      },
+    },
+  },
+  {
+    files: ['**/*.svelte', '**/*.svelte.ts'],
+    languageOptions: {
+      parserOptions: { parser: tseslint.parser, svelteConfig },
+    },
+    // The core rule reports parameter names inside TypeScript function types.
+    plugins: { '@typescript-eslint': tseslint.plugin },
+    rules: { 'no-unused-vars': 'off', '@typescript-eslint/no-unused-vars': 'error' },
+  },
+  {
+    // KeyboardEvent#keyCode is deprecated, but 229 is the only IME signal some browsers give
+    // for the key that ends composition. Keep reporting every other deprecated API.
+    files: ['**/*.{ts,svelte}'],
+    ignores: nodeFiles,
+    rules: { '@typescript-eslint/no-deprecated': ['warn', { allow: [{ from: 'lib', name: 'keyCode' }] }] },
+  },
+  {
+    // The controller re-renders through its `version` counter (see render()), so its Maps and
+    // Sets are deliberately plain collections rather than SvelteMap / SvelteSet.
+    files: ['src/ui/controller.svelte.ts'],
+    rules: { 'svelte/prefer-svelte-reactivity': 'off' },
+  },
+  {
+    // Node-side code is not part of the Obsidian plugin, so the Obsidian rules (Node built-ins,
+    // console output, plugin APIs) do not apply, and it is not in the type-checked project.
+    files: nodeFiles,
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: { globals: { ...globals.node } },
+    rules: {
+      ...Object.fromEntries(Object.keys(obsidianmd.rules).map(name => ['obsidianmd/' + name, 'off'])),
+      'no-restricted-globals': 'off',
+    },
+  },
+  {
+    // The standalone web page runs in a browser, where Obsidian's requestUrl and
+    // App#saveLocalStorage do not exist.
+    files: ['src/web/**'],
+    rules: { 'no-restricted-globals': 'off' },
+  },
+]);

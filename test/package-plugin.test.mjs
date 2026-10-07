@@ -8,7 +8,7 @@ import { packagePlugin, releaseAssets } from '../scripts/package-plugin.mjs';
 
 test('packaged plugin loads with only the Obsidian external module', async () => {
   const output = await mkdtemp(path.join(tmpdir(), 'outliner-package-'));
-  await packagePlugin(output);
+  await packagePlugin(output, { quiet: true });
   assert.deepEqual((await readdir(output)).sort(), [...releaseAssets].sort());
   const commands = [];
   const views = [];

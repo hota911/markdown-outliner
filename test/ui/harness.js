@@ -1,11 +1,7 @@
-import { createRequire } from 'node:module';
 import { afterEach, expect } from 'vitest';
 import { waitFor, within } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
-
-const require = createRequire(import.meta.url);
-export const core = require('../../src/core.js');
-const { mount } = require('../../src/ui.js');
+import { mountOutliner } from '../../src/ui/mount.ts';
 
 // In-memory stand-in for the web server / Obsidian vault adapters.
 // Revisions are counters so that any external write, even with equal text, is detected.
@@ -57,7 +53,7 @@ export async function setup(initial, { initialFile = 'tasks.md', canCreate, pref
   const adapter = memoryAdapter(initial, { canCreate });
   const container = document.createElement('div');
   document.body.append(container);
-  const app = mount(container, { core, adapter, initialFile, preferences, savePreferences });
+  const app = mountOutliner(container, { adapter, initialFile, preferences, savePreferences });
   mounted.push({ app, container });
   const screen = within(container);
   await waitFor(() => expect(screen.queryByText('ファイルを開いています…')).toBeNull());

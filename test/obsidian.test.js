@@ -1,14 +1,40 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { posix } from 'node:path';
-import vm from 'node:vm';
+import { test, vi } from 'vitest';
+import * as core from '../src/core.ts';
+import MarkdownOutlinerPlugin from '../src/main.ts';
 
 // These tests exercise the plugin boundary, not the native Obsidian application.
-const source = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
-const require = createRequire(import.meta.url);
-const core = require('../src/core.js');
+// fixture() replaces these arrays per test; the mocks below push into them.
+const state = vi.hoisted(() => ({ notices: [], mounts: [] }));
+
+vi.mock('obsidian', async () => {
+  const { posix } = await import('node:path');
+  class ItemView {
+    constructor(leaf) { this.app = leaf.app; this.contentEl = leaf.app.contentEl; }
+  }
+  class Plugin {
+    constructor(app) { this.app = app; this.views = new Map(); this.commands = []; this.ribbons = []; }
+    registerView(type, factory) { this.views.set(type, factory); }
+    addCommand(command) { this.commands.push(command); }
+    addRibbonIcon(icon, name, callback) { this.ribbons.push({ icon, name, callback }); }
+    async loadData() { return { bookmarks: [] }; }
+    async saveData(value) { this.savedData = structuredClone(value); }
+  }
+  class Notice { constructor(message) { state.notices.push(message); } }
+  class Scope {
+    register(modifiers, key, callback) { this.handler = callback; }
+  }
+  return { Plugin, ItemView, Notice, Scope, normalizePath: posix.normalize };
+});
+
+vi.mock('../src/ui/mount.ts', () => ({
+  mountOutliner: (element, options) => {
+    const mounted = { element, options, destroyed: 0, completed: 0,
+      completeActive() { this.completed++; return true; }, destroy() { this.destroyed++; } };
+    state.mounts.push(mounted);
+    return mounted;
+  },
+}));
 
 async function fixture() {
   class TFile {
@@ -22,6 +48,8 @@ async function fixture() {
   ]);
   const folders = new Set(['projects', 'archive.md']);
   const reads = [], writes = [], mounts = [], notices = [];
+  state.mounts = mounts;
+  state.notices = notices;
   const vault = {
     getFileByPath: path => files.has(path) ? new TFile(path) : null,
     getFolderByPath: path => folders.has(path) ? { path } : null,
@@ -43,7 +71,7 @@ async function fixture() {
   const contentEl = { empty() {}, addClass() {} };
   const existing = [];
   const created = [], revealed = [], states = [], opened = [];
-  const app = { vault, workspace: {
+  const app = { vault, contentEl, workspace: {
     getLeavesOfType: type => existing.filter(leaf => leaf.type === type),
     getLeaf: mode => {
       created.push(mode);
@@ -54,35 +82,7 @@ async function fixture() {
     },
     revealLeaf: leaf => { revealed.push(leaf); },
   } };
-  class ItemView {
-    constructor(leaf) { this.app = leaf.app; this.contentEl = contentEl; }
-  }
-  class Plugin {
-    constructor(app) { this.app = app; this.views = new Map(); this.commands = []; this.ribbons = []; }
-    registerView(type, factory) { this.views.set(type, factory); }
-    addCommand(command) { this.commands.push(command); }
-    addRibbonIcon(icon, name, callback) { this.ribbons.push({ icon, name, callback }); }
-    async loadData() { return { bookmarks: [] }; }
-    async saveData(value) { this.savedData = structuredClone(value); }
-  }
-  class Notice { constructor(message) { notices.push(message); } }
-  class Scope {
-    register(modifiers, key, callback) { this.handler = callback; }
-  }
-  const ui = { mount: (element, options) => {
-    const mounted = { element, options, destroyed: 0, completed: 0,
-      completeActive() { this.completed++; return true; }, destroy() { this.destroyed++; } };
-    mounts.push(mounted);
-    return mounted;
-  } };
-  const module = { exports: {} };
-  vm.runInNewContext(source, { module, require: id => {
-    if (id === 'obsidian') return { Plugin, ItemView, Notice, TFile, Scope, normalizePath: posix.normalize };
-    if (id === './core.js') return core;
-    if (id === './ui.js') return ui;
-    throw new Error('Unexpected module: ' + id);
-  } }, { filename: 'src/main.js' });
-  const plugin = new module.exports(app);
+  const plugin = new MarkdownOutlinerPlugin(app);
   await plugin.onload();
   const view = plugin.views.get('markdown-outliner')({ app });
   await view.onOpen();

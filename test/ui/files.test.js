@@ -62,10 +62,23 @@ describe('undo and redo', () => {
     await user.keyboard('{Control>}z{/Control}');
     expect(titleValues()).toEqual(['a', 'b']);
     expect(title('b').closest('.outline-item').style.getPropertyValue('--depth')).toBe('0');
-    // Undo re-renders without restoring focus, so the shortcut needs focus inside the outliner again.
-    await user.click(title('a'));
     await user.keyboard('{Control>}{Shift>}z{/Shift}{/Control}');
     expect(title('b').closest('.outline-item').style.getPropertyValue('--depth')).toBe('1');
+  });
+
+  it('undoes twice in a row and keeps focus on the edited item', async () => {
+    const { user, title, titleValues } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n' });
+    await user.click(title('b'));
+    await user.keyboard('{Tab}');
+    await user.keyboard('{Enter}');
+    expect(titleValues()).toEqual(['a', 'b', '']);
+    await user.keyboard('{Control>}z{/Control}');
+    expect(titleValues()).toEqual(['a', 'b']);
+    expect(title('b').closest('.outline-item').style.getPropertyValue('--depth')).toBe('1');
+    expect(document.activeElement).toBe(title('b'));
+    await user.keyboard('{Control>}z{/Control}');
+    expect(title('b').closest('.outline-item').style.getPropertyValue('--depth')).toBe('0');
+    expect(document.activeElement).toBe(title('b'));
   });
 });
 

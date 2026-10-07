@@ -1,0 +1,1175 @@
+import { flushSync } from 'svelte';
+import * as core from '../core.ts';
+import type { Status } from '../core.ts';
+import { RowKeys, type KeyedRow } from './keys.ts';
+import type { Adapter, Bookmark, Doc, MountOptions, Preferences, StatusFilter } from './types.ts';
+
+export type Field = 'title' | 'note';
+type RowKind = 'task' | 'bullet';
+
+interface Focus { path: string; line: number; field: Field }
+// The focus is captured with the texts so that undo and redo can put the caret back where the
+// edit happened; otherwise keyboard shortcuts stop reaching the outliner after the first undo.
+interface Snapshot { texts: Map<string, string>; focus: Focus | null }
+
+export interface Drop {
+  parentLine: number | null;
+  beforeLine: number | null;
+  line?: number;
+  position?: 'before' | 'after';
+  indicator: 'drop-before' | 'drop-after' | 'drop-child';
+  offset?: number;
+}
+
+export const statuses: [Status, string][] = [['todo', '未着手'], ['in-progress', '進行中'], ['done', '完了']];
+export const filters: [StatusFilter, string][] = [['all', 'すべて'], ['not-done', '完了以外'], ...statuses];
+export const statusIcons: Record<Status, string> = { todo: '○', 'in-progress': '◐', done: '✓' };
+const nextStatus = (status: Status | null) => statuses[(statuses.findIndex(([value]) => value === status) + 1) % statuses.length];
+
+// Only http(s) targets become anchors; any other Markdown link stays plain text.
+const markdownLink = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/;
+export interface LinkPart { text: string; href?: string }
+export function linkParts(title: string): LinkPart[] | null {
+  if (!markdownLink.test(title)) return null;
+  const parts: LinkPart[] = [];
+  let rest = title, match;
+  while ((match = markdownLink.exec(rest))) {
+    if (match.index) parts.push({ text: rest.slice(0, match.index) });
+    parts.push({ text: match[1], href: match[2] });
+    rest = rest.slice(match.index + match[0].length);
+  }
+  if (rest) parts.push({ text: rest });
+  return parts;
+}
+
+// Attachment that writes the model value into an input on every render. A `value` attribute
+// is not enough: Svelte compares with the previously rendered value, not with what the user
+// typed since, so undo back to that value would leave the typed text in place.
+export const syncValue = (value: () => string) => (node: HTMLInputElement | HTMLTextAreaElement) => {
+  const next = value();
+  if (node.value !== next) node.value = next;
+};
+
+export interface ItemView {
+  key: string;
+  path: string;
+  row: KeyedRow;
+  depth: number;
+  rootLine: number | null;
+  selected: boolean;
+  collapsed: boolean;
+  hasChildren: boolean;
+  showNote: boolean;
+  status: { icon: string; label: string; next: Status } | null;
+  links: LinkPart[] | null;
+  embed: { target: string | null; error: string | null; outline: OutlineView | null } | null;
+  // Drop targets after the last shown descendant of each ancestor that ends here, innermost first.
+  ends: { key: string; parentLine: number; depth: number; label: string }[];
+}
+
+export interface ZoomView {
+  row: KeyedRow;
+  status: { icon: string; label: string; next: Status } | null;
+  showNote: boolean;
+}
+
+export type OutlineView =
+  | { kind: 'cycle'; path: string }
+  | { kind: 'missing' }
+  | { kind: 'outline'; path: string; zoom: ZoomView | null; items: ItemView[]; addKind: RowKind; appendLine: number | null; appendChild: boolean };
+
+export interface BookmarkView { bookmark: unknown; label: string; title: string }
+
+export interface View {
+  fileList: string[];
+  current: string;
+  filter: StatusFilter;
+  searchValue: string;
+  canOpenSource: boolean;
+  autoSave: boolean;
+  selectionCount: number;
+  zoomPath: string | null;
+  conflicts: { path: string; text: string }[];
+  outline: OutlineView | null;
+  sidebarCollapsed: boolean;
+  bookmarksValid: boolean;
+  bookmarks: BookmarkView[];
+}
+
+function validBookmark(bookmark: unknown): bookmark is Bookmark {
+  const value = bookmark as Bookmark | null;
+  return !!value && typeof value.id === 'string' && ['file', 'search'].includes(value.kind)
+    && typeof value.file === 'string' && value.file.length > 0
+    && ['all', ...statuses.map(([status]) => status)].includes(value.status)
+    && Array.isArray(value.tags) && value.tags.every(tag => typeof tag === 'string')
+    && (value.searchText === undefined || typeof value.searchText === 'string');
+}
+
+const message = (error: unknown) => error instanceof Error ? error.message : String(error);
+// One line of title text, matching the textarea's minimum height in styles.css.
+const MIN_TITLE_HEIGHT = 28;
+
+// Holds the editing state and every operation of the outliner. Svelte components render the
+// view model from view() whenever render() bumps `version`, and call these methods on events.
+export class Controller {
+  version = $state(0);
+  toast = $state('');
+  notice = $state('');
+  saveState = $state({ text: '', dirty: false });
+  searchSaved = $state(false);
+
+  readonly docs: Map<string, Doc>;
+  private readonly adapter: Adapter;
+  private readonly preferences: Preferences;
+  private readonly savePreferences?: (value: Preferences) => Promise<void>;
+  private preferenceSave: Promise<void> = Promise.resolve();
+  private readonly initialFile: string;
+  private current: string;
+  private fileList: string[];
+  private filter: StatusFilter = 'all';
+  private tags = '';
+  private textSearch = '';
+  private zoom: { path: string; line: number } | null = null;
+  private active: Focus | null = null;
+  private composing = false;
+  private deferred = false;
+  private destroyed = false;
+  private polling = false;
+  private rendering = false;
+  private message = '';
+  private busy = false;
+  private autoSave = true;
+  private saveTimer: number | undefined;
+  private toastTimer: number | undefined;
+  private pollTimer: number | undefined;
+  private selectedPath: string | null = null;
+  private selectedLines = new Set<number>();
+  private selectionAnchor: number | null = null;
+  private dragging: { path: string; lines: number[] } | null = null;
+  private readonly collapsed = new Set<string>();
+  private readonly kept = new Map<string, Set<number>>();
+  private readonly undo: Snapshot[] = [];
+  private readonly redo: Snapshot[] = [];
+  private readonly keys = new RowKeys();
+  private container: HTMLElement | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private titleWidth = 0;
+  private focusRootAfterRender = false;
+  private renderCount = 0;
+  private readonly recorded = new WeakMap<HTMLElement, number>();
+
+  constructor({ adapter, drafts, initialFile = 'tasks.md', preferences = { bookmarks: [] }, savePreferences }: MountOptions) {
+    this.adapter = adapter;
+    this.docs = drafts || new Map<string, Doc>();
+    this.initialFile = initialFile;
+    this.current = initialFile;
+    this.fileList = [initialFile];
+    this.preferences = preferences;
+    this.savePreferences = savePreferences;
+  }
+
+  // Starts timers and listeners once the component is in the document.
+  attach(container: HTMLElement) {
+    this.container = container;
+    const view = container.ownerDocument.defaultView!;
+    if (typeof view.ResizeObserver === 'function') {
+      this.resizeObserver = new view.ResizeObserver(entries => {
+        const width = entries[0].contentRect.width;
+        if (width === this.titleWidth) return;
+        this.titleWidth = width;
+        for (const node of container.querySelectorAll<HTMLTextAreaElement>('.title-input')) this.fitTitle(node);
+      });
+      this.resizeObserver.observe(container);
+    }
+    this.pollTimer = view.setInterval(() => { void this.poll(); }, 3000);
+    this.render();
+    this.adapter.list().then(list => {
+      this.fileList = [...new Set([this.initialFile, ...list])];
+      return this.openFile(this.current);
+    }).catch((error: unknown) => { this.message = message(error); this.render(); });
+  }
+
+  destroy() {
+    this.destroyed = true;
+    window.clearInterval(this.pollTimer);
+    this.resizeObserver?.disconnect();
+    window.clearTimeout(this.saveTimer);
+    this.clearToast();
+  }
+
+  // The height lives in styles.css; only the measured value is passed as a CSS variable.
+  // (setCssProps is Obsidian-only, and this also runs in the web app and jsdom.)
+  fitTitle(node: HTMLTextAreaElement) {
+    const setHeight = (pixels: number) => node.style.setProperty('--title-height', pixels + 'px');
+    // Shrink to one line first so scrollHeight reflects the content, not the previous height.
+    setHeight(MIN_TITLE_HEIGHT);
+    setHeight(Math.max(MIN_TITLE_HEIGHT, node.scrollHeight));
+  }
+
+  private get activeElement() {
+    return this.container?.ownerDocument.activeElement ?? null;
+  }
+
+  private rows(path: string, text = this.docs.get(path)!.text) {
+    return this.keys.rows(path, text);
+  }
+
+  private scheduleSave() {
+    window.clearTimeout(this.saveTimer);
+    if (!this.autoSave || this.destroyed) return;
+    this.saveTimer = window.setTimeout(() => {
+      if (this.busy || this.composing || this.polling) { this.scheduleSave(); return; }
+      if ([...this.docs.values()].some(doc => doc.dirty && !doc.conflict)) void this.saveAll(true);
+    }, 800);
+  }
+
+  private clearSelection() {
+    this.selectedPath = null;
+    this.selectedLines.clear();
+    this.selectionAnchor = null;
+  }
+
+  clearToast = () => {
+    window.clearTimeout(this.toastTimer);
+    this.toast = '';
+  };
+
+  private showToast(text: string) {
+    this.clearToast();
+    this.toast = text;
+    this.toastTimer = window.setTimeout(this.clearToast, 4500);
+  }
+
+  private key = (path: string, line: number) => path + ':' + line;
+  private tagList = () => this.tags.trim().split(/\s+/).filter(Boolean).map(tag => tag.replace(/^#/, ''));
+  private searchValue = () => [this.textSearch.trim(), this.tagList().map(tag => '#' + tag).join(' ')].filter(Boolean).join(' ');
+
+  private parseSearch(value: string) {
+    const queryTags: string[] = [];
+    const words: string[] = [];
+    for (const word of value.trim().split(/\s+/).filter(Boolean)) {
+      if (/^#[^#\s]+$/.test(word)) queryTags.push(word.slice(1));
+      else words.push(word);
+    }
+    this.tags = queryTags.join(' ');
+    this.textSearch = words.join(' ');
+  }
+
+  private keepFor(path: string) {
+    return [...(this.kept.get(path) || []), ...(this.active && this.active.path === path ? [this.active.line] : [])];
+  }
+
+  private normalize(from: string, target: string | null) {
+    if (typeof target !== 'string' || !target || /^(?:[/\\]|[a-zA-Z]:|[a-zA-Z]+:)/.test(target)) throw new Error('埋め込み先にはフォルダー内の相対パスを指定してください。');
+    const parts = from.split('/').slice(0, -1);
+    for (const part of target.replace(/\\/g, '/').split('/')) {
+      if (part === '..') {
+        if (!parts.length) throw new Error('埋め込み先がフォルダーの外にあります。');
+        parts.pop();
+      } else if (part && part !== '.') parts.push(part);
+    }
+    return parts.join('/');
+  }
+
+  private async load(path: string) {
+    const existing = this.docs.get(path);
+    if (existing) return existing;
+    const result = await this.adapter.read(path);
+    const doc: Doc = { text: result.text, baseRevision: result.revision, dirty: false, conflict: false };
+    this.docs.set(path, doc);
+    return doc;
+  }
+
+  private async loadEmbeds(path: string, chain: string[] = []) {
+    if (chain.includes(path)) return;
+    const doc = await this.load(path);
+    for (const row of this.rows(path, doc.text)) {
+      if (row.kind !== 'embed') continue;
+      try { await this.loadEmbeds(this.normalize(path, row.embed), [...chain, path]); }
+      catch { /* A visible notice is rendered at this embed. */ }
+    }
+  }
+
+  private capture(): Snapshot {
+    return { texts: new Map([...this.docs].map(([path, doc]) => [path, doc.text])), focus: this.active && { ...this.active } };
+  }
+
+  private remember() {
+    this.undo.push(this.capture());
+    if (this.undo.length > 100) this.undo.shift();
+    this.redo.length = 0;
+  }
+
+  private applySnapshot(snapshot: Snapshot) {
+    for (const [path, text] of snapshot.texts) {
+      const doc = this.docs.get(path);
+      if (doc && doc.text !== text) { doc.text = text; doc.dirty = true; }
+    }
+    this.kept.clear();
+    const focus = snapshot.focus;
+    const doc = focus && this.docs.get(focus.path);
+    this.active = doc && this.rows(focus.path, doc.text).some(row => row.line === focus.line) ? { ...focus } : null;
+    this.focusRootAfterRender = true;
+    this.clearSelection();
+    this.scheduleSave();
+    this.render();
+  }
+
+  history = (back: boolean) => {
+    const source = back ? this.undo : this.redo;
+    const snapshot = source.pop();
+    if (!snapshot) return;
+    (back ? this.redo : this.undo).push(this.capture());
+    this.applySnapshot(snapshot);
+  };
+
+  completeActive = () => {
+    if (this.composing || !this.active) return false;
+    const { path, line, field } = this.active;
+    const row = this.rows(path).find(row => row.line === line);
+    if (!row) return false;
+    if (row.status === 'in-progress') this.mutate(path, text => core.updateStatus(text, line, 'done'), field);
+    return true;
+  };
+
+  private mutate(path: string, fn: (text: string) => core.EditResult, focus: Field | null) {
+    const doc = this.docs.get(path)!;
+    let result: core.EditResult;
+    try { result = fn(doc.text); }
+    catch (error) { this.showToast(message(error)); return; }
+    this.message = '';
+    if (result.text === doc.text) return;
+    this.remember();
+    const folded = this.rows(path, doc.text).filter(row => this.collapsed.has(this.key(path, row.line)));
+    doc.text = result.text;
+    doc.dirty = true;
+    this.clearSelection();
+    this.scheduleSave();
+    for (const id of [...this.collapsed]) if (id.startsWith(path + ':')) this.collapsed.delete(id);
+    for (const row of this.rows(path, doc.text)) {
+      if (folded.some(previous => previous.kind === row.kind && previous.title === row.title && previous.embed === row.embed)) this.collapsed.add(this.key(path, row.line));
+    }
+    this.kept.clear();
+    if (focus && result.line !== null) {
+      this.kept.set(path, new Set([result.line]));
+      this.active = { path, line: result.line, field: focus };
+    } else this.active = null;
+    if (this.zoom && this.zoom.path === path) {
+      const zoomLine = this.zoom.line;
+      if (zoomLine === result.line || !this.rows(path, doc.text).some(row => row.line === zoomLine)) this.zoom.line = result.line;
+    }
+    this.render();
+  }
+
+  private inputEdit(path: string, line: number, field: Field, value: string) {
+    const doc = this.docs.get(path)!;
+    let result: core.EditResult;
+    try { result = field === 'note' ? core.updateNote(doc.text, line, value) : core.updateTitle(doc.text, line, value); }
+    catch (error) {
+      this.message = message(error);
+      this.notice = this.message;
+      return;
+    }
+    const delta = result.text.split('\n').length - doc.text.split('\n').length;
+    if (delta) {
+      const existing = this.kept.get(path);
+      if (existing) this.kept.set(path, new Set([...existing].map(value => value > line ? value + delta : value)));
+      if (this.active && this.active.path === path && this.active.line > line) this.active.line += delta;
+      if (this.zoom && this.zoom.path === path && this.zoom.line > line) this.zoom.line += delta;
+      if (this.selectedPath === path) {
+        this.selectedLines = new Set([...this.selectedLines].map(value => value > line ? value + delta : value));
+        if (this.selectionAnchor !== null && this.selectionAnchor > line) this.selectionAnchor += delta;
+      }
+      for (const id of [...this.collapsed]) {
+        if (!id.startsWith(path + ':')) continue;
+        const value = Number(id.slice(path.length + 1));
+        if (value > line) { this.collapsed.delete(id); this.collapsed.add(this.key(path, value + delta)); }
+      }
+    }
+    doc.text = result.text;
+    doc.dirty = true;
+    this.scheduleSave();
+    this.updateStatus();
+    // Line numbers after the edited row moved, so handlers and data-line attributes must follow.
+    if (delta) this.refresh();
+  }
+
+  private insertion(child: boolean) {
+    return { child, status: (this.filter === 'all' || this.filter === 'not-done' ? 'todo' : this.filter), tags: this.tagList() };
+  }
+
+  add = (path: string, line: number | null, child: boolean, kind?: RowKind) => {
+    const source = this.rows(path).find(row => row.line === line);
+    const nextKind = kind || (source?.kind === 'bullet' ? 'bullet' : 'task');
+    this.mutate(path, text => core.insert(text, line, { ...this.insertion(child), kind: nextKind }), 'title');
+  };
+
+  private merge(path: string, row: KeyedRow, backwards: boolean) {
+    let column: number | undefined;
+    this.mutate(path, text => {
+      const result = core.merge(text, row.line, backwards ? 'previous' : 'next');
+      column = result.column;
+      return result;
+    }, 'title');
+    const focused = this.activeElement;
+    if (column !== undefined && focused instanceof HTMLTextAreaElement && focused.dataset.field === 'title') focused.setSelectionRange(column, column);
+  }
+
+  extractToFile = async (path: string, line: number) => {
+    const doc = this.docs.get(path)!;
+    if (this.selectedLines.size > 1) { this.showToast('複数選択中はファイルにできません。選択を解除してください。'); return; }
+    if (!this.adapter.create) { this.showToast('ファイルを指定して開いたときは新しいファイルを作れません。'); return; }
+    if (this.busy || doc.conflict) { this.showToast('保存処理中または保存競合中はファイルにできません。'); return; }
+    this.busy = true;
+    this.updateStatus();
+    const before = doc.text;
+    const folder = path.split('/').slice(0, -1).join('/');
+    let name: string, relative: string, result: ReturnType<typeof core.extractToFile>, created: { revision: Doc['baseRevision'] };
+    try {
+      const siblings = (await this.adapter.list()).filter(file => file.split('/').slice(0, -1).join('/') === folder).map(file => file.split('/').pop()!);
+      const row = this.rows(path, before).find(value => value.line === line)!;
+      name = core.fileName(row.title, siblings);
+      relative = folder ? folder + '/' + name : name;
+      result = core.extractToFile(before, line, name);
+      // The new file is created first so that a failure leaves the original untouched.
+      created = await this.adapter.create(relative, result.extracted);
+    } catch (error) {
+      this.busy = false;
+      this.updateStatus();
+      this.showToast('ファイルにできませんでした: ' + message(error));
+      return;
+    }
+    this.busy = false;
+    this.updateStatus();
+    if (doc.text !== before) {
+      this.showToast(name + ' を作成しましたが、作成中に入力が変わったため元の項目は置き換えていません。');
+      return;
+    }
+    this.docs.set(relative, { text: result.extracted, baseRevision: created.revision, dirty: false, conflict: false });
+    if (!this.fileList.includes(relative)) this.fileList.push(relative);
+    this.mutate(path, () => result, null);
+    // Undo cannot remove the created file, so restoring older snapshots would duplicate the item.
+    this.undo.length = 0;
+    this.redo.length = 0;
+    await this.saveAll();
+    this.showToast(name + ' を作成しました。Undo の履歴は消去しました。');
+  };
+
+  // --- Field events -------------------------------------------------------------------------
+
+  private focusField(path: string, line: number, field: Field, node: HTMLTextAreaElement) {
+    this.active = { path, line, field };
+    const latest = this.rows(path).find(value => value.line === line);
+    if (latest) {
+      const value = field === 'note' ? latest.note : latest.title;
+      if (node.value !== value) node.value = value;
+    }
+    if (field === 'title') this.fitTitle(node);
+  }
+
+  // Event handlers for a title or note textarea; `row` returns the row as of the latest render.
+  fieldEvents(path: string, row: () => KeyedRow, field: Field) {
+    return {
+      onfocus: (event: FocusEvent) => this.focusField(path, row().line, field, event.currentTarget as HTMLTextAreaElement),
+      oncompositionstart: () => { this.composing = true; },
+      oncompositionend: () => { this.composing = false; this.scheduleSave(); },
+      oninput: (event: Event) => this.inputField(path, row().line, field, event.currentTarget as HTMLTextAreaElement),
+      onblur: () => this.blurField(),
+      onkeydown: (event: KeyboardEvent) => this.keydownField(path, row(), field, event.currentTarget as HTMLTextAreaElement, event),
+    };
+  }
+
+  private inputField(path: string, line: number, field: Field, node: HTMLTextAreaElement) {
+    if (field === 'title' && /[\r\n]/.test(node.value)) {
+      const position = node.selectionStart;
+      const prefix = node.value.slice(0, position).replace(/[\r\n]+/g, ' ');
+      node.value = node.value.replace(/[\r\n]+/g, ' ');
+      node.setSelectionRange(prefix.length, prefix.length);
+    }
+    // One undo step covers a run of typing in one control until the next render.
+    if (this.recorded.get(node) !== this.renderCount) {
+      this.remember();
+      this.recorded.set(node, this.renderCount);
+    }
+    this.inputEdit(path, line, field, node.value);
+    if (field === 'note') node.rows = Math.max(1, Math.min(8, node.value.split('\n').length));
+    else this.fitTitle(node);
+  }
+
+  private blurField() {
+    if (this.rendering) return;
+    this.active = null;
+    this.composing = false;
+    this.deferred = true;
+    void this.poll();
+  }
+
+  private focusNote(path: string, line: number) {
+    this.active = { path, line, field: 'note' };
+    this.render();
+  }
+
+  private keydownField(path: string, row: KeyedRow, field: Field, node: HTMLTextAreaElement, event: KeyboardEvent) {
+    // keyCode 229 is the only IME signal some browsers give for the key that ends composition.
+    if (event.isComposing || this.composing || event.keyCode === 229) return;
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      this.completeActive();
+      return;
+    }
+    if (field === 'note') {
+      if (event.key === 'Enter' && event.shiftKey) {
+        event.preventDefault();
+        this.active = { path, line: row.line, field: 'title' };
+        this.render();
+      }
+      return;
+    }
+    const collapsedSelection = node.selectionStart === node.selectionEnd;
+    const atStart = event.key === 'Backspace' && node.selectionStart === 0;
+    const atEnd = event.key === 'Delete' && node.selectionEnd === node.value.length;
+    const zoom = this.zoom;
+    const zoomRoot = zoom?.path === path ? this.rows(path).find(value => value.line === zoom.line) : null;
+    if (zoomRoot && row.line === zoomRoot.line) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (event.shiftKey) this.focusNote(path, row.line);
+        else this.add(path, row.line, true);
+        return;
+      }
+      if (event.key === 'Tab' || event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key)) { event.preventDefault(); return; }
+      if (collapsedSelection && (atStart || atEnd)) return;
+    }
+    if (collapsedSelection && (atStart || atEnd) && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+      event.preventDefault();
+      if (zoomRoot) {
+        const rows = this.rows(path);
+        const neighbor = rows[rows.findIndex(value => value.line === row.line) + (atStart ? -1 : 1)];
+        if (!neighbor || neighbor.line <= zoomRoot.line || neighbor.line >= zoomRoot.end) return;
+      }
+      this.merge(path, row, atStart);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (event.shiftKey) this.focusNote(path, row.line);
+      else this.add(path, row.line, false);
+    } else if (event.key === 'Tab') {
+      event.preventDefault();
+      if (zoomRoot && event.shiftKey && row.parentLine === zoomRoot.line) return;
+      this.mutate(path, text => event.shiftKey ? core.outdent(text, row.line) : core.indent(text, row.line), 'title');
+    } else if (event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key)) {
+      event.preventDefault();
+      this.mutate(path, text => core.move(text, row.line, event.key === 'ArrowUp' ? 'up' : 'down'), 'title');
+    } else if (['ArrowUp', 'ArrowDown'].includes(event.key) && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+      event.preventDefault();
+      const titles = [...this.container!.querySelectorAll<HTMLTextAreaElement>('[data-field="title"]')];
+      const next = titles[titles.indexOf(node) + (event.key === 'ArrowUp' ? -1 : 1)];
+      if (next) {
+        const column = node.selectionStart;
+        next.focus();
+        next.setSelectionRange(Math.min(column, next.value.length), Math.min(column, next.value.length));
+        next.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }
+
+  // --- Row actions --------------------------------------------------------------------------
+
+  setStatus = (path: string, line: number, status: Status) => this.mutate(path, text => core.updateStatus(text, line, status), 'title');
+  moveRow = (path: string, line: number, direction: 'up' | 'down') => this.mutate(path, text => core.move(text, line, direction), 'title');
+  showNote = (path: string, line: number) => this.focusNote(path, line);
+
+  toggleFold = (path: string, line: number) => {
+    const id = this.key(path, line);
+    if (this.collapsed.has(id)) this.collapsed.delete(id); else this.collapsed.add(id);
+    this.active = null;
+    this.render();
+  };
+
+  zoomTo = (path: string, line: number) => {
+    this.zoom = { path, line };
+    this.collapsed.delete(this.key(path, line));
+    this.active = null;
+    this.render();
+  };
+
+  zoomOut = () => {
+    this.zoom = null;
+    this.active = null;
+    this.render();
+  };
+
+  private shown(path: string, text: string) {
+    const tagFilters = this.tagList();
+    const rows = this.rows(path, text);
+    const byLine = new Map(rows.map(row => [row.line, row]));
+    const keptLines = new Set(this.keepFor(path));
+    const visible = new Set<number>();
+    for (const row of rows) {
+      const words = (row.title + '\n' + row.note).split(/\s+/);
+      const matches = (this.filter === 'all' || (this.filter === 'not-done' ? row.status !== 'done' : row.status === this.filter)) && tagFilters.every(tag => words.includes('#' + tag))
+        && row.title.toLowerCase().includes(this.textSearch.trim().toLowerCase());
+      if (!keptLines.has(row.line) && !matches) continue;
+      let ancestor: KeyedRow | undefined = row;
+      while (ancestor) {
+        visible.add(ancestor.line);
+        ancestor = ancestor.parentLine === null ? undefined : byLine.get(ancestor.parentLine);
+      }
+    }
+    return visible;
+  }
+
+  selectRow = (path: string, row: KeyedRow, event: MouseEvent) => {
+    const rows = this.rows(path);
+    const previous = rows.find(value => this.selectedLines.has(value.line));
+    if (this.selectedPath !== path || previous && previous.parentLine !== row.parentLine || !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+      this.clearSelection();
+      this.selectedPath = path;
+    }
+    const anchor = this.selectionAnchor;
+    if (event.shiftKey && anchor !== null) {
+      const visible = this.shown(path, this.docs.get(path)!.text);
+      for (const sibling of rows) {
+        if (sibling.parentLine === row.parentLine && visible.has(sibling.line) && sibling.line >= Math.min(anchor, row.line) && sibling.line <= Math.max(anchor, row.line)) this.selectedLines.add(sibling.line);
+      }
+    } else {
+      if (this.selectedLines.has(row.line)) this.selectedLines.delete(row.line); else this.selectedLines.add(row.line);
+      this.selectionAnchor = row.line;
+    }
+    this.active = null;
+    this.render();
+  };
+
+  private reorderSelection(path: string, target: number, position: 'before' | 'after') {
+    if (this.selectedPath !== path || !this.selectedLines.size) return;
+    let result: ReturnType<typeof core.reorder> | undefined;
+    const lines = [...this.selectedLines];
+    this.mutate(path, text => {
+      result = core.reorder(text, lines, target, position);
+      return result;
+    }, 'title');
+    if (result) {
+      this.selectedPath = path;
+      this.selectedLines = new Set(result.lines);
+      this.selectionAnchor = result.line;
+      this.render();
+    }
+  }
+
+  moveSelection = (down: boolean) => {
+    const path = this.selectedPath!;
+    const rows = this.rows(path);
+    const selected = rows.filter(row => this.selectedLines.has(row.line));
+    const siblings = rows.filter(row => row.parentLine === selected[0].parentLine);
+    const edge = down ? selected[selected.length - 1] : selected[0];
+    const target = siblings[siblings.indexOf(edge) + (down ? 1 : -1)];
+    if (target) this.reorderSelection(path, target.line, down ? 'after' : 'before');
+  };
+
+  setSelectionStatus = (status: Status) => {
+    const path = this.selectedPath!;
+    const lines = [...this.selectedLines];
+    this.mutate(path, text => {
+      let result: core.EditResult = { text, line: lines[0] };
+      for (const value of lines) if (this.rows(path, result.text).find(row => row.line === value)?.kind === 'task') result = core.updateStatus(result.text, value, status);
+      return result;
+    }, 'title');
+  };
+
+  clearSelectionAndRender = () => {
+    this.clearSelection();
+    this.render();
+  };
+
+  // --- Drag and drop ------------------------------------------------------------------------
+
+  dragStart(path: string, row: KeyedRow, event: DragEvent) {
+    const lines = this.selectedPath === path && this.selectedLines.has(row.line) ? [...this.selectedLines] : [row.line];
+    this.dragging = { path, lines };
+    this.container!.classList.add('is-dragging');
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', row.title);
+    }
+  }
+
+  dragEnd = () => {
+    this.dragging = null;
+    this.container!.classList.remove('is-dragging');
+    this.clearDrop();
+  };
+
+  clearDrop = () => {
+    for (const node of this.container!.querySelectorAll('.drop-before, .drop-after, .drop-child')) node.classList.remove('drop-before', 'drop-after', 'drop-child');
+  };
+
+  // Computes where a row line accepts the dragged items from the pointer position.
+  lineDrop(path: string, line: number, rootLine: number | null, node: HTMLElement, event: DragEvent): Drop | null {
+    const rows = this.rows(path);
+    const byLine = new Map(rows.map(value => [value.line, value]));
+    const row = byLine.get(line);
+    if (!row) return null;
+    const hasChildren = rows.some(child => child.parentLine === row.line);
+    const bounds = node.getBoundingClientRect();
+    const fraction = (event.clientY - bounds.top) / bounds.height;
+    const titleLeft = node.querySelector('.title-input')!.getBoundingClientRect().left;
+    if (!hasChildren && fraction >= .25 && fraction <= .75 && event.clientX >= titleLeft) {
+      return { parentLine: row.line, beforeLine: null, indicator: 'drop-child', offset: 24 };
+    }
+    const position = fraction < .5 ? 'before' : 'after';
+    let targetRow = row;
+    let offset = 0;
+    while (targetRow.parentLine !== null && targetRow.parentLine !== rootLine && event.clientX < titleLeft + offset - 12) {
+      targetRow = byLine.get(targetRow.parentLine)!;
+      offset -= 24;
+    }
+    const siblings = rows.filter(candidate => candidate.parentLine === targetRow.parentLine);
+    const beforeLine = position === 'before' ? targetRow.line : siblings[siblings.indexOf(targetRow) + 1]?.line ?? null;
+    return { parentLine: targetRow.parentLine, beforeLine, line: targetRow.line, position, indicator: position === 'before' ? 'drop-before' : 'drop-after', offset };
+  }
+
+  dragOver(path: string, node: HTMLElement, event: DragEvent, destination: (event: DragEvent) => Drop | null) {
+    if (!this.dragging || this.dragging.path !== path) return;
+    const drop = destination(event);
+    if (!drop) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    this.clearDrop();
+    node.style.setProperty('--drop-offset', (drop.offset || 0) + 'px');
+    node.classList.add(drop.indicator);
+  }
+
+  drop(path: string, event: DragEvent, destination: (event: DragEvent) => Drop | null) {
+    if (!this.dragging || this.dragging.path !== path) return;
+    const drop = destination(event);
+    if (!drop) return;
+    event.preventDefault();
+    const lines = [...this.dragging.lines];
+    const byLine = new Map(this.rows(path).map(row => [row.line, row]));
+    this.dragEnd();
+    if (drop.parentLine !== null || lines.some(value => byLine.get(value)?.parentLine !== null)) {
+      this.mutate(path, text => {
+        const result = core.reparent(text, lines, drop.parentLine, drop.beforeLine);
+        if (drop.parentLine !== null) this.collapsed.delete(this.key(path, drop.parentLine));
+        return result;
+      }, 'title');
+    } else {
+      this.selectedPath = path;
+      this.selectedLines = new Set(lines);
+      this.reorderSelection(path, drop.line!, drop.position!);
+    }
+  }
+
+  // --- Toolbar ------------------------------------------------------------------------------
+
+  setFilter = (value: StatusFilter) => {
+    this.filter = value;
+    this.kept.clear();
+    this.active = null;
+    this.render();
+  };
+
+  searchInput = (value: string) => {
+    this.parseSearch(value);
+    this.updateStar();
+  };
+
+  applySearch = (value: string) => {
+    this.parseSearch(value);
+    this.kept.clear();
+    this.active = null;
+    this.render();
+  };
+
+  reset = () => {
+    this.filter = 'all';
+    this.tags = '';
+    this.textSearch = '';
+    this.kept.clear();
+    this.active = null;
+    this.render();
+  };
+
+  setAutoSave = (value: boolean) => {
+    this.autoSave = value;
+    this.scheduleSave();
+  };
+
+  openSource = async () => {
+    try { await this.adapter.openSource!(this.zoom ? this.zoom.path : this.current); }
+    catch (error) { this.message = message(error); this.render(); }
+  };
+
+  copyConflict = (path: string, node: HTMLTextAreaElement) => {
+    node.focus();
+    node.select();
+    const text = this.docs.get(path)!.text;
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(() => { this.message = '入力内容を選択しました。コピーしてください。'; });
+  };
+
+  openExternal = async (path: string) => {
+    try {
+      const result = await this.adapter.read(path);
+      this.remember();
+      this.docs.set(path, { text: result.text, baseRevision: result.revision, dirty: false, conflict: false });
+      this.clearSelection();
+      this.message = '';
+      this.active = null;
+      this.render();
+    } catch (error) { this.message = message(error); this.render(); }
+  };
+
+  // --- Bookmarks ----------------------------------------------------------------------------
+
+  private persistPreferences() {
+    const save = this.savePreferences;
+    if (!save) return;
+    const snapshot = JSON.parse(JSON.stringify(this.preferences)) as Preferences;
+    this.preferenceSave = this.preferenceSave.then(() => save(snapshot)).catch((error: unknown) => {
+      if (!this.destroyed) this.showToast('画面設定を保存できませんでした: ' + message(error));
+    });
+  }
+
+  addBookmark = (kind: 'file' | 'search') => {
+    if (!Array.isArray(this.preferences.bookmarks)) {
+      this.showToast('ブックマークの設定を読み込めません。設定ファイルを確認してください。');
+      return;
+    }
+    const bookmark: Bookmark = {
+      id: crypto.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(36).slice(2), kind, file: this.current,
+      status: kind === 'file' ? 'all' : this.filter, tags: kind === 'file' ? [] : this.tagList(), searchText: kind === 'file' ? '' : this.textSearch.trim(),
+    };
+    if (this.preferences.bookmarks.some(saved => validBookmark(saved) && saved.kind === kind && saved.file === bookmark.file
+      && saved.status === bookmark.status && JSON.stringify(saved.tags) === JSON.stringify(bookmark.tags)
+      && (saved.searchText || '') === bookmark.searchText)) {
+      this.showToast('このブックマークは登録済みです。');
+      return;
+    }
+    this.preferences.bookmarks.push(bookmark);
+    this.persistPreferences();
+    this.render();
+  };
+
+  private currentSearchBookmark() {
+    return Array.isArray(this.preferences.bookmarks) ? this.preferences.bookmarks.find(saved => validBookmark(saved)
+      && saved.kind === 'search' && saved.file === this.current && saved.status === this.filter
+      && JSON.stringify(saved.tags) === JSON.stringify(this.tagList()) && (saved.searchText || '') === this.textSearch.trim()) : undefined;
+  }
+
+  private updateStar() {
+    this.searchSaved = !!this.currentSearchBookmark();
+  }
+
+  toggleSearchBookmark = () => {
+    const existing = this.currentSearchBookmark();
+    if (existing) {
+      this.preferences.bookmarks.splice(this.preferences.bookmarks.indexOf(existing), 1);
+      this.persistPreferences();
+      this.render();
+    } else this.addBookmark('search');
+  };
+
+  removeBookmark = (bookmark: unknown) => {
+    this.preferences.bookmarks.splice(this.preferences.bookmarks.indexOf(bookmark), 1);
+    this.persistPreferences();
+    this.render();
+  };
+
+  toggleSidebar = () => {
+    this.preferences.sidebarCollapsed = this.preferences.sidebarCollapsed !== true;
+    this.persistPreferences();
+    this.render();
+  };
+
+  openBookmark = async (bookmark: unknown) => {
+    if (!validBookmark(bookmark)) { this.showToast('このブックマークの設定は読み込めません。'); return; }
+    try { await this.loadEmbeds(bookmark.file); }
+    catch (error) { this.showToast('ブックマークを開けませんでした: ' + message(error)); return; }
+    if (this.destroyed) return;
+    this.filter = bookmark.kind === 'file' ? 'all' : bookmark.status;
+    this.tags = bookmark.kind === 'file' ? '' : bookmark.tags.map(tag => '#' + tag).join(' ');
+    this.textSearch = bookmark.kind === 'file' ? '' : bookmark.searchText || '';
+    this.kept.clear();
+    await this.openFile(bookmark.file);
+  };
+
+  private bookmarkViews(): BookmarkView[] {
+    return this.preferences.bookmarks.map(bookmark => {
+      const valid = validBookmark(bookmark);
+      const filename = valid ? bookmark.file.split('/').pop()! : '読み込めないブックマーク';
+      const state = valid ? filters.find(([value]) => value === bookmark.status)![1] : '';
+      const label = valid && bookmark.kind === 'search' ? state + (bookmark.tags.length ? ' ' + bookmark.tags.map(tag => '#' + tag).join(' ') : '')
+        + (bookmark.searchText ? '「' + bookmark.searchText + '」' : '') + ' · ' + filename : filename;
+      return { bookmark, label, title: valid ? bookmark.file : label };
+    });
+  }
+
+  // --- Rendering ----------------------------------------------------------------------------
+
+  private updateStatus() {
+    const docs = [...this.docs.values()];
+    const dirty = docs.filter(doc => doc.dirty).length;
+    const conflicts = docs.filter(doc => doc.conflict).length;
+    this.saveState = {
+      text: this.busy ? '処理中…' : conflicts ? '保存競合 ' + conflicts + ' ファイル（入力保持）' : dirty ? '未保存 ' + dirty + ' ファイル' : '保存済み',
+      dirty: !!dirty,
+    };
+  }
+
+  // Re-renders without moving focus, for line shifts caused by typing.
+  private refresh() {
+    if (this.composing) { this.deferred = true; return; }
+    this.version++;
+    flushSync();
+  }
+
+  render() {
+    if (this.destroyed) return;
+    if (this.composing) { this.deferred = true; return; }
+    this.deferred = false;
+    const focus = this.active && { ...this.active };
+    const focusRoot = this.focusRootAfterRender;
+    this.focusRootAfterRender = false;
+    const oldNode = this.activeElement;
+    const selection = oldNode instanceof HTMLTextAreaElement || oldNode instanceof HTMLInputElement && typeof oldNode.selectionStart === 'number'
+      ? [oldNode.selectionStart ?? 0, oldNode.selectionEnd ?? 0] : null;
+    // Moving a focused node blurs it; those blurs are not the user leaving the field.
+    this.rendering = true;
+    try {
+      this.notice = this.message;
+      this.updateStar();
+      this.renderCount++;
+      this.version++;
+      flushSync();
+      this.updateStatus();
+      const container = this.container!;
+      for (const node of container.querySelectorAll<HTMLTextAreaElement>('.title-input')) this.fitTitle(node);
+      const target = focus && [...container.querySelectorAll<HTMLTextAreaElement>('[data-field]')]
+        .find(node => node.dataset.path === focus.path && Number(node.dataset.line) === focus.line && node.dataset.field === focus.field);
+      if (target) {
+        target.focus();
+        if (selection) target.setSelectionRange(Math.min(selection[0], target.value.length), Math.min(selection[1], target.value.length));
+      } else {
+        const focused = this.activeElement;
+        if (focused instanceof HTMLTextAreaElement && container.contains(focused) && focused.dataset.field) {
+          // A field that kept its node across the render is still being edited.
+          this.active = { path: focused.dataset.path!, line: Number(focused.dataset.line), field: focused.dataset.field as Field };
+        } else if (focusRoot && !container.contains(focused)) {
+          // Keeps keyboard shortcuts working after undo or redo removed the focused field.
+          container.querySelector<HTMLElement>('.outliner-workspace')?.focus();
+        }
+      }
+    } finally {
+      this.rendering = false;
+    }
+  }
+
+  view(): View {
+    // Reading the version makes every derived view re-run on render().
+    void this.version;
+    const outline = this.docs.has(this.current) ? this.outlineView(this.zoom ? this.zoom.path : this.current) : null;
+    return {
+      fileList: [...this.fileList],
+      current: this.current,
+      filter: this.filter,
+      searchValue: this.searchValue(),
+      canOpenSource: !!this.adapter.openSource,
+      autoSave: this.autoSave,
+      selectionCount: this.selectedLines.size,
+      zoomPath: this.zoom ? this.zoom.path : null,
+      conflicts: [...this.docs].filter(([, doc]) => doc.conflict).map(([path, doc]) => ({ path, text: doc.text })),
+      outline,
+      sidebarCollapsed: this.preferences.sidebarCollapsed === true,
+      bookmarksValid: Array.isArray(this.preferences.bookmarks),
+      bookmarks: Array.isArray(this.preferences.bookmarks) ? this.bookmarkViews() : [],
+    };
+  }
+
+  private statusView(row: KeyedRow, zoomed: boolean) {
+    if (row.kind !== 'task' || !row.status) return null;
+    const [next, nextLabel] = nextStatus(row.status);
+    const label = zoomed ? 'ズーム対象を' + nextLabel + 'にする' : statuses.find(([value]) => value === row.status)![1] + '（クリックで' + nextLabel + '）';
+    return { icon: statusIcons[row.status], label, next };
+  }
+
+  private isActive(path: string, line: number, field: Field) {
+    return !!this.active && this.active.path === path && this.active.line === line && this.active.field === field;
+  }
+
+  private outlineView(path: string, chain: string[] = []): OutlineView {
+    if (chain.includes(path)) return { kind: 'cycle', path };
+    const doc = this.docs.get(path);
+    if (!doc) return { kind: 'missing' };
+    const rows = this.rows(path, doc.text);
+    const visible = this.shown(path, doc.text);
+    const byLine = new Map(rows.map(row => [row.line, row]));
+    const zoom = this.zoom;
+    const rootRow = zoom && zoom.path === path ? byLine.get(zoom.line) ?? null : null;
+    const baseDepth = rootRow ? rootRow.depth + 1 : 0;
+    const items: ItemView[] = [];
+    const itemByLine = new Map<number, ItemView>();
+    for (const row of rows) {
+      if (rootRow && !(row.line > rootRow.line && row.line < rootRow.end)) continue;
+      if (!visible.has(row.line) && row.kind !== 'embed') continue;
+      let hidden = false;
+      for (let ancestor = row.parentLine === null ? undefined : byLine.get(row.parentLine); ancestor; ancestor = ancestor.parentLine === null ? undefined : byLine.get(ancestor.parentLine)) {
+        if (this.collapsed.has(this.key(path, ancestor.line))) { hidden = true; break; }
+      }
+      if (hidden) continue;
+      const collapsed = this.collapsed.has(this.key(path, row.line));
+      const item: ItemView = {
+        key: row.key,
+        path,
+        row,
+        depth: Math.max(0, row.depth - baseDepth),
+        rootLine: rootRow ? rootRow.line : null,
+        selected: this.selectedPath === path && this.selectedLines.has(row.line),
+        collapsed,
+        hasChildren: rows.some(child => child.parentLine === row.line),
+        showNote: row.kind !== 'embed' && (!!row.note || this.isActive(path, row.line, 'note')),
+        status: this.statusView(row, false),
+        links: row.kind === 'embed' ? null : linkParts(row.title),
+        embed: null,
+        ends: [],
+      };
+      if (row.kind === 'embed') {
+        item.embed = { target: null, error: null, outline: null };
+        if (!collapsed) {
+          try {
+            item.embed.target = this.normalize(path, row.embed);
+            item.embed.outline = this.outlineView(item.embed.target, [...chain, path]);
+          } catch (error) { item.embed.error = message(error); }
+        }
+      } else itemByLine.set(row.line, item);
+      items.push(item);
+    }
+    for (const row of rows) {
+      if (row.kind === 'embed' || !itemByLine.has(row.line) || !rows.some(child => child.parentLine === row.line)) continue;
+      const descendants = rows.filter(child => child.line >= row.line && child.line < row.end && itemByLine.has(child.line));
+      // Later (inner) rows go first, matching insertion right after the same item.
+      itemByLine.get(descendants[descendants.length - 1].line)!.ends.unshift({
+        key: 'end-' + row.key, parentLine: row.line, depth: Math.max(0, row.depth + 1 - baseDepth), label: row.title + ' の子項目の末尾',
+      });
+    }
+    const siblings = rows.filter(row => row.parentLine === (rootRow ? rootRow.line : null));
+    const last = siblings[siblings.length - 1];
+    const editable = siblings.filter(row => row.kind !== 'embed');
+    const lastEditable = editable[editable.length - 1];
+    return {
+      kind: 'outline',
+      path,
+      zoom: rootRow ? {
+        row: rootRow,
+        status: this.statusView(rootRow, true),
+        showNote: !!rootRow.note || this.isActive(path, rootRow.line, 'note'),
+      } : null,
+      items,
+      addKind: lastEditable?.kind === 'bullet' ? 'bullet' : 'task',
+      appendLine: !rootRow ? null : last ? last.line : rootRow.line,
+      appendChild: !!rootRow && !last,
+    };
+  }
+
+  // --- Files --------------------------------------------------------------------------------
+
+  openFile = async (path: string) => {
+    if (!this.fileList.includes(path)) this.fileList.push(path);
+    this.current = path;
+    this.clearSelection();
+    this.zoom = null;
+    this.active = null;
+    this.message = '';
+    this.render();
+    try { await this.loadEmbeds(path); }
+    catch (error) { this.message = message(error); }
+    this.render();
+  };
+
+  saveAll = async (automatic = false) => {
+    if (this.busy) return;
+    this.busy = true;
+    this.message = '';
+    this.updateStatus();
+    for (const [path, doc] of this.docs) {
+      if (!doc.dirty || automatic === true && doc.conflict) continue;
+      const savingText = doc.text;
+      try {
+        const result = await this.adapter.save(path, savingText, doc.baseRevision);
+        doc.baseRevision = result.revision;
+        doc.dirty = doc.text !== savingText;
+        doc.conflict = false;
+      } catch (error) {
+        doc.conflict = true;
+        this.message = '保存できませんでした: ' + message(error);
+      }
+    }
+    this.busy = false;
+    if (this.message) this.notice = this.message;
+    this.scheduleSave();
+    if (this.active || this.composing) { this.deferred = true; this.updateStatus(); }
+    else this.render();
+  };
+
+  reload = async () => {
+    if (this.busy) return;
+    this.message = '';
+    for (const [path, doc] of this.docs) {
+      try {
+        const result = await this.adapter.read(path);
+        if (doc.dirty) {
+          if (result.revision !== doc.baseRevision) doc.conflict = true;
+          this.message = '未保存の入力を保持しています。保存後に再読込してください。';
+        } else {
+          if (doc.text !== result.text) this.clearSelection();
+          doc.text = result.text;
+          doc.baseRevision = result.revision;
+        }
+      } catch (error) { this.message = message(error); }
+    }
+    await this.loadEmbeds(this.current);
+    if (this.active || this.composing) { this.deferred = true; this.updateStatus(); } else this.render();
+  };
+
+  private async poll() {
+    if (this.destroyed || this.busy || this.polling) return;
+    this.polling = true;
+    let changed = false;
+    try {
+      for (const [path, doc] of this.docs) {
+        try {
+          const result = await this.adapter.read(path);
+          if (result.revision === doc.baseRevision) continue;
+          if (doc.dirty) { if (!doc.conflict) changed = true; doc.conflict = true; }
+          else if (this.active || this.composing) { this.deferred = true; }
+          else {
+            this.clearSelection();
+            this.undo.length = 0;
+            this.redo.length = 0;
+            if (this.zoom?.path === path) this.zoom = null;
+            doc.text = result.text;
+            doc.baseRevision = result.revision;
+            changed = true;
+          }
+        } catch (error) { if (this.message !== message(error)) changed = true; this.message = message(error); }
+      }
+      const focused = this.activeElement;
+      const editingControl = !!focused && !!this.container?.contains(focused) && ['INPUT', 'TEXTAREA', 'SELECT'].includes(focused.tagName) && (focused as HTMLInputElement).type !== 'checkbox';
+      if (changed || this.deferred && !editingControl) {
+        await this.loadEmbeds(this.current);
+        if (this.active || this.composing || editingControl) { this.deferred = true; } else this.render();
+      }
+    } finally { this.polling = false; this.updateStatus(); }
+  }
+
+  keyboard = (event: KeyboardEvent) => {
+    // keyCode 229 is the only IME signal some browsers give for the key that ends composition.
+    if (event.isComposing || this.composing || event.keyCode === 229) return;
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      this.history(!event.shiftKey);
+    }
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      void this.saveAll();
+    }
+  };
+}

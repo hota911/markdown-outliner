@@ -1,20 +1,31 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, symlink, rename } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile, readFile, symlink, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createOutlinerServer } from '../server.mjs';
+import { configMarker, createOutlinerServer, injectConfig } from '../server.mjs';
+
+// Stands in for the `npm run build:web` output so these tests do not depend on a build.
+const webRoot = await mkdtemp(path.join(tmpdir(), 'markdown-outliner-web-'));
+await mkdir(path.join(webRoot, 'assets'));
+await writeFile(path.join(webRoot, 'index.html'), `<!doctype html><head>${configMarker}</head><script type="module" src="./assets/app.js"></script>`);
+await writeFile(path.join(webRoot, 'assets', 'app.js'), 'console.log("app");\n');
+await writeFile(path.join(webRoot, 'assets', 'app.css'), 'body {}\n');
+await writeFile(path.join(webRoot, 'notes.txt'), 'not served\n');
+
+const configOf = html => JSON.parse(html.match(/<script id="outliner-config" type="application\/json">(.*?)<\/script>/)[1]);
 
 let server, workspace, origin, token;
 before(async () => {
   workspace = await mkdtemp(path.join(tmpdir(), 'markdown-outliner-test-'));
   await writeFile(path.join(workspace, 'tasks.md'), '# Tasks\n\n- [ ] Draft #work\n');
   await writeFile(path.join(workspace, 'work.md'), '- [/] Embedded #work\n');
-  server = await createOutlinerServer(workspace);
+  server = await createOutlinerServer(workspace, { webRoot });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
   const html = await (await fetch(origin)).text();
-  token = html.match(/'X-Outliner-Token': '([a-f0-9]+)'/)[1];
+  token = configOf(html).token;
+  assert.match(token, /^[a-f0-9]{48}$/);
 });
 after(async () => { await new Promise(resolve => server.close(resolve)); });
 
@@ -83,10 +94,30 @@ test('blocks paths and symlinks outside the selected directory', async () => {
   assert.doesNotMatch(await linked.text(), /Private content/);
 });
 
-test('serves the shared UI assets', async () => {
-  for (const asset of ['/core.js', '/ui.js', '/styles.css']) {
+test('serves the built web assets and nothing else', async () => {
+  for (const asset of ['/assets/app.js', '/assets/app.css']) {
     assert.equal((await fetch(origin + asset)).status, 200);
   }
+  for (const other of ['/notes.txt', '/index.html', '/assets/missing.js', '/server.mjs', '/assets/../../server.mjs']) {
+    assert.equal((await fetch(origin + other)).status, 404);
+  }
+});
+
+test('embeds the configuration so file names cannot close the script element', () => {
+  const html = injectConfig(`<head>${configMarker}</head>`, { initialFile: '</script><script>alert(1)</script>.md' });
+  assert.doesNotMatch(html, /<\/script><script>alert/);
+  assert.equal(configOf(html).initialFile, '</script><script>alert(1)</script>.md');
+});
+
+test('rejects requests for a different Host header', async () => {
+  const { request } = await import('node:http');
+  const status = await new Promise((resolve, reject) => {
+    request(origin + '/api/files', { headers: { host: 'localhost:' + server.address().port } }, response => {
+      response.resume();
+      resolve(response.statusCode);
+    }).on('error', reject).end();
+  });
+  assert.equal(status, 403);
 });
 
 test('returns explicit errors for missing Markdown and invalid requests', async () => {
@@ -109,13 +140,13 @@ test('single-file mode lists, reads and saves only the selected Markdown file', 
   await writeFile(selected, '# TODO\n\n- [ ] Draft\n');
   await writeFile(sibling, 'Private sibling content\n');
   await symlink(sibling, path.join(directory, 'linked.md'));
-  const singleServer = await createOutlinerServer(selected);
+  const singleServer = await createOutlinerServer(selected, { webRoot });
   await new Promise(resolve => singleServer.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => singleServer.close(resolve)));
   const singleOrigin = `http://127.0.0.1:${singleServer.address().port}`;
-  const html = await (await fetch(singleOrigin)).text();
-  assert.match(html, /initialFile: "TODO\.md"/);
-  const singleToken = html.match(/'X-Outliner-Token': '([a-f0-9]+)'/)[1];
+  const config = configOf(await (await fetch(singleOrigin)).text());
+  assert.equal(config.initialFile, 'TODO.md');
+  const singleToken = config.token;
   assert.deepEqual(await (await fetch(`${singleOrigin}/api/files`)).json(), ['TODO.md']);
   const loaded = await (await fetch(`${singleOrigin}/api/file?path=TODO.md`)).json();
   assert.equal(loaded.text, '# TODO\n\n- [ ] Draft\n');
@@ -140,7 +171,7 @@ test('single-file mode lists, reads and saves only the selected Markdown file', 
   }
   assert.equal(await readFile(sibling, 'utf8'), 'Private sibling content\n');
   assert.equal(await readFile(selected, 'utf8'), changed);
-  assert.doesNotMatch(html, /create:/);
+  assert.equal(config.canCreate, false);
   assert.equal((await create(singleOrigin, 'new.md', 'new\n', singleToken)).status, 403);
   await assert.rejects(readFile(path.join(directory, 'new.md'), 'utf8'));
 

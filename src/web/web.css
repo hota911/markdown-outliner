@@ -1,0 +1,5 @@
+/* The standalone page has no host chrome around the outliner. */
+body {
+  margin: 0;
+  background: #fff;
+}
