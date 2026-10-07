@@ -86,6 +86,20 @@ test.describe('on a touch screen', () => {
     await expect((await outliner.line('next')).getByTitle('Add a child task')).toBeHidden();
   });
 
+  test('a single tap on a row button of the edited line runs it', async ({ openOutliner, page }) => {
+    const outliner = await openOutliner('- [ ] a\n- [ ] b\n');
+    const tapOnce = async (title: string) => {
+      const box = await rect((await outliner.line('a')).getByTitle(title, { exact: true }));
+      await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+    };
+    await tapTitle(page, 'a');
+    // The web host opened a single file, so the tap only explains why no file was created.
+    await tapOnce('Move the item with its children and notes to a new file and embed it');
+    await expect(page.getByRole('status')).toHaveText('Cannot create new files when a single file was opened.');
+    await tapOnce('Add a child task');
+    await expect.poll(outliner.titles).toEqual(['a', '', 'b']);
+  });
+
   test('tapping the handle selects the item without changing the file', async ({ openOutliner, page }) => {
     const outliner = await openOutliner('- [ ] a\n- [ ] b\n');
     await (await outliner.handle('b')).tap();

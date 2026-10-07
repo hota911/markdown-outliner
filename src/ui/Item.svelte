@@ -36,6 +36,10 @@
     ctrl.dragOver(item.path, event.currentTarget as HTMLElement, event, destination);
   }
 
+  function keepFocus(event: Event) {
+    event.preventDefault();
+  }
+
   // The embed heading itself turns into the rename field: only the base name is edited; the folder
   // and .md stay as text around it.
   let renaming = $state(false);
@@ -217,7 +221,10 @@
           <div class="title-display" onclick={event => displayClick(event, titleNode)}><InlineText nodes={display ?? [{ kind: 'text', text: shownTitle, start: 0 }]} {marks} /></div>
         {/if}
       </div>
-      <div class="row-actions">
+      <!-- A press keeps the focus where it is: focus decides where the buttons sit (see styles.css), and a
+           button that moved between the press and the release would get no click. The keyboard still
+           reaches them with Tab. -->
+      <div class="row-actions" onpointerdown={keepFocus} onmousedown={keepFocus}>
         <button type="button" class="icon" title={item.row.kind === 'task' ? ctrl.t.item.addChildTask : ctrl.t.item.addChildBullet} onclick={() => ctrl.add(item.path, item.row.line, true)}>+</button>
         <!-- On touch screens the buttons marked in-touch-bar are hidden; the touch bar has the same commands. -->
         <button type="button" class="quiet in-touch-bar" title={ctrl.t.item.editNoteTitle} onclick={() => ctrl.showNote(item.path, item.row.line)}>{ctrl.t.item.note}</button>
