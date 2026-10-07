@@ -79,11 +79,11 @@ The plugin build bundles Svelte and the shared code into `main.js`, so the relea
 
 ## Release
 
-1. Bump `version` in `manifest.json` and `package.json`.
-2. Add the new version and its `minAppVersion` to `versions.json`.
-3. Run `npm test` and `npm run build`.
-4. Create a GitHub Release whose tag is exactly the version, without a `v` prefix (for example `0.1.0`).
-5. Attach `dist/main.js`, `dist/manifest.json`, and `dist/styles.css` to the release.
+1. On a branch, run `npm version <patch|minor|major> --no-git-tag-version`. This updates `package.json`, `package-lock.json`, `manifest.json`, and `versions.json` (the `version` script copies the version and `minAppVersion`).
+2. Commit the changes, open a PR, and merge it to `main`.
+3. On the updated `main`, push a tag equal to the version, without a `v` prefix: `git tag 0.1.0 && git push origin 0.1.0`.
+
+The `Release` workflow checks that the tag matches the versions, runs lint, typecheck, tests, and the build, attests build provenance, then publishes a GitHub Release with `main.js`, `manifest.json`, and `styles.css` attached.
 
 ## 概要（日本語）
 
