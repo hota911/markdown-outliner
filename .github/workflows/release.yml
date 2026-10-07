@@ -36,6 +36,10 @@ jobs:
               process.exit(1);
             }
           '
+      - name: Extract release notes from CHANGELOG.md
+        env:
+          TAG: ${{ github.ref_name }}
+        run: node scripts/changelog-section.mjs "$TAG" > "$RUNNER_TEMP/release-notes.md"
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
@@ -52,4 +56,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$TAG" dist/main.js dist/manifest.json dist/styles.css \
-            --title "$TAG" --generate-notes
+            --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md"

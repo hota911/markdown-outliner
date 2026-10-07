@@ -97,6 +97,7 @@ Source layout:
 - `vite.config.ts`: the plugin build (a single CommonJS `main.js`).
 - `vite.web.config.ts`: the web app build and dev server.
 - `scripts/package-plugin.mjs`: builds the plugin and copies `manifest.json` and `styles.css` into `dist/`.
+- `scripts/changelog-section.mjs`: prints one version's section of `CHANGELOG.md`, used as the release notes.
 - `e2e/`: Playwright tests in Chromium (drag and drop, layout, and the touch screen layout in `mobile.spec.ts`); `playwright.config.ts` runs `mobile.spec.ts` as a Pixel 7 and the rest as desktop Chrome.
 - `obsidian-e2e/`: Playwright tests of the plugin in the Obsidian desktop app, with their own `playwright.config.ts`; `fixtures.ts` starts Obsidian and has helpers to open a file, run a command by id, and read a vault file.
 
@@ -105,10 +106,13 @@ The plugin build bundles Svelte and the shared code into `main.js`, so the relea
 ## Release
 
 1. On a branch, run `npm version <patch|minor|major> --no-git-tag-version`. This updates `package.json`, `package-lock.json`, `manifest.json`, and `versions.json` (the `version` script copies the version and `minAppVersion`).
-2. Commit the changes, open a PR, and merge it to `main`.
-3. On the updated `main`, push a tag equal to the version, without a `v` prefix: `git tag 0.1.0 && git push origin 0.1.0`.
+2. In the same branch, move the entries under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) to a new `## [X.Y.Z] - YYYY-MM-DD` heading, leave `## [Unreleased]` empty, and update the compare links at the bottom. `npm test` fails if CHANGELOG.md has no entries for the version in `package.json`.
+3. Commit the changes, open a PR, and merge it to `main`.
+4. On the updated `main`, push a tag equal to the version, without a `v` prefix: `git tag 0.1.0 && git push origin 0.1.0`.
 
-The `Release` workflow checks that the tag matches the versions, runs lint, typecheck, tests, and the build, attests build provenance, then publishes a GitHub Release with `main.js`, `manifest.json`, and `styles.css` attached.
+The `Release` workflow checks that the tag matches the versions, runs lint, typecheck, tests, and the build, attests build provenance, then publishes a GitHub Release with `main.js`, `manifest.json`, and `styles.css` attached. The release notes are the tag's section of CHANGELOG.md (`node scripts/changelog-section.mjs <version>` prints it); the workflow fails if that section is missing or empty.
+
+Pull requests with user-facing changes add an entry under `## [Unreleased]` in CHANGELOG.md, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) (Added, Changed, Fixed, Security, and so on). Changes that only affect development, such as tests, CI, or dependency updates that do not reach the released files, need no entry.
 
 ## 概要（日本語）
 
