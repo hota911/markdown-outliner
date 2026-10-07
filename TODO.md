@@ -7,6 +7,7 @@
   - [x] Create a GitHub Release #P1
     [0.1.0](https://github.com/hota911/markdown-outliner/releases/tag/0.1.0), published on 2026-10-07 by the Release workflow from a pushed tag.
   - [ ] Submit to the community directory
+    Submit after using it personally for a while; until then releases stay at 0.1.x (decided 2026-10-07).
     Add the plugin on community.obsidian.md after linking the GitHub account, and address the automated review. Entry for community-plugins.json:
     `{"id": "markdown-outliner", "name": "Markdown Outliner", "author": "hota911", "description": "Edit Markdown task lists as an outline, keep adding and restructuring tasks while filtering, and write changes back to embedded files.", "repo": "hota911/markdown-outliner"}`
 - [ ] Apply external changes in a tab whose input has focus
@@ -22,8 +23,8 @@
   jsdom cannot reproduce dragging, so these are marked todo in test/ui.
 - [x] Match the theme colors
   Done in 0.1.1: src/styles.css uses Obsidian's CSS variables and no longer sets `color-scheme: light`. The web version defines the same variables in light and dark sets in src/web/theme.css. A Mac version would reuse that file.
-- [ ] Localization
-  The UI text is Japanese only. Add English first. The Obsidian version follows Obsidian's display language.
+- [x] Localization
+  English and Japanese messages live in src/ui/messages.ts; Obsidian follows its display language (1.8.7+, otherwise English) and the web version follows the browser language.
 - [ ] Obsidian integration
   - [ ] Open the outliner from the side menu
   - [ ] Open each file in its own tab

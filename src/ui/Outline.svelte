@@ -26,10 +26,10 @@
 
 {#if outline.kind === 'cycle'}
   {@const path = outline.path}
-  <div class="notice">このファイルはすでに埋め込まれています。循環する埋め込みは表示できません。</div>
-  <button type="button" class="quiet" title="埋め込み先のファイルを直接開く" onclick={() => ctrl.openFile(path)}>このファイルを開く</button>
+  <div class="notice">{ctrl.t.outline.cycle}</div>
+  <button type="button" class="quiet" title={ctrl.t.outline.openEmbeddedTitle} onclick={() => ctrl.openFile(path)}>{ctrl.t.outline.openEmbedded}</button>
 {:else if outline.kind === 'missing'}
-  <div class="notice">ファイルを開けません。保存先とファイル名を確認してください。</div>
+  <div class="notice">{ctrl.t.outline.missing}</div>
 {:else if outline.kind === 'outline'}
   {#if outline.zoom}
     {@const zoom = outline.zoom}
@@ -40,8 +40,8 @@
         rows="1"
         wrap="soft"
         {@attach syncValue(() => zoom.row.title)}
-        placeholder="タイトルを入力"
-        aria-label="ズーム対象のタイトル"
+        placeholder={ctrl.t.outline.zoomTitlePlaceholder}
+        aria-label={ctrl.t.outline.zoomTitle}
         data-path={path}
         data-line={zoom.row.line}
         data-field="title"
@@ -51,13 +51,13 @@
         {@const status = zoom.status}
         <button type="button" class="task-status" title={status.label} aria-label={status.label} onclick={() => ctrl.setStatus(path, zoom.row.line, status.next)}>{status.icon}</button>
       {/if}
-      <button type="button" class="quiet" title="ズーム対象のノートを編集" onclick={() => ctrl.showNote(path, zoom.row.line)}>ノート</button>
+      <button type="button" class="quiet" title={ctrl.t.outline.zoomNoteTitle} onclick={() => ctrl.showNote(path, zoom.row.line)}>{ctrl.t.item.note}</button>
       {#if zoom.showNote}
         <textarea
           class="note-input zoom-note"
           {@attach syncValue(() => zoom.row.note)}
           rows={Math.max(1, Math.min(8, zoom.row.note.split('\n').length))}
-          aria-label="ズーム対象のノート"
+          aria-label={ctrl.t.outline.zoomNote}
           data-path={path}
           data-line={zoom.row.line}
           data-field="note"
@@ -70,13 +70,13 @@
     <Item {ctrl} {item} />
   {/each}
   {#if !outline.items.length}
-    <div class="empty">表示する項目がありません。「＋」で入力できます。</div>
+    <div class="empty">{ctrl.t.outline.empty}</div>
   {/if}
   <div class="outline-add">
-    <button type="button" class="icon append-item" title="リストの末尾に項目を追加" aria-label="リストの末尾に項目を追加" onclick={append}>＋</button>
-    <select class="add-kind" aria-label="追加する項目の種類" bind:value={kind}>
-      <option value="task">タスク</option>
-      <option value="bullet">箇条書き</option>
+    <button type="button" class="icon append-item" title={ctrl.t.outline.append} aria-label={ctrl.t.outline.append} onclick={append}>＋</button>
+    <select class="add-kind" aria-label={ctrl.t.outline.addKind} bind:value={kind}>
+      <option value="task">{ctrl.t.outline.task}</option>
+      <option value="bullet">{ctrl.t.outline.bullet}</option>
     </select>
   </div>
 {/if}

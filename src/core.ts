@@ -2,6 +2,24 @@
 // so callers never hold partially edited state.
 
 export type Status = 'todo' | 'in-progress' | 'done';
+
+export type CoreErrorCode =
+  | 'noEditableItem' | 'titleNewline' | 'unknownStatus' | 'embedHasNoStatus' | 'noteFormat' | 'noteUnsafe'
+  | 'invalidInsert' | 'invalidTag' | 'invalidMergeDirection' | 'mergeAcrossEmbed' | 'mergeAcrossText'
+  | 'mergeBothHaveContent' | 'unsafeIndent' | 'invalidMoveDirection' | 'invalidReorder' | 'reorderSiblingsOnly'
+  | 'reorderAcrossEmbed' | 'reorderAcrossText' | 'invalidReparent' | 'reparentIntoSelf' | 'reparentSiblingsOnly'
+  | 'invalidInsertPosition' | 'insertPositionInSelection' | 'reparentAcrossEmbed' | 'reparentAcrossText'
+  | 'invalidFileNameInput' | 'invalidFileName' | 'extractEmbed' | 'invalidFilter';
+
+// Edits refuse with a code; the UI turns it into text in the display language (src/ui/messages.ts).
+export class CoreError extends Error {
+  readonly code: CoreErrorCode;
+  constructor(code: CoreErrorCode) {
+    super(code);
+    this.name = 'CoreError';
+    this.code = code;
+  }
+}
 export type RowKind = 'task' | 'bullet' | 'embed';
 
 export interface Row {
@@ -124,14 +142,14 @@ export function parse(text: string): Row[] {
 function target(text: string, line: number | null): Targeted {
   const doc = scan(text);
   const row = doc.rows.find(row => row.line === line);
-  if (!Number.isInteger(line) || !row) throw new Error('指定行に編集可能な項目がありません');
+  if (!Number.isInteger(line) || !row) throw new CoreError('noEditableItem');
   return { ...doc, row };
 }
 
 const result = (doc: { lines: string[]; newline: string }, line: number): EditResult => ({ text: doc.lines.join(doc.newline), line });
 
 function titleValue(value: string) {
-  if (typeof value !== 'string' || /[\r\n]/.test(value)) throw new Error('項目名には改行を使用できません');
+  if (typeof value !== 'string' || /[\r\n]/.test(value)) throw new CoreError('titleNewline');
   return value;
 }
 
@@ -142,19 +160,19 @@ export function updateTitle(text: string, line: number, title: string): EditResu
 }
 
 export function updateStatus(text: string, line: number, status: Status): EditResult {
-  if (!isStatus(status)) throw new Error('未知の状態です');
+  if (!isStatus(status)) throw new CoreError('unknownStatus');
   const doc = target(text, line), match = item(doc.lines[line])!;
-  if (doc.row.kind === 'embed') throw new Error('埋め込みは状態を持ちません');
+  if (doc.row.kind === 'embed') throw new CoreError('embedHasNoStatus');
   doc.lines[line] = match[1] + match[2] + ' [' + marks[status] + '] ' + match[4];
   return result(doc, line);
 }
 
 export function updateNote(text: string, line: number, note: string): EditResult {
-  if (typeof note !== 'string' || note.includes('\r')) throw new Error('ノートは LF 区切りの文字列で指定してください');
+  if (typeof note !== 'string' || note.includes('\r')) throw new CoreError('noteFormat');
   const doc = target(text, line);
   const original = doc.lines.slice(line + 1, doc.row.ownEnd);
   if (original.some(value => /^\s*(?:\d+[.)] |[-*+] |`{3,}|~{3,})/.test(value)) || note.split('\n').some(value => /^\s*(?:[-*+] |`{3,}|~{3,})/.test(value))) {
-    throw new Error('リストやコードブロックを含むノートは安全に変更できません');
+    throw new CoreError('noteUnsafe');
   }
   const prefix = ' '.repeat(doc.row.depth * 2 + 2);
   const content = note ? note.split('\n').map(value => prefix + value) : [];
@@ -164,9 +182,9 @@ export function updateNote(text: string, line: number, note: string): EditResult
 
 export function insert(text: string, line: number | null, options: InsertOptions): EditResult {
   const kind = options.kind === undefined ? 'task' : options.kind;
-  if (!['task', 'bullet'].includes(kind) || (kind === 'task' && !isStatus(options.status)) || !Array.isArray(options.tags)) throw new Error('追加条件が不正です');
+  if (!['task', 'bullet'].includes(kind) || (kind === 'task' && !isStatus(options.status)) || !Array.isArray(options.tags)) throw new CoreError('invalidInsert');
   const tags = options.tags.map(tag => {
-    if (typeof tag !== 'string' || !/^#?[^\s#]+$/.test(tag)) throw new Error('タグが不正です');
+    if (typeof tag !== 'string' || !/^#?[^\s#]+$/.test(tag)) throw new CoreError('invalidTag');
     return '#' + tag.replace(/^#/, '');
   });
   const doc = line === null ? scan(text) : target(text, line);
@@ -178,18 +196,18 @@ export function insert(text: string, line: number | null, options: InsertOptions
 }
 
 export function merge(text: string, line: number, direction: 'previous' | 'next'): EditResult & { column: number } {
-  if (!['previous', 'next'].includes(direction)) throw new Error('結合方向が不正です');
+  if (!['previous', 'next'].includes(direction)) throw new CoreError('invalidMergeDirection');
   const doc = target(text, line);
   const index = doc.rows.indexOf(doc.row);
   const neighbor = doc.rows[index + (direction === 'previous' ? -1 : 1)];
   if (!neighbor) return { text, line, column: direction === 'previous' ? 0 : doc.row.title.length };
   const first = direction === 'previous' ? neighbor : doc.row;
   const second = direction === 'previous' ? doc.row : neighbor;
-  if (first.kind === 'embed' || second.kind === 'embed') throw new Error('埋め込みの境界ではタスクを結合できません');
-  if (doc.lines.slice(first.end, second.line).some(value => value.trim())) throw new Error('本文をまたいでタスクを結合できません');
+  if (first.kind === 'embed' || second.kind === 'embed') throw new CoreError('mergeAcrossEmbed');
+  if (doc.lines.slice(first.end, second.line).some(value => value.trim())) throw new CoreError('mergeAcrossText');
   const firstHasContent = first.note.trim() || doc.rows.some(row => row.parentLine === first.line);
   const secondHasContent = second.note.trim() || doc.rows.some(row => row.parentLine === second.line);
-  if (firstHasContent && secondHasContent) throw new Error('両方に子タスクまたはノートがあるため結合できません');
+  if (firstHasContent && secondHasContent) throw new CoreError('mergeBothHaveContent');
   const match = item(doc.lines[first.line])!;
   doc.lines[first.line] = match[1] + match[2] + ' ' + (match[3] === undefined ? '' : '[' + match[3] + '] ') + first.title + second.title;
   const difference = (first.depth - second.depth) * 2;
@@ -205,7 +223,7 @@ function shift(lines: string[], amount: number) {
     if (!source.trim()) return source;
     const match = /^([ \t]*)(.*)$/.exec(source)!;
     const indentation = width(match[1]) + amount;
-    if (indentation < 0) throw new Error('インデントを安全に変更できません');
+    if (indentation < 0) throw new CoreError('unsafeIndent');
     return ' '.repeat(indentation) + match[2];
   });
 }
@@ -235,7 +253,7 @@ export function outdent(text: string, line: number): EditResult {
 }
 
 export function move(text: string, line: number, direction: 'up' | 'down'): EditResult {
-  if (!['up', 'down'].includes(direction)) throw new Error('移動方向が不正です');
+  if (!['up', 'down'].includes(direction)) throw new CoreError('invalidMoveDirection');
   const doc = target(text, line), group = siblings(doc), index = group.indexOf(doc.row);
   const other = group[index + (direction === 'up' ? -1 : 1)];
   if (!other) return { text, line };
@@ -249,11 +267,11 @@ export function move(text: string, line: number, direction: 'up' | 'down'): Edit
 }
 
 export function reorder(text: string, lines: number[], targetLine: number, position: 'before' | 'after' = 'before'): EditResult & { lines: number[] } {
-  if (!['before', 'after'].includes(position) || !Array.isArray(lines) || !lines.length) throw new Error('並び替え条件が不正です');
+  if (!['before', 'after'].includes(position) || !Array.isArray(lines) || !lines.length) throw new CoreError('invalidReorder');
   const doc = target(text, targetLine);
   const selected = new Set(lines);
   for (const line of selected) {
-    if (!Number.isInteger(line) || !doc.rows.some(row => row.line === line)) throw new Error('指定行に編集可能な項目がありません');
+    if (!Number.isInteger(line) || !doc.rows.some(row => row.line === line)) throw new CoreError('noEditableItem');
   }
   const moving = doc.rows.filter(row => {
     if (!selected.has(row.line)) return false;
@@ -267,13 +285,13 @@ export function reorder(text: string, lines: number[], targetLine: number, posit
   });
   const unchanged = { text, line: moving[0].line, lines: moving.map(row => row.line) };
   if (moving.some(row => targetLine >= row.line && targetLine < row.end)) return unchanged;
-  if (moving.some(row => row.parentLine !== doc.row.parentLine || row.depth !== doc.row.depth)) throw new Error('同じ親の兄弟だけを並び替えできます');
+  if (moving.some(row => row.parentLine !== doc.row.parentLine || row.depth !== doc.row.depth)) throw new CoreError('reorderSiblingsOnly');
   const group = siblings(doc);
   const bounds = [...moving, doc.row].map(row => group.indexOf(row));
   const affected = group.slice(Math.min(...bounds), Math.max(...bounds) + 1);
-  if (doc.rows.some(row => row.kind === 'embed' && row.line >= affected[0].line && row.line < affected[affected.length - 1].end)) throw new Error('埋め込みの境界では並び替えできません');
+  if (doc.rows.some(row => row.kind === 'embed' && row.line >= affected[0].line && row.line < affected[affected.length - 1].end)) throw new CoreError('reorderAcrossEmbed');
   for (let index = 1; index < affected.length; index++) {
-    if (doc.lines.slice(affected[index - 1].end, affected[index].line).some(value => value.trim())) throw new Error('本文をまたいで並び替えできません');
+    if (doc.lines.slice(affected[index - 1].end, affected[index].line).some(value => value.trim())) throw new CoreError('reorderAcrossText');
   }
   const insertion = position === 'before' ? doc.row.line : doc.row.end;
   const at = insertion - moving.reduce((count, row) => count + (row.end <= insertion ? row.end - row.line : 0), 0);
@@ -302,29 +320,29 @@ function ancestorsInclude(doc: Scanned, start: ScannedRow | undefined, test: (ro
 }
 
 export function reparent(text: string, sourceLines: number[], targetLine: number | null, beforeLine: number | null = null): EditResult & { lines: number[] } {
-  if (!Array.isArray(sourceLines) || !sourceLines.length) throw new Error('子への移動条件が不正です');
+  if (!Array.isArray(sourceLines) || !sourceLines.length) throw new CoreError('invalidReparent');
   const doc: Scanned & { row?: ScannedRow } = targetLine === null ? scan(text) : target(text, targetLine);
   const selected = new Set(sourceLines);
   for (const line of selected) {
-    if (!Number.isInteger(line) || !doc.rows.some(row => row.line === line)) throw new Error('指定行に編集可能な項目がありません');
+    if (!Number.isInteger(line) || !doc.rows.some(row => row.line === line)) throw new CoreError('noEditableItem');
   }
   const moving = doc.rows.filter(row => selected.has(row.line)), first = moving[0];
-  if (targetLine !== null && moving.some(row => targetLine >= row.line && targetLine < row.end)) throw new Error('自分自身や子孫の子には移動できません');
-  if (moving.some(row => row.parentLine !== first.parentLine || row.depth !== first.depth)) throw new Error('同じ親の兄弟だけを子へ移動できます');
+  if (targetLine !== null && moving.some(row => targetLine >= row.line && targetLine < row.end)) throw new CoreError('reparentIntoSelf');
+  if (moving.some(row => row.parentLine !== first.parentLine || row.depth !== first.depth)) throw new CoreError('reparentSiblingsOnly');
   if (beforeLine !== null) {
     const before = doc.rows.find(row => row.line === beforeLine);
-    if (!Number.isInteger(beforeLine) || !before || before.parentLine !== targetLine || (targetLine === null && before.depth !== 0)) throw new Error('挿入位置には対象の直接の子を指定してください');
-    if (moving.some(row => beforeLine >= row.line && beforeLine < row.end)) throw new Error('選択した項目やその子孫を挿入位置には指定できません');
+    if (!Number.isInteger(beforeLine) || !before || before.parentLine !== targetLine || (targetLine === null && before.depth !== 0)) throw new CoreError('invalidInsertPosition');
+    if (moving.some(row => beforeLine >= row.line && beforeLine < row.end)) throw new CoreError('insertPositionInSelection');
   }
   let insertion = beforeLine === null ? doc.row ? doc.row.end : doc.lines.length : beforeLine;
   if (targetLine === null && beforeLine === null && doc.lines[insertion - 1] === '') insertion--;
   const start = Math.min(targetLine === null ? insertion : targetLine, first.line);
   const end = Math.max(doc.row ? doc.row.end : Math.min(insertion + 1, doc.lines.length), moving[moving.length - 1].end);
-  if (doc.rows.some(row => row.kind === 'embed' && row.line >= start && row.line < end)) throw new Error('埋め込みの境界では子へ移動できません');
+  if (doc.rows.some(row => row.kind === 'embed' && row.line >= start && row.line < end)) throw new CoreError('reparentAcrossEmbed');
   const isEmbed = (row: ScannedRow) => row.kind === 'embed';
-  if (ancestorsInclude(doc, doc.row, isEmbed) || ancestorsInclude(doc, first, isEmbed)) throw new Error('埋め込みの境界では子へ移動できません');
+  if (ancestorsInclude(doc, doc.row, isEmbed) || ancestorsInclude(doc, first, isEmbed)) throw new CoreError('reparentAcrossEmbed');
   for (let line = start; line < end; line++) {
-    if (doc.lines[line].trim() && !doc.rows.some(row => line >= row.line && line < row.ownEnd)) throw new Error('本文をまたいで子へ移動できません');
+    if (doc.lines[line].trim() && !doc.rows.some(row => line >= row.line && line < row.ownEnd)) throw new CoreError('reparentAcrossText');
   }
   const at = insertion - moving.reduce((count, row) => count + (row.end <= insertion ? row.end - row.line : 0), 0);
   const depth = doc.row ? doc.row.depth + 1 : 0;
@@ -337,12 +355,13 @@ export function reparent(text: string, sourceLines: number[], targetLine: number
 // Characters that break file names on common platforms or Obsidian wiki links.
 const unusableInFileName = /[/\\:*?"<>|#^[\]]/g;
 
-export function fileName(title: string, existingNames: string[]): string {
-  if (typeof title !== 'string' || !Array.isArray(existingNames)) throw new Error('ファイル名の条件が不正です');
+// `untitled` is the base name used when nothing usable is left of the title.
+export function fileName(title: string, existingNames: string[], untitled: string): string {
+  if (typeof title !== 'string' || !Array.isArray(existingNames)) throw new CoreError('invalidFileNameInput');
   const base = title.split(/\s+/).filter(word => !word.startsWith('#')).join(' ')
     .replace(unusableInFileName, '').replace(/\s+/g, ' ').trim()
     // A leading dot would make a hidden file that the file list skips.
-    .replace(/^[.\s]+/, '') || 'タスク';
+    .replace(/^[.\s]+/, '') || untitled;
   const taken = new Set(existingNames.map(name => name.toLowerCase()));
   let name = base + '.md';
   for (let number = 2; taken.has(name.toLowerCase()); number++) name = base + ' ' + number + '.md';
@@ -353,15 +372,15 @@ function dedent(lines: string[], amount: number) {
   return lines.map(source => {
     let index = 0, removed = 0;
     while (removed < amount && /[ \t]/.test(source[index] || '')) removed += source[index++] === '\t' ? 2 : 1;
-    if (removed > amount || (removed < amount && source.trim())) throw new Error('インデントを安全に変更できません');
+    if (removed > amount || (removed < amount && source.trim())) throw new CoreError('unsafeIndent');
     return source.slice(index);
   });
 }
 
 export function extractToFile(text: string, line: number, name: string): EditResult & { extracted: string } {
-  if (typeof name !== 'string' || !/^[^/\\[\]#|^]+\.md$/.test(name)) throw new Error('ファイル名が不正です');
+  if (typeof name !== 'string' || !/^[^/\\[\]#|^]+\.md$/.test(name)) throw new CoreError('invalidFileName');
   const doc = target(text, line);
-  if (doc.row.kind === 'embed') throw new Error('埋め込みの行はファイルにできません');
+  if (doc.row.kind === 'embed') throw new CoreError('extractEmbed');
   const extracted = dedent(doc.lines.slice(line, doc.row.end), doc.row.depth * 2).join(doc.newline) + doc.newline;
   doc.lines.splice(line, doc.row.end - line, item(doc.lines[line])![1] + '- ![[' + name + ']]');
   return { ...result(doc, line), extracted };
@@ -369,7 +388,7 @@ export function extractToFile(text: string, line: number, name: string): EditRes
 
 export function visibleLines(text: string, filter: { status: Status | 'all'; tag?: string }, keepLines: number[] = []): Set<number> {
   const rows = parse(text), visible = new Set<number>();
-  if (!['all', ...Object.keys(marks)].includes(filter.status)) throw new Error('フィルター状態が不正です');
+  if (!['all', ...Object.keys(marks)].includes(filter.status)) throw new CoreError('invalidFilter');
   const tag = filter.tag ? '#' + filter.tag.replace(/^#/, '') : '';
   for (const row of rows) {
     const words = (row.title + '\n' + row.note).split(/\s+/);

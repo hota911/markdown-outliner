@@ -1,0 +1,443 @@
+import { CoreError, type CoreErrorCode, type Status } from '../core.ts';
+import type { StatusFilter } from './types.ts';
+
+// Every user-visible string of the UI, the Obsidian plugin and the web page, in English and
+// Japanese. Strings that belong to the Markdown file format (task markers, tags, embeds) are
+// not here and never change with the language.
+
+export type Language = 'en' | 'ja';
+
+// English is the default and the fallback for every language other than Japanese.
+export function languageOf(tag: string): Language {
+  return /^ja(?:-|$)/i.test(tag) ? 'ja' : 'en';
+}
+
+// Error codes returned by server.mjs in `{ code }`.
+export type ServerErrorCode =
+  | 'notMarkdown' | 'selectedFileOnly' | 'fileMissing' | 'outsideWorkspace' | 'fileTooLarge' | 'invalidContent'
+  | 'saveBusy' | 'externalChange' | 'externalChangeBeforeSave' | 'saveRace' | 'createInSingleFile' | 'folderMissing'
+  | 'createOutsideFolder' | 'fileExists' | 'badToken' | 'badOrigin' | 'contentTooLarge' | 'notFound' | 'hostRejected'
+  | 'internal';
+
+const enStatus: Record<Status, string> = { todo: 'Not started', 'in-progress': 'In progress', done: 'Done' };
+const jaStatus: Record<Status, string> = { todo: '未着手', 'in-progress': '進行中', done: '完了' };
+// Status names inside an English sentence.
+const enStatusLower = (status: Status) => enStatus[status].toLowerCase();
+const fileCount = (count: number) => count === 1 ? '1 file' : `${count} files`;
+
+const en = {
+  status: enStatus,
+  filter: { all: 'All', 'not-done': 'Not done', ...enStatus } satisfies Record<StatusFilter, string>,
+  // Status button labels; `next` is the status a click sets.
+  statusButton: (current: Status, next: Status) => `${enStatus[current]} (click for ${enStatusLower(next)})`,
+  zoomStatusButton: (next: Status) => `Mark the zoomed item as ${enStatusLower(next)}`,
+  selectionStatus: (status: Status) => `Mark the selected tasks as ${enStatusLower(status)}`,
+
+  saveState: {
+    busy: 'Working…',
+    conflicts: (count: number) => `Save conflict in ${fileCount(count)} (input kept)`,
+    unsaved: (count: number) => `${fileCount(count)} unsaved`,
+    saved: 'Saved',
+  },
+
+  toolbar: {
+    fileSelect: 'File to open',
+    filter: 'Status to show',
+    searchPlaceholder: 'Filter by words or #tags',
+    search: 'Filter by words or tags',
+    bookmarkSearch: 'Bookmark this search',
+    removeSearchBookmark: 'Remove this search bookmark',
+    openSourceTitle: 'Open the current file in the regular editor',
+    openSource: 'Open as Markdown',
+    resetTitle: 'Reset the search, tag and status filters',
+    reset: 'Reset',
+    saveTitle: 'Save changed files',
+    save: 'Save',
+    reloadTitle: 'Reload files; files with changes keep your input',
+    reload: 'Reload',
+    undoTitle: 'Undo',
+    undo: 'Undo',
+    redoTitle: 'Redo',
+    redo: 'Redo',
+    autoSave: 'Auto-save',
+    selected: (count: number) => `${count} selected`,
+    moveSelectionUp: 'Move the selected items up',
+    moveSelectionDown: 'Move the selected items down',
+    clearSelectionTitle: 'Deselect the selected items',
+    clearSelection: 'Deselect',
+    zoomOutTitle: 'Leave the zoomed item',
+    zoomOut: '← Back to all',
+  },
+
+  conflict: {
+    message: (path: string) => `${path} changed outside the outliner. Your input is kept. Copy it if needed, then open the external version.`,
+    copyLabel: (path: string) => `Unsaved input for ${path}`,
+    copyTitle: 'Select and copy your input',
+    copy: 'Copy input',
+    openExternalTitle: 'Keep your input in the undo history and switch to the external version',
+    openExternal: 'Open external version',
+    selectedForCopy: 'Your input is selected. Copy it.',
+  },
+
+  opening: 'Opening file…',
+  help: '↑↓: move the cursor · Enter: add · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several',
+  closeToast: 'Close notification',
+
+  bookmarks: {
+    heading: 'Bookmarks',
+    expand: 'Expand sidebar',
+    collapse: 'Collapse sidebar',
+    addFileTitle: 'Bookmark the current file',
+    addFile: 'Add file',
+    settingsUnreadable: 'Cannot read the settings.',
+    empty: 'Bookmark files and searches here.',
+    remove: (label: string) => `Remove ${label}`,
+    unreadableLabel: 'Unreadable bookmark',
+    searchLabel: (status: string, tags: string, text: string, file: string) =>
+      status + (tags ? ' ' + tags : '') + (text ? ` "${text}"` : '') + ' · ' + file,
+    listUnreadable: 'Cannot read the bookmark settings. Check the settings file.',
+    exists: 'This bookmark already exists.',
+    invalid: 'Cannot read the settings of this bookmark.',
+    openFailed: (detail: string) => `Could not open the bookmark: ${detail}`,
+    saveFailed: (detail: string) => `Could not save the view settings: ${detail}`,
+  },
+
+  outline: {
+    cycle: 'This file is already embedded. Circular embeds cannot be shown.',
+    missing: 'Cannot open the file. Check its location and name.',
+    openEmbeddedTitle: 'Open the embedded file directly',
+    openEmbedded: 'Open this file',
+    zoomTitlePlaceholder: 'Enter a title',
+    zoomTitle: 'Title of the zoomed item',
+    zoomNoteTitle: 'Edit the note of the zoomed item',
+    zoomNote: 'Note of the zoomed item',
+    empty: 'No items to show. Use "＋" to add one.',
+    append: 'Add an item at the end of the list',
+    addKind: 'Kind of item to add',
+    task: 'Task',
+    bullet: 'Bullet',
+  },
+
+  item: {
+    fold: 'Collapse or expand children',
+    embedSource: (path: string) => `File: ${path}`,
+    dragHandle: 'Select, or drag to move',
+    taskPlaceholder: 'Enter a task',
+    bulletPlaceholder: 'Enter a bullet',
+    title: 'Item text',
+    addChildTask: 'Add a child task',
+    addChildBullet: 'Add a child bullet',
+    editNoteTitle: 'Edit the note',
+    note: 'Note',
+    notePlaceholder: 'Enter a note',
+    noteLabel: 'Item note',
+    zoomIn: 'Zoom into this item',
+    moveUp: 'Move the item up',
+    moveDown: 'Move the item down',
+    extractTitle: 'Move the item with its children and notes to a new file and embed it',
+    extract: 'Move to file',
+    childrenEnd: (title: string) => `End of the children of ${title}`,
+  },
+
+  edit: {
+    embedRelativePath: 'Use a relative path inside the folder for the embedded file.',
+    embedOutsideFolder: 'The embedded file is outside the folder.',
+    extractMultiple: 'Cannot move several selected items to a file. Clear the selection first.',
+    extractSingleFile: 'Cannot create new files when a single file was opened.',
+    extractBusy: 'Cannot move to a file while saving or during a save conflict.',
+    extractFailed: (detail: string) => `Could not move to a file: ${detail}`,
+    extractChanged: (name: string) => `Created ${name}, but the original item was not replaced because the input changed meanwhile.`,
+    extracted: (name: string) => `Created ${name}. The undo history was cleared.`,
+    untitledFile: 'Task',
+    saveFailed: (detail: string) => `Could not save: ${detail}`,
+    reloadKeptInput: 'Unsaved input is kept. Save, then reload.',
+  },
+
+  core: {
+    noEditableItem: 'There is no editable item on that line.',
+    titleNewline: 'Item text cannot contain line breaks.',
+    unknownStatus: 'Unknown status.',
+    embedHasNoStatus: 'Embeds have no status.',
+    noteFormat: 'Notes must be text separated by LF line breaks.',
+    noteUnsafe: 'Notes that contain lists or code blocks cannot be changed safely.',
+    invalidInsert: 'Invalid options for adding an item.',
+    invalidTag: 'Invalid tag.',
+    invalidMergeDirection: 'Invalid merge direction.',
+    mergeAcrossEmbed: 'Cannot merge items across an embed.',
+    mergeAcrossText: 'Cannot merge items across other text.',
+    mergeBothHaveContent: 'Cannot merge because both items have children or notes.',
+    unsafeIndent: 'Cannot change the indentation safely.',
+    invalidMoveDirection: 'Invalid move direction.',
+    invalidReorder: 'Invalid options for reordering.',
+    reorderSiblingsOnly: 'Only siblings with the same parent can be reordered.',
+    reorderAcrossEmbed: 'Cannot reorder across an embed.',
+    reorderAcrossText: 'Cannot reorder across other text.',
+    invalidReparent: 'Invalid options for moving under an item.',
+    reparentIntoSelf: 'Cannot move an item under itself or its descendants.',
+    reparentSiblingsOnly: 'Only siblings with the same parent can be moved under an item.',
+    invalidInsertPosition: 'The insertion point must be a direct child of the target.',
+    insertPositionInSelection: 'The insertion point cannot be a selected item or one of its descendants.',
+    reparentAcrossEmbed: 'Cannot move under an item across an embed.',
+    reparentAcrossText: 'Cannot move under an item across other text.',
+    invalidFileNameInput: 'Invalid options for the file name.',
+    invalidFileName: 'Invalid file name.',
+    extractEmbed: 'An embed line cannot be moved to a file.',
+    invalidFilter: 'Invalid status filter.',
+  } satisfies Record<CoreErrorCode, string>,
+
+  server: {
+    notMarkdown: 'Specify a Markdown file.',
+    selectedFileOnly: 'Only the selected file can be opened.',
+    fileMissing: 'The file does not exist.',
+    outsideWorkspace: 'Only the selected file or files in the selected folder can be opened.',
+    fileTooLarge: 'Only Markdown files of 2 MB or less can be opened.',
+    invalidContent: 'Check the content to save.',
+    saveBusy: 'Saves overlapped. Your input is kept.',
+    externalChange: 'The file changed outside the outliner. Copy your input, then reload.',
+    externalChangeBeforeSave: 'An external change was detected before saving. Your input is kept.',
+    saveRace: 'The save overlapped with an external change. Check the file.',
+    createInSingleFile: 'Cannot create new files when a single file was opened.',
+    folderMissing: 'The destination folder does not exist.',
+    createOutsideFolder: 'Files can only be created inside the selected folder.',
+    fileExists: 'A file with the same name already exists.',
+    badToken: 'Saving is not allowed.',
+    badOrigin: 'Cannot verify where the save came from.',
+    contentTooLarge: 'The content to save is too large.',
+    notFound: 'The requested page does not exist.',
+    hostRejected: 'This connection is not allowed.',
+    internal: 'The file operation failed. Keep your input and try again.',
+  } satisfies Record<ServerErrorCode, string>,
+
+  web: {
+    title: 'Markdown Outliner',
+    requestFailed: 'The operation failed.',
+    preferencesUnreadable: 'Cannot read the bookmarks. Check the browser storage settings.',
+  },
+
+  obsidian: {
+    viewTitle: 'Markdown Outliner',
+    openOutliner: 'Open outliner',
+    vaultRelativePath: 'Specify a Markdown file in the vault by its path relative to the vault.',
+    fileMissing: 'The Markdown file does not exist.',
+    externalChange: 'The file changed outside the outliner. Copy your input, then reload.',
+    fileExists: 'A file with the same name already exists.',
+    openSourceUnsaved: 'The regular editor shows the saved content. Your input in the outliner is not saved yet.',
+    closedWithUnsaved: 'Unsaved input is kept. Reopen the outliner and save. Save before quitting Obsidian.',
+  },
+};
+
+export type Messages = typeof en;
+
+// Annotated with Messages, so a missing or extra key anywhere is a type error.
+const ja: Messages = {
+  status: jaStatus,
+  filter: { all: 'すべて', 'not-done': '完了以外', ...jaStatus },
+  statusButton: (current, next) => jaStatus[current] + '（クリックで' + jaStatus[next] + '）',
+  zoomStatusButton: next => 'ズーム対象を' + jaStatus[next] + 'にする',
+  selectionStatus: status => '選択したタスクを' + jaStatus[status] + 'にする',
+
+  saveState: {
+    busy: '処理中…',
+    conflicts: count => '保存競合 ' + count + ' ファイル（入力保持）',
+    unsaved: count => '未保存 ' + count + ' ファイル',
+    saved: '保存済み',
+  },
+
+  toolbar: {
+    fileSelect: '開くファイル',
+    filter: '表示する状態',
+    searchPlaceholder: '語句・#タグで絞り込み',
+    search: '語句・タグで絞り込み',
+    bookmarkSearch: '検索をブックマーク',
+    removeSearchBookmark: '検索のブックマークを解除',
+    openSourceTitle: '表示中の元ファイルを通常エディタで開く',
+    openSource: 'Markdown で開く',
+    resetTitle: '検索・タグ・状態の絞り込みをリセット',
+    reset: 'リセット',
+    saveTitle: '変更したファイルを保存',
+    save: '保存',
+    reloadTitle: '変更があるファイルは保存するか入力を保持します',
+    reload: '再読込',
+    undoTitle: '元に戻す',
+    undo: 'Undo',
+    redoTitle: 'やり直す',
+    redo: 'Redo',
+    autoSave: '自動保存',
+    selected: count => count + ' 項目を選択',
+    moveSelectionUp: '選択した項目をまとめて上へ移動',
+    moveSelectionDown: '選択した項目をまとめて下へ移動',
+    clearSelectionTitle: '選択した項目を解除',
+    clearSelection: '選択解除',
+    zoomOutTitle: 'ズームを解除',
+    zoomOut: '← 全体に戻る',
+  },
+
+  conflict: {
+    message: path => path + ' に外部の変更があります。入力内容を残しています。必要ならコピーしてから外部の内容を開いてください。',
+    copyLabel: path => path + ' の保存前の入力内容',
+    copyTitle: '入力内容を選択してコピー',
+    copy: '入力内容をコピー',
+    openExternalTitle: '入力内容を履歴に残して外部の内容へ切り替える',
+    openExternal: '外部の内容を開く',
+    selectedForCopy: '入力内容を選択しました。コピーしてください。',
+  },
+
+  opening: 'ファイルを開いています…',
+  help: '↑↓: カーソル移動 · Enter: 追加 · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択',
+  closeToast: '通知を閉じる',
+
+  bookmarks: {
+    heading: 'ブックマーク',
+    expand: 'サイドバーを展開',
+    collapse: 'サイドバーを縮小',
+    addFileTitle: '表示中のファイルをブックマーク',
+    addFile: 'ファイルを追加',
+    settingsUnreadable: '設定を読み込めません。',
+    empty: 'ファイルや検索条件を登録できます。',
+    remove: label => label + ' を削除',
+    unreadableLabel: '読み込めないブックマーク',
+    searchLabel: (status, tags, text, file) => status + (tags ? ' ' + tags : '') + (text ? '「' + text + '」' : '') + ' · ' + file,
+    listUnreadable: 'ブックマークの設定を読み込めません。設定ファイルを確認してください。',
+    exists: 'このブックマークは登録済みです。',
+    invalid: 'このブックマークの設定は読み込めません。',
+    openFailed: detail => 'ブックマークを開けませんでした: ' + detail,
+    saveFailed: detail => '画面設定を保存できませんでした: ' + detail,
+  },
+
+  outline: {
+    cycle: 'このファイルはすでに埋め込まれています。循環する埋め込みは表示できません。',
+    missing: 'ファイルを開けません。保存先とファイル名を確認してください。',
+    openEmbeddedTitle: '埋め込み先のファイルを直接開く',
+    openEmbedded: 'このファイルを開く',
+    zoomTitlePlaceholder: 'タイトルを入力',
+    zoomTitle: 'ズーム対象のタイトル',
+    zoomNoteTitle: 'ズーム対象のノートを編集',
+    zoomNote: 'ズーム対象のノート',
+    empty: '表示する項目がありません。「＋」で入力できます。',
+    append: 'リストの末尾に項目を追加',
+    addKind: '追加する項目の種類',
+    task: 'タスク',
+    bullet: '箇条書き',
+  },
+
+  item: {
+    fold: '子項目を折りたたむ／開く',
+    embedSource: path => 'ファイル: ' + path,
+    dragHandle: '項目を選択／ドラッグして移動',
+    taskPlaceholder: 'タスクを入力',
+    bulletPlaceholder: '箇条書きを入力',
+    title: '項目の内容',
+    addChildTask: '子タスクを追加',
+    addChildBullet: '子の箇条書きを追加',
+    editNoteTitle: 'ノートを編集',
+    note: 'ノート',
+    notePlaceholder: 'ノートを入力',
+    noteLabel: '項目のノート',
+    zoomIn: 'この項目にズーム',
+    moveUp: '項目を上へ移動',
+    moveDown: '項目を下へ移動',
+    extractTitle: '項目を子とノートごと新しいファイルへ移して埋め込みにする',
+    extract: 'ファイルにする',
+    childrenEnd: title => title + ' の子項目の末尾',
+  },
+
+  edit: {
+    embedRelativePath: '埋め込み先にはフォルダー内の相対パスを指定してください。',
+    embedOutsideFolder: '埋め込み先がフォルダーの外にあります。',
+    extractMultiple: '複数選択中はファイルにできません。選択を解除してください。',
+    extractSingleFile: 'ファイルを指定して開いたときは新しいファイルを作れません。',
+    extractBusy: '保存処理中または保存競合中はファイルにできません。',
+    extractFailed: detail => 'ファイルにできませんでした: ' + detail,
+    extractChanged: name => name + ' を作成しましたが、作成中に入力が変わったため元の項目は置き換えていません。',
+    extracted: name => name + ' を作成しました。Undo の履歴は消去しました。',
+    untitledFile: 'タスク',
+    saveFailed: detail => '保存できませんでした: ' + detail,
+    reloadKeptInput: '未保存の入力を保持しています。保存後に再読込してください。',
+  },
+
+  core: {
+    noEditableItem: '指定行に編集可能な項目がありません',
+    titleNewline: '項目名には改行を使用できません',
+    unknownStatus: '未知の状態です',
+    embedHasNoStatus: '埋め込みは状態を持ちません',
+    noteFormat: 'ノートは LF 区切りの文字列で指定してください',
+    noteUnsafe: 'リストやコードブロックを含むノートは安全に変更できません',
+    invalidInsert: '追加条件が不正です',
+    invalidTag: 'タグが不正です',
+    invalidMergeDirection: '結合方向が不正です',
+    mergeAcrossEmbed: '埋め込みの境界ではタスクを結合できません',
+    mergeAcrossText: '本文をまたいでタスクを結合できません',
+    mergeBothHaveContent: '両方に子タスクまたはノートがあるため結合できません',
+    unsafeIndent: 'インデントを安全に変更できません',
+    invalidMoveDirection: '移動方向が不正です',
+    invalidReorder: '並び替え条件が不正です',
+    reorderSiblingsOnly: '同じ親の兄弟だけを並び替えできます',
+    reorderAcrossEmbed: '埋め込みの境界では並び替えできません',
+    reorderAcrossText: '本文をまたいで並び替えできません',
+    invalidReparent: '子への移動条件が不正です',
+    reparentIntoSelf: '自分自身や子孫の子には移動できません',
+    reparentSiblingsOnly: '同じ親の兄弟だけを子へ移動できます',
+    invalidInsertPosition: '挿入位置には対象の直接の子を指定してください',
+    insertPositionInSelection: '選択した項目やその子孫を挿入位置には指定できません',
+    reparentAcrossEmbed: '埋め込みの境界では子へ移動できません',
+    reparentAcrossText: '本文をまたいで子へ移動できません',
+    invalidFileNameInput: 'ファイル名の条件が不正です',
+    invalidFileName: 'ファイル名が不正です',
+    extractEmbed: '埋め込みの行はファイルにできません',
+    invalidFilter: 'フィルター状態が不正です',
+  },
+
+  server: {
+    notMarkdown: 'Markdown ファイルを指定してください。',
+    selectedFileOnly: '選択したファイルだけを開けます。',
+    fileMissing: '参照先のファイルがありません。',
+    outsideWorkspace: '選択したファイルまたはフォルダー内のファイルだけを開けます。',
+    fileTooLarge: '2MB 以下の Markdown ファイルだけを開けます。',
+    invalidContent: '保存内容を確認してください。',
+    saveBusy: '保存処理が重なりました。入力は保持されています。',
+    externalChange: '外部で変更されています。入力をコピーしてから読み直してください。',
+    externalChangeBeforeSave: '保存前に外部変更を検知しました。入力は保持されています。',
+    saveRace: '保存と外部変更が重なりました。ファイルを確認してください。',
+    createInSingleFile: 'ファイルを指定して開いたときは新しいファイルを作れません。',
+    folderMissing: '保存先のフォルダーがありません。',
+    createOutsideFolder: '選択したフォルダー内にだけファイルを作れます。',
+    fileExists: '同じ名前のファイルがすでにあります。',
+    badToken: '保存を許可できません。',
+    badOrigin: '保存元を確認できません。',
+    contentTooLarge: '保存内容が大きすぎます。',
+    notFound: '指定した画面がありません。',
+    hostRejected: 'この接続は許可されていません。',
+    internal: 'ファイル操作に失敗しました。入力を保持してやり直してください。',
+  },
+
+  web: {
+    title: 'Markdown Outliner',
+    requestFailed: '操作に失敗しました。',
+    preferencesUnreadable: 'ブックマークを読み込めません。ブラウザの保存設定を確認してください。',
+  },
+
+  obsidian: {
+    viewTitle: 'Markdown Outliner',
+    openOutliner: 'アウトライナーを開く',
+    vaultRelativePath: 'Vault 内の Markdown を Vault からの相対パスで指定してください。',
+    fileMissing: '参照先の Markdown がありません。',
+    externalChange: '外部で変更されています。入力をコピーしてから読み直してください。',
+    fileExists: '同じ名前のファイルがすでにあります。',
+    openSourceUnsaved: '通常エディタには保存済みの内容を開きます。アウトライナーの入力は未保存です。',
+    closedWithUnsaved: '未保存の入力を保持しています。アウトライナーを開き直して保存してください。Obsidian の終了前に保存が必要です。',
+  },
+};
+
+export const messages: Record<Language, Messages> = { en, ja };
+
+// Text for an error shown in the UI: edit refusals from core.ts are translated by code;
+// other errors come from the adapters, which already write them in the display language.
+export function errorText(t: Messages, error: unknown): string {
+  if (error instanceof CoreError) return t.core[error.code];
+  return error instanceof Error ? error.message : String(error);
+}
+
+// Text for a `{ code }` error response from server.mjs.
+export function serverErrorText(t: Messages, code: unknown): string {
+  return typeof code === 'string' && Object.hasOwn(t.server, code) ? t.server[code as ServerErrorCode] : t.web.requestFailed;
+}

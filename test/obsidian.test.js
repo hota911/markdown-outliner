@@ -5,7 +5,7 @@ import MarkdownOutlinerPlugin from '../src/obsidian/main.ts';
 
 // These tests exercise the plugin boundary, not the native Obsidian application.
 // fixture() replaces these arrays per test; the mocks below push into them.
-const state = vi.hoisted(() => ({ notices: [], mounts: [] }));
+const state = vi.hoisted(() => ({ notices: [], mounts: [], language: 'ja' }));
 
 vi.mock('obsidian', async () => {
   const { posix } = await import('node:path');
@@ -24,7 +24,9 @@ vi.mock('obsidian', async () => {
   class Scope {
     register(modifiers, key, callback) { this.handler = callback; }
   }
-  return { Plugin, ItemView, Notice, Scope, normalizePath: posix.normalize };
+  // The existing tests run with Obsidian set to Japanese; fixture() can choose another language.
+  return { Plugin, ItemView, Notice, Scope, normalizePath: posix.normalize,
+    getLanguage: () => state.language, requireApiVersion: () => true };
 });
 
 vi.mock('../src/ui/mount.ts', () => ({
@@ -36,7 +38,8 @@ vi.mock('../src/ui/mount.ts', () => ({
   },
 }));
 
-async function fixture() {
+async function fixture({ language = 'ja' } = {}) {
+  state.language = language;
   class TFile {
     constructor(path) { this.path = path; this.extension = path.split('.').at(-1); }
   }
@@ -231,4 +234,23 @@ test('登録コマンドとリボンが既存の View leaf を再利用する', 
   assert.equal(f.states[0].active, true);
   assert.equal(f.revealed[0], f.revealed[1]);
   assert.deepEqual(f.notices, []);
+});
+
+test('Obsidian の表示言語でコマンド名・表示名・エラーを切り替える', async () => {
+  const ja = await fixture();
+  assert.equal(ja.plugin.commands[0].name, 'アウトライナーを開く');
+  assert.equal(ja.plugin.ribbons[0].name, 'アウトライナーを開く');
+  assert.equal(ja.view.getDisplayText(), 'Markdown Outliner');
+  assert.equal(ja.mounts.at(-1).options.language, 'ja');
+
+  const en = await fixture({ language: 'en' });
+  assert.equal(en.plugin.commands[0].name, 'Open outliner');
+  assert.equal(en.plugin.ribbons[0].name, 'Open outliner');
+  assert.equal(en.view.getDisplayText(), 'Markdown Outliner');
+  assert.equal(en.mounts.at(-1).options.language, 'en');
+  await assert.rejects(en.adapter.read('missing.md'), { message: 'The Markdown file does not exist.' });
+
+  // Languages without a translation fall back to English.
+  const fr = await fixture({ language: 'fr' });
+  assert.equal(fr.plugin.commands[0].name, 'Open outliner');
 });

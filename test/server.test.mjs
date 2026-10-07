@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, writeFile, readFile, symlink, rename } from 'node:fs/pr
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { configMarker, createOutlinerServer, injectConfig } from '../server.mjs';
+import { messages } from '../src/ui/messages.ts';
 
 // Stands in for the `npm run build:web` output so these tests do not depend on a build.
 const webRoot = await mkdtemp(path.join(tmpdir(), 'markdown-outliner-web-'));
@@ -121,16 +122,30 @@ test('rejects requests for a different Host header', async () => {
 });
 
 test('returns explicit errors for missing Markdown and invalid requests', async () => {
-  assert.equal((await fetch(`${origin}/api/file?path=missing.md`)).status, 404);
-  assert.equal((await fetch(`${origin}/api/file?path=server.mjs`)).status, 400);
+  const missing = await fetch(`${origin}/api/file?path=missing.md`);
+  assert.equal(missing.status, 404);
+  assert.deepEqual(await missing.json(), { code: 'fileMissing' });
+  const notMarkdown = await fetch(`${origin}/api/file?path=server.mjs`);
+  assert.equal(notMarkdown.status, 400);
+  assert.deepEqual(await notMarkdown.json(), { code: 'notMarkdown' });
   const response = await fetch(`${origin}/api/file?path=work.md`, {
     method: 'PUT', headers: { 'X-Outliner-Token': token }, body: 'not JSON'
   });
   assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { code: 'invalidContent' });
   const nullBody = await fetch(`${origin}/api/file?path=work.md`, {
     method: 'PUT', headers: { 'X-Outliner-Token': token }, body: 'null'
   });
   assert.equal(nullBody.status, 400);
+});
+
+test('every error code the server returns has text in English and Japanese', async () => {
+  const source = await readFile(new URL('../server.mjs', import.meta.url), 'utf8');
+  const codes = [...source.matchAll(/new RequestError\(\d+, '(\w+)'\)/g)].map(match => match[1]).concat('internal');
+  assert.ok(codes.length > 20);
+  for (const language of ['en', 'ja']) {
+    for (const code of codes) assert.equal(typeof messages[language].server[code], 'string', `${language}: ${code}`);
+  }
 });
 
 test('single-file mode lists, reads and saves only the selected Markdown file', async t => {
