@@ -57,43 +57,6 @@ export const statusIcons: Record<Status, string> = { todo: '○', 'in-progress':
 export const filterIcons: Record<StatusFilter, string> = { all: '', 'not-done': '◌', ...statusIcons };
 const nextStatus = (status: Status | null) => statuses[(statuses.indexOf(status!) + 1) % statuses.length];
 
-// Only http(s) targets become anchors; any other Markdown link stays plain text.
-const markdownLink = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/;
-// A tag is a whole whitespace-separated word, the same rule the search box uses.
-// The leading space is captured rather than looked behind for, which iOS before 16.4 lacks.
-const tagWord = /(^|\s)(#[^#\s]+)(?=\s|$)/g;
-// `start` is the offset of the shown text in the title, so that a click on the rendered text can
-// put the caret there and filter matches can be marked in it.
-export interface TitlePart { text: string; start: number; href?: string; tag?: string }
-
-// The title split into http(s) links, #tags and plain text; null when it has neither links nor tags.
-export function titleParts(title: string): TitlePart[] | null {
-  const links = [...title.matchAll(new RegExp(markdownLink, 'g'))]
-    // The shown link text follows the opening bracket.
-    .map(match => ({ start: match.index, end: match.index + match[0].length, part: { text: match[1], start: match.index + 1, href: match[2] } }));
-  const tags = [...title.matchAll(tagWord)]
-    .map(match => ({ start: match.index + match[1].length, end: match.index + match[0].length, tag: match[2] }))
-    .map(({ start, end, tag }) => ({ start, end, part: { text: tag, start, tag: tag.slice(1) } }))
-    .filter(tag => !links.some(link => tag.start < link.end && link.start < tag.end));
-  if (!links.length && !tags.length) return null;
-  const parts: TitlePart[] = [];
-  let offset = 0;
-  for (const token of [...links, ...tags].sort((a, b) => a.start - b.start)) {
-    if (token.start > offset) parts.push({ text: title.slice(offset, token.start), start: offset });
-    parts.push(token.part);
-    offset = token.end;
-  }
-  if (offset < title.length) parts.push({ text: title.slice(offset), start: offset });
-  return parts;
-}
-
-// The tag (without `#`) of the whitespace-separated word around `offset`, or null when that word
-// is not a tag. A word counts as a tag exactly when the search box would treat it as one.
-export function tagAt(text: string, offset: number): string | null {
-  const word = text.slice(0, offset).match(/\S*$/)![0] + text.slice(offset).match(/^\S*/)![0];
-  return /^#[^#\s]+$/.test(word) ? word.slice(1) : null;
-}
-
 // Attachment that writes the model value into an input on every render. A `value` attribute
 // is not enough: Svelte compares with the previously rendered value, not with what the user
 // typed since, so undo back to that value would leave the typed text in place.
@@ -101,6 +64,25 @@ export const syncValue = (value: () => string) => (node: HTMLInputElement | HTML
   const next = value();
   if (node.value !== next) node.value = next;
 };
+
+// Blank lines at the end of a note cannot be kept in the Markdown: they would separate the note
+// from what follows rather than belong to it. They are left out of the file, and the textarea
+// being typed in keeps them, so Enter at the end of a note starts a new line.
+export const noteText = (value: string) => value.replace(/(?:\n[ \t]*)+$/, '');
+
+// syncValue for a note textarea; the focused one keeps the blank lines typed at its end.
+export const syncNote = (value: () => string) => (node: HTMLTextAreaElement) => {
+  const next = value();
+  if (node === node.ownerDocument.activeElement && noteText(node.value) === next) return;
+  if (node.value !== next) node.value = next;
+};
+
+// The tag (without `#`) of the whitespace-separated word around `offset`, or null when that word
+// is not a tag. A word counts as a tag exactly when the search box would treat it as one.
+export function tagAt(text: string, offset: number): string | null {
+  const word = text.slice(0, offset).match(/\S*$/)![0] + text.slice(offset).match(/^\S*/)![0];
+  return /^#[^#\s]+$/.test(word) ? word.slice(1) : null;
+}
 
 export interface ItemView {
   key: string;
@@ -113,7 +95,6 @@ export interface ItemView {
   hasChildren: boolean;
   showNote: boolean;
   status: { icon: string; label: string; next: Status } | null;
-  titleParts: TitlePart[] | null;
   // Shown only because a descendant matches the active filter; rendered dimmed.
   context: boolean;
   // The search box words and #tags to mark in the title; null without a text filter and for context rows.
@@ -476,7 +457,7 @@ export class Controller {
   private inputEdit(path: string, line: number, field: Field, value: string) {
     const doc = this.docs.get(path)!;
     let result: core.EditResult;
-    try { result = field === 'note' ? core.updateNote(doc.text, line, value) : core.updateTitle(doc.text, line, value); }
+    try { result = field === 'note' ? core.updateNote(doc.text, line, noteText(value)) : core.updateTitle(doc.text, line, value); }
     catch (error) {
       this.message = this.describe(error);
       this.notice = this.message;
@@ -704,7 +685,14 @@ export class Controller {
         this.scheduleSave();
       },
       oninput: (event: Event) => this.inputField(path, row().line, field, event.currentTarget as HTMLTextAreaElement, event as InputEvent),
-      onblur: () => this.blurField(),
+      onblur: (event: FocusEvent) => {
+        // The blank lines kept at the end of a note while it was typed in are not in the file.
+        if (field === 'note') {
+          const node = event.currentTarget as HTMLTextAreaElement;
+          node.value = noteText(node.value);
+        }
+        this.blurField();
+      },
       onkeydown: (event: KeyboardEvent) => this.keydownField(path, row(), field, event.currentTarget as HTMLTextAreaElement, event),
     };
   }
@@ -1598,7 +1586,6 @@ export class Controller {
         hasChildren: rows.some(child => child.parentLine === row.line),
         showNote: row.kind !== 'embed' && (!!row.note || this.isActive(path, row.line, 'note')),
         status: this.statusView(row, false),
-        titleParts: row.kind === 'embed' ? null : titleParts(row.title),
         context: visible.get(row.line) === false,
         // Context rows did not match, so any words they share with the query are not marked.
         highlight: visible.get(row.line) ? highlight : null,

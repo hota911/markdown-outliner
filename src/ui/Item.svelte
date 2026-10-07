@@ -1,23 +1,29 @@
 <script lang="ts">
+  import InlineText from './InlineText.svelte';
   import Outline from './Outline.svelte';
   import SlashMenu from './SlashMenu.svelte';
   import type { Controller, Drop, ItemView } from './controller.svelte.ts';
-  import { syncValue, tagAt, titleParts } from './controller.svelte.ts';
-  import { markPieces, matchRanges, type Piece } from './filter.ts';
+  import { syncNote, syncValue, tagAt } from './controller.svelte.ts';
+  import { matchRanges } from './filter.ts';
+  import { parseInline } from './inline.ts';
   import { grow } from './motion.ts';
 
   let { ctrl, item }: { ctrl: Controller; item: ItemView } = $props();
   const uid = $props.id();
 
   let editing = $state(false);
-  // The links and marks follow the textarea when it loses focus, before the next render updates the row.
+  let noteEditing = $state(false);
+  // The rendered text follows the textarea when it loses focus, before the next render updates the row.
   let shownTitle = $derived(item.row.title);
+  let shownNote = $derived(item.row.note);
+  const display = $derived(parseInline(shownTitle));
+  const noteDisplay = $derived(parseInline(shownNote));
   const marks = $derived(item.highlight ? matchRanges(shownTitle, item.highlight) : []);
-  // The rendered title is laid over the textarea while it is not edited, for links, tags and filter matches.
-  const overlay = $derived(item.titleParts !== null || marks.length > 0);
-  const display = $derived((titleParts(shownTitle) ?? [{ text: shownTitle, start: 0 }])
-    .map(part => ({ ...part, pieces: markPieces(part.text, part.start, marks) })));
+  // The rendered title is laid over the textarea while it is not edited, for inline Markdown, tags
+  // and filter matches.
+  const overlay = $derived(display !== null || marks.length > 0);
   let titleNode: HTMLTextAreaElement | undefined = $state();
+  let noteNode: HTMLTextAreaElement | undefined = $state();
 
   const titleEvents = $derived(ctrl.fieldEvents(item.path, () => item.row, 'title'));
   const slashMenu = $derived(ctrl.slashMenu(item.path, item.row.line));
@@ -59,28 +65,48 @@
     return true;
   }
 
-  function titleClick(event: MouseEvent & { currentTarget: HTMLTextAreaElement }) {
+  function fieldClick(event: MouseEvent & { currentTarget: HTMLTextAreaElement }) {
     // The click has already put the caret where the pointer is.
     const node = event.currentTarget;
     if (node.selectionStart === node.selectionEnd && filterTag(event, node.value, node.selectionStart)) node.blur();
   }
 
-  // The rendered text covers the textarea while it is not edited: a tag adds itself to the search,
-  // and other text starts editing with the caret where it was clicked.
-  function displayClick(event: MouseEvent) {
+  // The first non-empty text after `node` inside `root`.
+  function nextText(root: Node, node: Node): Text | null {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    walker.currentNode = node;
+    for (let next = walker.nextNode() as Text | null; next; next = walker.nextNode() as Text | null) {
+      if (next.data) return next;
+    }
+    return null;
+  }
+
+  // The rendered text covers its textarea while it is not edited: links keep their own click, a tag
+  // adds itself to the search, and other text starts editing with the caret at the clicked
+  // character. Where the engine has no caretPositionFromPoint (Safari before 18.4), or the click is
+  // not on text, the caret goes to the end.
+  function displayClick(event: MouseEvent & { currentTarget: HTMLElement }, field: HTMLTextAreaElement | undefined) {
     const target = event.target as Element;
-    if (target.closest('a') || !titleNode) return;
+    if (target.closest('a') || !field) return;
     const tag = target.closest<HTMLElement>('[data-tag]');
     if (tag) {
       ctrl.filterByTag(tag.dataset.tag!);
       return;
     }
-    // Engines without caretPositionFromPoint (Safari before 18.4) put the caret at the end.
-    const clicked = document.caretPositionFromPoint?.(event.clientX, event.clientY);
-    const part = clicked?.offsetNode.parentElement?.closest<HTMLElement>('[data-start]');
-    const position = clicked && part ? Number(part.dataset.start) + clicked.offset : titleNode.value.length;
-    titleNode.focus();
-    titleNode.setSelectionRange(position, position);
+    const caret = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+    const clicked = caret?.offsetNode.nodeType === Node.TEXT_NODE ? caret.offsetNode as Text : null;
+    const leaf = clicked?.parentElement?.closest<HTMLElement>('[data-start]');
+    let offset = caret && leaf ? Number(leaf.dataset.start) + caret.offset : field.value.length;
+    if (caret && clicked && leaf && caret.offset === clicked.data.length) {
+      // At the end of the last text of a line, the caret also goes past the closing markers
+      // (`**`, a backtick), so Enter or typing at the end of the line stays outside the markup.
+      // Only text and code start with a line break, and their pieces carry an offset.
+      const next = nextText(event.currentTarget, clicked);
+      if (!next) offset = field.value.length;
+      else if (next.data.startsWith('\n')) offset = Number(next.parentElement!.closest<HTMLElement>('[data-start]')!.dataset.start);
+    }
+    field.focus();
+    field.setSelectionRange(offset, offset);
   }
 </script>
 
@@ -99,9 +125,6 @@
     ondragend={ctrl.dragEnd}
   >⠿</button>
 {/snippet}
-
-<!-- Plain text pieces carry their offset in the title, so a click on them, marked or not, can put the caret there. -->
-{#snippet marked(pieces: Piece[], plain: boolean)}{#each pieces as piece, index (index)}{#if piece.mark}<mark data-start={plain ? piece.start : undefined}>{piece.text}</mark>{:else if plain}<span data-start={piece.start}>{piece.text}</span>{:else}{piece.text}{/if}{/each}{/snippet}
 
 <div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} class:is-context={item.context} style:--depth={item.depth} in:grow>
   {#if item.embed}
@@ -178,9 +201,9 @@
           aria-controls={slashMenu?.id}
           aria-activedescendant={slashMenu ? slashMenu.id + '-' + slashMenu.index : undefined}
           {...titleEvents}
-          onclick={titleClick}
+          onclick={fieldClick}
           onfocus={event => { titleEvents.onfocus(event); editing = true; }}
-          onblur={event => { editing = false; shownTitle = event.currentTarget.value; titleEvents.onblur(); }}
+          onblur={event => { editing = false; shownTitle = event.currentTarget.value; titleEvents.onblur(event); }}
         ></textarea>
         {#if item.context}
           <span id={uid + '-context'} class="visually-hidden">{ctrl.t.item.filterContext}</span>
@@ -191,9 +214,7 @@
         {#if overlay}
           <!-- The textarea stays the keyboard target; clicking the rendered text only forwards focus. -->
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <div class="title-display" onclick={displayClick}>
-            {#each display as part, index (index)}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{@render marked(part.pieces, false)}</a>{:else if part.tag}<span class="tag" data-tag={part.tag}>{@render marked(part.pieces, false)}</span>{:else}{@render marked(part.pieces, true)}{/if}{/each}
-          </div>
+          <div class="title-display" onclick={event => displayClick(event, titleNode)}><InlineText nodes={display ?? [{ kind: 'text', text: shownTitle, start: 0 }]} {marks} /></div>
         {/if}
       </div>
       <div class="row-actions">
@@ -207,17 +228,27 @@
       </div>
     </div>
     {#if item.showNote}
-      <textarea
-        class="note-input"
-        {@attach syncValue(() => item.row.note)}
-        placeholder={ctrl.t.item.notePlaceholder}
-        rows={Math.max(1, Math.min(8, item.row.note.split('\n').length))}
-        aria-label={ctrl.t.item.noteLabel}
-        data-path={item.path}
-        data-line={item.row.line}
-        data-field="note"
-        {...noteEvents}
-      ></textarea>
+      <div class="note-area" class:has-overlay={noteDisplay !== null} class:is-editing={noteEditing}>
+        <textarea
+          bind:this={noteNode}
+          class="note-input"
+          {@attach syncNote(() => item.row.note)}
+          placeholder={ctrl.t.item.notePlaceholder}
+          rows={Math.max(1, Math.min(8, item.row.note.split('\n').length))}
+          aria-label={ctrl.t.item.noteLabel}
+          data-path={item.path}
+          data-line={item.row.line}
+          data-field="note"
+          {...noteEvents}
+          onclick={fieldClick}
+          onfocus={event => { noteEvents.onfocus(event); noteEditing = true; }}
+          onblur={event => { noteEditing = false; noteEvents.onblur(event); shownNote = event.currentTarget.value; }}
+        ></textarea>
+        {#if noteDisplay !== null}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <div class="note-display" onclick={event => displayClick(event, noteNode)}><InlineText nodes={noteDisplay} /></div>
+        {/if}
+      </div>
     {/if}
   {/if}
 </div>

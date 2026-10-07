@@ -38,3 +38,17 @@ test.describe('Enter in an item text', () => {
     await expect.poll(outliner.saved).toBe('- [ ] parent\n  - [ ] child\n- [ ] new\n- [ ] next\n');
   });
 });
+
+test.describe('Enter in a note', () => {
+  test('at the end starts a new line of the note', async ({ openOutliner, page }) => {
+    const outliner = await openOutliner('- [ ] a\n  memo\n- [ ] b\n');
+    const note = page.getByRole('textbox', { name: 'Item note' });
+    await note.click();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await expect(note).toHaveValue('memo\n');
+    await page.keyboard.type('more');
+    await expect(note).toHaveValue('memo\nmore');
+    await expect.poll(outliner.saved).toBe('- [ ] a\n  memo\n  more\n- [ ] b\n');
+  });
+});

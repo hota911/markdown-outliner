@@ -88,6 +88,74 @@ describe('Markdown links in titles', () => {
     expect(document.activeElement).toBe(title('read [docs](https://example.com)'));
     expect(display.closest('.title-area').classList.contains('is-editing')).toBe(true);
   });
+
+  it('renders emphasis, code and bare URLs in titles', async () => {
+    const { container } = await setup({ 'tasks.md': '- [ ] **bold** *em* `code` ~~gone~~ https://example.com\n' });
+    const display = container.querySelector('.title-display');
+    expect(display.querySelector('strong').textContent).toBe('bold');
+    expect(display.querySelector('em').textContent).toBe('em');
+    expect(display.querySelector('code').textContent).toBe('code');
+    expect(display.querySelector('del').textContent).toBe('gone');
+    expect(display.querySelector('a').getAttribute('href')).toBe('https://example.com');
+  });
+});
+
+describe('inline Markdown in notes', () => {
+  const note = '  see [docs](https://example.com/docs) or https://example.org.\n  **bold** _em_ `code` ~~gone~~\n';
+  const noteDisplay = container => container.querySelector('.note-display');
+
+  it('renders each syntax and keeps the line breaks', async () => {
+    const { container } = await setup({ 'tasks.md': '- [ ] a\n' + note });
+    const display = noteDisplay(container);
+    expect(display.textContent).toBe('see docs or https://example.org.\nbold em code gone');
+    expect([...display.querySelectorAll('a')].map(link => [link.textContent, link.getAttribute('href'), link.target, link.rel])).toEqual([
+      ['docs', 'https://example.com/docs', '_blank', 'noopener noreferrer'],
+      ['https://example.org', 'https://example.org', '_blank', 'noopener noreferrer'],
+    ]);
+    expect(['strong', 'em', 'code', 'del'].map(tag => display.querySelector(tag).textContent)).toEqual(['bold', 'em', 'code', 'gone']);
+  });
+
+  it('shows the raw text while the note is edited', async () => {
+    const { user, screen, container, saved } = await setup({ 'tasks.md': '- [ ] a\n  **bold**\n' });
+    const area = container.querySelector('.note-area');
+    await user.click(noteDisplay(container).querySelector('strong'));
+    const field = screen.getByRole('textbox', { name: '項目のノート' });
+    expect(document.activeElement).toBe(field);
+    expect(area.classList.contains('is-editing')).toBe(true);
+    expect(field.value).toBe('**bold**');
+    // Without caretPositionFromPoint (jsdom), the caret goes to the end.
+    expect([field.selectionStart, field.selectionEnd]).toEqual([8, 8]);
+    await user.keyboard(' and *more*');
+    field.blur();
+    await flush();
+    expect(area.classList.contains('is-editing')).toBe(false);
+    expect(noteDisplay(container).querySelector('em').textContent).toBe('more');
+    expect(await saved()).toBe('- [ ] a\n  **bold** and *more*\n');
+  });
+
+  it('clicking a link opens it instead of editing the note', async () => {
+    const { user, container } = await setup({ 'tasks.md': '- [ ] a\n  [docs](https://example.com)\n' });
+    const link = noteDisplay(container).querySelector('a');
+    const opened = [];
+    link.addEventListener('click', event => { opened.push(link.href); event.preventDefault(); });
+    await user.click(link);
+    expect(opened).toEqual(['https://example.com/']);
+    expect(document.activeElement).toBe(link);
+    expect(container.querySelector('.note-area').classList.contains('is-editing')).toBe(false);
+  });
+
+  it('keeps other link targets and HTML as plain text', async () => {
+    const { container } = await setup({ 'tasks.md': '- [ ] a\n  [bad](javascript:alert(1)) <img src=x onerror=alert(1)> `<b>`\n' });
+    const display = noteDisplay(container);
+    expect(display.querySelector('a, img, b')).toBeNull();
+    expect(display.textContent).toBe('[bad](javascript:alert(1)) <img src=x onerror=alert(1)> <b>');
+  });
+
+  it('a plain note stays a plain textarea', async () => {
+    const { container } = await setup({ 'tasks.md': '- [ ] a\n  just a note\n' });
+    expect(noteDisplay(container)).toBeNull();
+    expect(container.querySelector('.note-area').classList.contains('has-overlay')).toBe(false);
+  });
 });
 
 describe('filtering', () => {
@@ -213,6 +281,31 @@ describe('filtering', () => {
     expect(document.activeElement).toBe(title('doing #home'));
   });
 
+  it('a #tag inside bold text or in a note is shown like a link and filters on a click', async () => {
+    const { user, screen, title, titleValues } = await setup({ 'tasks.md': '- [ ] **fix #bug now** and **#plain**\n- [ ] other\n  see #home\n- [ ] doing #home\n' });
+    const search = () => screen.getByRole('searchbox', { name: '語句・タグで絞り込み' });
+    const display = title('**fix #bug now** and **#plain**').closest('.title-area').querySelector('.title-display');
+    const tag = within(display).getByText('#bug');
+    expect(tag.classList.contains('tag')).toBe(true);
+    expect(tag.closest('strong')).toBeTruthy();
+    // `**#plain**` is not a whole-word tag, so it stays bold text.
+    expect(within(display).getByText('#plain').classList.contains('tag')).toBe(false);
+    await user.click(tag);
+    expect(search().value).toBe('#bug');
+    expect(titleValues()).toEqual(['**fix #bug now** and **#plain**']);
+
+    await user.click(screen.getByRole('button', { name: 'リセット' }));
+    const noteTag = within(title('other').closest('.outline-item').querySelector('.note-display')).getByText('#home');
+    expect(noteTag.dataset.tag).toBe('home');
+    await user.click(noteTag);
+    expect(search().value).toBe('#home');
+    expect(titleValues()).toEqual(['other', 'doing #home']);
+
+    await user.click(screen.getByRole('button', { name: 'リセット' }));
+    await clickAt(screen.getByRole('textbox', { name: '項目のノート' }), 'see #ho'.length, { metaKey: true });
+    expect(search().value).toBe('#home');
+  });
+
   it('reset shows everything again', async () => {
     const { user, screen, titleValues } = await setup({ 'tasks.md': text });
     await user.type(screen.getByRole('searchbox', { name: '語句・タグで絞り込み' }), 'nothing-matches{Enter}');
@@ -251,6 +344,44 @@ describe('highlighting filter matches', () => {
     const item = row('read [the docs](https://example.com) docs');
     expect(marks(item)).toEqual(['docs', 'docs']);
     expect(item.getByRole('link').textContent).toBe('the docs');
+  });
+
+  it('marks matches inside bold text, link text and a #tag inside bold text', async () => {
+    const { user, screen, row } = await setup({ 'tasks.md': '- [ ] **plan #work now** [plan docs](https://example.com) `plan`\n' });
+    await search(user, screen, 'plan #work');
+    const item = row('**plan #work now** [plan docs](https://example.com) `plan`');
+    expect(marks(item)).toEqual(['plan', '#work', 'plan', 'plan']);
+    const [bold, tag, link, code] = item.queryAllByText((_, node) => node.tagName === 'MARK');
+    expect(bold.parentElement.tagName).toBe('STRONG');
+    expect(tag.parentElement.dataset.tag).toBe('work');
+    expect(tag.closest('strong')).toBeTruthy();
+    expect(link.closest('a').getAttribute('href')).toBe('https://example.com');
+    expect(code.parentElement.tagName).toBe('CODE');
+  });
+
+  // jsdom has no caretPositionFromPoint, so the test gives the display one that reports `node` and `offset`.
+  async function clickAtText(user, node, offset) {
+    const original = document.caretPositionFromPoint;
+    document.caretPositionFromPoint = () => ({ offsetNode: node, offset });
+    try { await user.click(node.parentElement); }
+    finally { document.caretPositionFromPoint = original; }
+  }
+
+  it('a click on highlighted text puts the caret at the clicked character, and past the closing markers at the end', async () => {
+    const { user, screen, title } = await setup({ 'tasks.md': '- [ ] buy **fresh milk**\n' });
+    await search(user, screen, 'milk');
+    const field = title('buy **fresh milk**');
+    const mark = () => field.closest('.title-area').querySelector('.title-display mark');
+    expect(mark().closest('strong')).toBeTruthy();
+    await clickAtText(user, mark().firstChild, 2);
+    expect(document.activeElement).toBe(field);
+    expect([field.selectionStart, field.selectionEnd]).toEqual(['buy **fresh mi'.length, 'buy **fresh mi'.length]);
+
+    field.blur();
+    await flush();
+    // The end of the last text of the title is after `**`.
+    await clickAtText(user, mark().firstChild, 'milk'.length);
+    expect([field.selectionStart, field.selectionEnd]).toEqual(['buy **fresh milk**'.length, 'buy **fresh milk**'.length]);
   });
 
   it('marks nothing without a text filter', async () => {
