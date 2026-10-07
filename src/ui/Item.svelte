@@ -2,6 +2,7 @@
   import Outline from './Outline.svelte';
   import type { Controller, Drop, ItemView } from './controller.svelte.ts';
   import { linkParts, syncValue } from './controller.svelte.ts';
+  import { grow } from './motion.ts';
 
   let { ctrl, item }: { ctrl: Controller; item: ItemView } = $props();
 
@@ -28,14 +29,14 @@
   }
 </script>
 
-<div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} style:--depth={item.depth}>
+<div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} style:--depth={item.depth} in:grow>
   {#if item.embed}
     <div class="outline-line">
       <button type="button" class="icon fold" title={ctrl.t.item.fold} onclick={() => ctrl.toggleFold(item.path, item.row.line)}>{item.collapsed ? '▸' : '▾'}</button>
       <span class="embed-title">{item.row.embed}</span>
     </div>
     {#if !item.collapsed}
-      <div class="embedded">
+      <div class="embedded" in:grow>
         <div class="source-label">{ctrl.t.item.embedSource(item.row.embed!)}</div>
         {#if item.embed.error !== null}
           <div class="notice">{item.embed.error}</div>

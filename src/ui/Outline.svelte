@@ -66,9 +66,13 @@
       {/if}
     </section>
   {/if}
-  {#each outline.items as item (item.key)}
-    <Item {ctrl} {item} />
-  {/each}
+  <!-- Opening another file or zooming rebuilds the list, so only items added within the same list
+       play their local intro, not every item of the new one. -->
+  {#key outline.path + '\n' + (outline.zoom?.row.key ?? '')}
+    {#each outline.items as item (item.key)}
+      <Item {ctrl} {item} />
+    {/each}
+  {/key}
   {#if !outline.items.length}
     <div class="empty">{ctrl.t.outline.empty}</div>
   {/if}
