@@ -22,6 +22,7 @@
   --text-accent: #2f6f55;
   --text-on-accent: #fff;
   --text-selection: #eaf3ee;
+  --text-highlight-bg: #fbe7a1;
   --text-warning: #92651b;
 }
 
@@ -45,6 +46,7 @@
     --text-accent: #7cc2a2;
     --text-on-accent: #fff;
     --text-selection: #2a4237;
+    --text-highlight-bg: #5e4b17;
     --text-warning: #d9a45a;
   }
 }

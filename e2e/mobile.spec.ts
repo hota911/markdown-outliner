@@ -12,7 +12,8 @@ const rect = (locator: Locator) => locator.evaluate(node => node.getBoundingClie
 async function tapTitle(page: Page, title: string) {
   const fields = page.getByRole('textbox', { name: 'Item text' });
   const index = (await fields.evaluateAll(nodes => nodes.map(node => (node as HTMLTextAreaElement).value))).indexOf(title);
-  await fields.nth(index).tap();
+  // A title with #tags is shown as text over the field until it is edited; tap its start, not a tag.
+  await fields.nth(index).locator('..').tap({ position: { x: 2, y: 8 } });
   await expect(focusedField(page)).toHaveValue(title);
 }
 
@@ -93,6 +94,24 @@ test.describe('on a touch screen', () => {
     await expect((await outliner.line('b')).getByTitle('Add a child task')).toBeHidden();
     expect(await outliner.titles()).toEqual(['a', 'b']);
     expect(await outliner.saved()).toBe('- [ ] a\n- [ ] b\n');
+  });
+
+  test('a / opens the command menu, whose 36px rows run a command on a tap, on a 360px wide screen', async ({ openOutliner, page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    const outliner = await openOutliner('- [ ] child of a long title\n');
+    await tapTitle(page, 'child of a long title');
+    await page.keyboard.press('End');
+    await page.keyboard.type(' /');
+    const menu = page.getByRole('listbox');
+    await expect(menu).toBeVisible();
+    const done = menu.getByRole('option', { name: 'Done', exact: true });
+    expect((await rect(done)).height).toBeGreaterThanOrEqual(36);
+    expect((await rect(menu)).right).toBeLessThanOrEqual(360);
+    expect(await horizontalOverflow(page.locator('html'))).toBeLessThanOrEqual(0);
+    await done.tap();
+    await expect(menu).toBeHidden();
+    await expect.poll(outliner.saved).toBe('- [x] child of a long title\n');
+    await expect(focusedField(page)).toHaveValue('child of a long title');
   });
 
   for (const width of [360, 412]) {

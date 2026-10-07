@@ -7,9 +7,9 @@ export type CoreErrorCode =
   | 'noEditableItem' | 'titleNewline' | 'unknownStatus' | 'embedHasNoStatus' | 'noteFormat' | 'noteUnsafe'
   | 'invalidInsert' | 'invalidTag' | 'invalidMergeDirection' | 'mergeAcrossEmbed' | 'mergeAcrossText'
   | 'mergeBothHaveContent' | 'unsafeIndent' | 'invalidMoveDirection' | 'invalidReorder' | 'reorderSiblingsOnly'
-  | 'reorderAcrossEmbed' | 'reorderAcrossText' | 'invalidReparent' | 'reparentIntoSelf' | 'reparentSiblingsOnly'
-  | 'invalidInsertPosition' | 'insertPositionInSelection' | 'reparentAcrossEmbed' | 'reparentAcrossText'
-  | 'invalidFileNameInput' | 'invalidFileName' | 'extractEmbed' | 'invalidFilter';
+  | 'reorderAcrossText' | 'invalidReparent' | 'reparentIntoSelf' | 'reparentSiblingsOnly'
+  | 'invalidInsertPosition' | 'insertPositionInSelection' | 'reparentIntoEmbed' | 'reparentAcrossText'
+  | 'invalidFileNameInput' | 'invalidFileName' | 'extractEmbed' | 'invalidFilter' | 'notEmbed';
 
 // Edits refuse with a code; the UI turns it into text in the display language (src/ui/messages.ts).
 export class CoreError extends Error {
@@ -169,6 +169,28 @@ export function updateStatus(text: string, line: number, status: Status): EditRe
   return result(doc, line);
 }
 
+// Drops the status box of a task; a bullet stays as it is. (updateStatus turns a bullet into a task.)
+export function toBullet(text: string, line: number): EditResult {
+  const doc = target(text, line), match = item(doc.lines[line])!;
+  if (doc.row.kind === 'embed') throw new CoreError('embedHasNoStatus');
+  doc.lines[line] = match[1] + match[2] + ' ' + match[4];
+  return result(doc, line);
+}
+
+// Embeds `name`, a path relative to the folder of this file, with the line extractToFile writes.
+// An empty item without note or children becomes the embed; otherwise it goes in as the next sibling.
+export function embedFile(text: string, line: number, name: string): EditResult {
+  if (typeof name !== 'string' || !/^[^\\[\]#|^]+\.md$/.test(name)) throw new CoreError('invalidFileName');
+  const doc = target(text, line);
+  const embed = item(doc.lines[line])![1] + '- ![[' + name + ']]';
+  if (doc.row.kind !== 'embed' && !doc.row.title && doc.row.end === line + 1) {
+    doc.lines[line] = embed;
+    return result(doc, line);
+  }
+  doc.lines.splice(doc.row.end, 0, embed);
+  return result(doc, doc.row.end);
+}
+
 export function updateNote(text: string, line: number, note: string): EditResult {
   if (typeof note !== 'string' || note.includes('\r')) throw new CoreError('noteFormat');
   const doc = target(text, line);
@@ -298,7 +320,6 @@ export function reorder(text: string, lines: number[], targetLine: number, posit
   const group = siblings(doc);
   const bounds = [...moving, doc.row].map(row => group.indexOf(row));
   const affected = group.slice(Math.min(...bounds), Math.max(...bounds) + 1);
-  if (doc.rows.some(row => row.kind === 'embed' && row.line >= affected[0].line && row.line < affected[affected.length - 1].end)) throw new CoreError('reorderAcrossEmbed');
   for (let index = 1; index < affected.length; index++) {
     if (doc.lines.slice(affected[index - 1].end, affected[index].line).some(value => value.trim())) throw new CoreError('reorderAcrossText');
   }
@@ -347,9 +368,9 @@ export function reparent(text: string, sourceLines: number[], targetLine: number
   if (targetLine === null && beforeLine === null && doc.lines[insertion - 1] === '') insertion--;
   const start = Math.min(targetLine === null ? insertion : targetLine, first.line);
   const end = Math.max(doc.row ? doc.row.end : Math.min(insertion + 1, doc.lines.length), moving[moving.length - 1].end);
-  if (doc.rows.some(row => row.kind === 'embed' && row.line >= start && row.line < end)) throw new CoreError('reparentAcrossEmbed');
-  const isEmbed = (row: ScannedRow) => row.kind === 'embed';
-  if (ancestorsInclude(doc, doc.row, isEmbed) || ancestorsInclude(doc, first, isEmbed)) throw new CoreError('reparentAcrossEmbed');
+  // An embed line is moved like an item, but nothing goes under it: its children would read as
+  // part of the embedded file.
+  if (ancestorsInclude(doc, doc.row, row => row.kind === 'embed')) throw new CoreError('reparentIntoEmbed');
   for (let line = start; line < end; line++) {
     if (doc.lines[line].trim() && !doc.rows.some(row => line >= row.line && line < row.ownEnd)) throw new CoreError('reparentAcrossText');
   }
@@ -393,6 +414,42 @@ export function extractToFile(text: string, line: number, name: string): EditRes
   const extracted = dedent(doc.lines.slice(line, doc.row.end), doc.row.depth * 2).join(doc.newline) + doc.newline;
   doc.lines.splice(line, doc.row.end - line, item(doc.lines[line])![1] + '- ![[' + name + ']]');
   return { ...result(doc, line), extracted };
+}
+
+// Whether a base name (without `.md`) typed by the user can name a file: not empty, no
+// surrounding spaces, no leading dot (a hidden file the file list skips), no control characters,
+// and none of the characters that break file names or embeds (as removed by `fileName`).
+export function usableBaseName(name: string): boolean {
+  return typeof name === 'string' && name !== '' && name === name.trim() && !name.startsWith('.')
+    && !/[/\\:*?"<>|#^[\]]/.test(name) && !/\p{Cc}/u.test(name);
+}
+
+// The embed target after its file is renamed to `baseName`; the folder part stays as written.
+export function renamedEmbed(embed: string, baseName: string): string {
+  if (typeof embed !== 'string' || !usableBaseName(baseName)) throw new CoreError('invalidFileName');
+  return embed.replace(/[^/\\]*$/, baseName + '.md');
+}
+
+// Points the embed on `line` at `embed`. Obsidian may already have rewritten the link when it
+// renamed the file, possibly without `.md`, so any `![[...]]` item counts as the embed.
+export function retargetEmbed(text: string, line: number, embed: string): EditResult {
+  if (typeof embed !== 'string' || !/^[^[\]#|^]+\.md$/.test(embed)) throw new CoreError('invalidFileName');
+  const doc = target(text, line);
+  if (!/^!\[\[[^\]]+\]\]$/.test(doc.row.title)) throw new CoreError('notEmbed');
+  const source = doc.lines[line];
+  doc.lines[line] = source.slice(0, source.length - doc.row.title.length) + '![[' + embed + ']]';
+  return result(doc, line);
+}
+
+// The tags written as `#tag` in a text, without the `#`, in order of first appearance. As in
+// Obsidian, a tag starts at the start of the text or after whitespace, runs over letters, digits,
+// `_`, `-` and `/` (nested tags), and is not only digits.
+export function tagsIn(text: string): string[] {
+  const tags = new Set<string>();
+  for (const [, tag] of text.matchAll(/(?<!\S)#([\p{L}\p{M}\p{N}_/-]+)/gu)) {
+    if (!/^\d+$/.test(tag)) tags.add(tag);
+  }
+  return [...tags];
 }
 
 export function visibleLines(text: string, filter: { status: Status | 'all'; tag?: string }, keepLines: number[] = []): Set<number> {

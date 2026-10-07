@@ -48,7 +48,9 @@ vi.mock('obsidian', async () => {
     register(modifiers, key, callback) { this.handler = callback; }
   }
   // The existing tests run with Obsidian set to Japanese; fixture() can choose another language.
-  return { Plugin, ItemView, FileView, MarkdownView, TFile, Notice, Scope, normalizePath: posix.normalize,
+  // Like Obsidian's getAllTags: the tags of the text and of the frontmatter, written with `#`.
+  const getAllTags = cache => [...(cache.tags ?? []).map(({ tag }) => tag), ...(cache.frontmatter?.tags ?? []).map(tag => '#' + tag)];
+  return { Plugin, ItemView, FileView, MarkdownView, TFile, Notice, Scope, getAllTags, normalizePath: posix.normalize,
     getLanguage: () => state.language, requireApiVersion: () => true };
 });
 
@@ -118,6 +120,12 @@ async function fixture({ language = 'ja' } = {}) {
       return new TFile(path);
     },
   };
+  // Files without an entry have no cache yet, as right after Obsidian starts.
+  const caches = new Map([
+    ['work.md', { tags: [{ tag: '#work' }, { tag: '#仕事/進行中' }] }],
+    ['projects/plan.md', { frontmatter: { tags: ['plan'] } }],
+  ]);
+  const metadataCache = { getFileCache: file => caches.get(file.path) ?? null };
   const contentEl = { empty() {}, addClass() {} };
   const existing = [];
   const created = [], revealed = [], states = [], opened = [], fileMenus = [];
@@ -136,7 +144,18 @@ async function fixture({ language = 'ja' } = {}) {
       openFile: async file => { opened.push(file.path); } };
     return leaf;
   };
-  const app = { vault, contentEl, workspace: {
+  // Like FileManager#renameFile with "Automatically update internal links": renames the file,
+  // then rewrites links to it, without the .md extension.
+  const fileManager = {
+    renameFile: async (file, newPath) => {
+      const oldName = file.path.split('/').at(-1);
+      await vault.rename(file, newPath, []);
+      for (const [path, text] of files) {
+        files.set(path, text.split('![[' + oldName + ']]').join('![[' + file.basename + ']]'));
+      }
+    },
+  };
+  const app = { vault, metadataCache, contentEl, fileManager, workspace: {
     getLeavesOfType: type => existing.filter(leaf => leaf.type === type),
     getLeaf: mode => {
       created.push(mode);
@@ -214,6 +233,11 @@ test('Vault 内のどのフォルダーの Markdown も一覧に出し読み書�
   assert.deepEqual(f.writes, ['projects/plan.md']);
 });
 
+test('Vault の全 Markdown のタグを # なしで返す', async () => {
+  const f = await fixture();
+  assert.deepEqual([...await f.adapter.tags()].sort(), ['plan', 'work', '仕事/進行中']);
+});
+
 test('絶対パス・バックスラッシュ・親参照・非 Markdown・存在しないファイルの read/save を拒否する', async () => {
   const f = await fixture();
   await assert.rejects(f.adapter.read('/TODO.md'));
@@ -248,6 +272,22 @@ test('新しい Markdown を Vault 内に作成し、既存ファイルと Vault
   await assert.rejects(f.adapter.create('notes.md.txt', 'text\n'));
   assert.equal(f.files.get('work.md'), '- [ ] embedded task\n');
   assert.deepEqual(f.writes, ['projects/new task.md']);
+});
+
+test('埋め込み先の名前を FileManager で変更し、既存ファイルと Vault 外への変更は拒否する', async () => {
+  const f = await fixture();
+  await f.adapter.rename('work.md', 'done work.md');
+  assert.equal(f.files.get('done work.md'), '- [ ] embedded task\n');
+  assert.equal(f.files.has('work.md'), false);
+  // FileManager updated the link; the UI then restores .md (see the rename tests in test/ui/files.test.js).
+  assert.equal(f.files.get('TODO.md'), '- ![[done work]]\n');
+  await assert.rejects(f.adapter.rename('done work.md', 'TODO.md'), /同じ名前/);
+  await assert.rejects(f.adapter.rename('done work.md', 'archive.md'), /同じ名前/);
+  await assert.rejects(f.adapter.rename('done work.md', '../outside.md'));
+  await assert.rejects(f.adapter.rename('../outside.md', 'inside.md'));
+  await assert.rejects(f.adapter.rename('missing.md', 'new.md'));
+  assert.equal(f.files.get('TODO.md'), '- ![[done work]]\n');
+  assert.equal(f.files.get('done work.md'), '- [ ] embedded task\n');
 });
 
 test('View の再 Open と Close で以前の UI を破棄し再表示できる', async () => {
