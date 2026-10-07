@@ -24,7 +24,6 @@ async function start() {
   }
   mountOutliner(app, {
     adapter: api.adapter,
-    initialFile: 'tasks.md',
     language,
     preferences,
     savePreferences: value => api.savePreferences(JSON.stringify(value)),
