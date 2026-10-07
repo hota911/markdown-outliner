@@ -1,0 +1,52 @@
+/* The web version has no Obsidian, so it defines the Obsidian theme variables that
+   src/styles.css uses. Imported only by the web entry; the plugin never loads this file. */
+:root {
+  color-scheme: light dark;
+  --background-primary: #fff;
+  --background-primary-alt: #fafbf9;
+  --background-modifier-border: #e1e6e1;
+  --background-modifier-border-hover: #9aafa3;
+  --background-modifier-form-field: #fff;
+  --interactive-normal: #fff;
+  --interactive-hover: #edf3ef;
+  --interactive-accent: #315e4c;
+  --interactive-accent-hover: #244b3b;
+  --color-accent: #43846b;
+  --color-yellow: #927016;
+  --color-yellow-rgb: 146, 112, 22;
+  --text-normal: #29332e;
+  --text-muted: #6a7d72;
+  --text-faint: #7b8b80;
+  --text-accent: #2f6f55;
+  --text-on-accent: #fff;
+  --text-selection: #eaf3ee;
+  --text-warning: #92651b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background-primary: #1d2320;
+    --background-primary-alt: #232a26;
+    --background-modifier-border: #38423c;
+    --background-modifier-border-hover: #5f7066;
+    --background-modifier-form-field: #232a26;
+    --interactive-normal: #29302c;
+    --interactive-hover: #323b36;
+    --interactive-accent: #3d7a61;
+    --interactive-accent-hover: #4a8b70;
+    --color-accent: #5fa585;
+    --color-yellow: #e0b84a;
+    --color-yellow-rgb: 224, 184, 74;
+    --text-normal: #dde5e0;
+    --text-muted: #a2b1a8;
+    --text-faint: #7d8c83;
+    --text-accent: #7cc2a2;
+    --text-on-accent: #fff;
+    --text-selection: #2a4237;
+    --text-warning: #d9a45a;
+  }
+}
+
+body {
+  background: var(--background-primary);
+}
