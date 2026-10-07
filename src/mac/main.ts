@@ -21,7 +21,6 @@ const api = createMacApi(request => window.webkit.messageHandlers.outliner.postM
 void api.loadPreferences().then(saved => {
   mountOutliner(app, {
     adapter: api.adapter,
-    initialFile: 'tasks.md',
     language,
     preferences: saved ? JSON.parse(saved) as Preferences : { bookmarks: [] },
     savePreferences: value => api.savePreferences(JSON.stringify(value)),
