@@ -85,6 +85,11 @@
 .outliner .title-area .title-input { width: 100%; }
 .outliner .title-area.has-links:not(.is-editing) .title-input { position: absolute; inset: 0; opacity: 0; }
 .outliner .title-area.is-editing .title-display { display: none; }
+/* The `/` menu hangs below the title it was typed in, over the lines that follow; about 8 rows show. */
+.outliner .zoom-heading { position: relative; }
+.outliner .slash-menu { position: absolute; left: 0; z-index: 3; width: 100%; max-width: 320px; max-height: calc(8 * 32px + 10px); overflow-y: auto; padding: 4px; border: 1px solid var(--background-modifier-border); border-radius: 6px; background: var(--background-primary); box-shadow: 0 4px 18px rgba(0, 0, 0, .15); font-size: 14px; font-weight: normal; }
+.outliner .slash-option { min-height: 32px; padding: 4px 8px; border-radius: 4px; line-height: 24px; cursor: pointer; overflow-wrap: anywhere; }
+.outliner .slash-option.is-active { background: var(--interactive-hover); }
 .outliner .title-display { position: relative; min-height: 28px; padding: 2px 0; line-height: 24px; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
 .outliner .title-display a { color: var(--text-accent); text-decoration: underline; cursor: pointer; }
 .outliner .is-done > .outline-line .title-display { color: var(--text-faint); text-decoration: line-through; }
@@ -146,6 +151,8 @@
   .outliner .row-actions { height: 36px; }
   .outliner .row-actions .in-touch-bar { display: none; }
   .outliner .help { display: none; }
+  .outliner .slash-menu { max-height: calc(8 * 36px + 10px); }
+  .outliner .slash-option { min-height: 36px; padding: 6px 8px; }
   /* Soft keyboards lack Tab, Alt+arrows and Shift+Enter, so while an item field has focus a bar of buttons
      for them sticks to the bottom of the view, which sits above the keyboard. */
   .outliner .outliner-editor:has([data-field]:focus) .touch-bar { position: sticky; bottom: 0; z-index: 2; display: flex; gap: 4px; padding: 6px 0; border-top: 1px solid var(--background-modifier-border); background: var(--background-primary); }

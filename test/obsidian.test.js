@@ -48,7 +48,9 @@ vi.mock('obsidian', async () => {
     register(modifiers, key, callback) { this.handler = callback; }
   }
   // The existing tests run with Obsidian set to Japanese; fixture() can choose another language.
-  return { Plugin, ItemView, FileView, MarkdownView, TFile, Notice, Scope, normalizePath: posix.normalize,
+  // Like Obsidian's getAllTags: the tags of the text and of the frontmatter, written with `#`.
+  const getAllTags = cache => [...(cache.tags ?? []).map(({ tag }) => tag), ...(cache.frontmatter?.tags ?? []).map(tag => '#' + tag)];
+  return { Plugin, ItemView, FileView, MarkdownView, TFile, Notice, Scope, getAllTags, normalizePath: posix.normalize,
     getLanguage: () => state.language, requireApiVersion: () => true };
 });
 
@@ -118,6 +120,12 @@ async function fixture({ language = 'ja' } = {}) {
       return new TFile(path);
     },
   };
+  // Files without an entry have no cache yet, as right after Obsidian starts.
+  const caches = new Map([
+    ['work.md', { tags: [{ tag: '#work' }, { tag: '#仕事/進行中' }] }],
+    ['projects/plan.md', { frontmatter: { tags: ['plan'] } }],
+  ]);
+  const metadataCache = { getFileCache: file => caches.get(file.path) ?? null };
   const contentEl = { empty() {}, addClass() {} };
   const existing = [];
   const created = [], revealed = [], states = [], opened = [], fileMenus = [];
@@ -136,7 +144,7 @@ async function fixture({ language = 'ja' } = {}) {
       openFile: async file => { opened.push(file.path); } };
     return leaf;
   };
-  const app = { vault, contentEl, workspace: {
+  const app = { vault, metadataCache, contentEl, workspace: {
     getLeavesOfType: type => existing.filter(leaf => leaf.type === type),
     getLeaf: mode => {
       created.push(mode);
@@ -212,6 +220,11 @@ test('Vault 内のどのフォルダーの Markdown も一覧に出し読み書�
   await f.adapter.save('projects/plan.md', '- [x] nested task\n', nested.revision);
   assert.equal(f.files.get('projects/plan.md'), '- [x] nested task\n');
   assert.deepEqual(f.writes, ['projects/plan.md']);
+});
+
+test('Vault の全 Markdown のタグを # なしで返す', async () => {
+  const f = await fixture();
+  assert.deepEqual([...await f.adapter.tags()].sort(), ['plan', 'work', '仕事/進行中']);
 });
 
 test('絶対パス・バックスラッシュ・親参照・非 Markdown・存在しないファイルの read/save を拒否する', async () => {
