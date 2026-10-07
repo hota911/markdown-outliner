@@ -135,6 +135,11 @@ export class Controller {
   private active: Focus | null = null;
   private composing = false;
   private deferred = false;
+  // An external change to an unedited file waits while the user may be typing; the status says so.
+  private externalPending = false;
+  // Set when the user comes back to the outliner; the next poll then applies external changes
+  // even though a field still has focus.
+  private resumeRequested = false;
   private destroyed = false;
   private polling = false;
   private rendering = false;
@@ -192,6 +197,8 @@ export class Controller {
     }
     this.pollWindow = view;
     this.pollTimer = view.setInterval(() => { void this.poll(); }, 3000);
+    view.addEventListener('focus', this.resume);
+    view.document.addEventListener('visibilitychange', this.resume);
     this.render();
     this.adapter.list().then(list => {
       this.fileList = [...new Set([this.initialFile, ...list])];
@@ -202,6 +209,8 @@ export class Controller {
   destroy() {
     this.destroyed = true;
     this.pollWindow?.clearInterval(this.pollTimer);
+    this.pollWindow?.removeEventListener('focus', this.resume);
+    this.pollWindow?.document.removeEventListener('visibilitychange', this.resume);
     this.resizeObserver?.disconnect();
     window.clearTimeout(this.saveTimer);
     this.clearToast();
@@ -920,7 +929,8 @@ export class Controller {
     const dirty = docs.filter(doc => doc.dirty).length;
     const conflicts = docs.filter(doc => doc.conflict).length;
     this.saveState = {
-      text: this.busy ? this.t.saveState.busy : conflicts ? this.t.saveState.conflicts(conflicts) : dirty ? this.t.saveState.unsaved(dirty) : this.t.saveState.saved,
+      text: this.busy ? this.t.saveState.busy : conflicts ? this.t.saveState.conflicts(conflicts) : dirty ? this.t.saveState.unsaved(dirty)
+        : this.externalPending ? this.t.saveState.externalPending : this.t.saveState.saved,
       dirty: !!dirty,
     };
   }
@@ -1139,33 +1149,66 @@ export class Controller {
     if (this.active || this.composing) { this.deferred = true; this.updateStatus(); } else this.render();
   };
 
+  // Whether the user may be typing: a field is being edited or a control of the outliner has focus.
+  private editing() {
+    const focused = this.activeElement;
+    return !!this.active || !!focused && !!this.container?.contains(focused)
+      && ['INPUT', 'TEXTAREA', 'SELECT'].includes(focused.tagName) && (focused as HTMLInputElement).type !== 'checkbox';
+  }
+
+  // Called when the window gets focus or the browser tab is shown or hidden. Switching to another
+  // tab or window keeps the focus in the field, so waiting for the user to leave the field would
+  // defer an external change forever. Hiding the view with display: none, as a background
+  // Obsidian tab is, blurs the field in Chromium, so blurField() already covers that case.
+  private resume = () => {
+    this.resumeRequested = true;
+    void this.poll();
+  };
+
+  // Replaces an unedited file with its external version, keeping the edited item across lines
+  // added or removed above it.
+  private applyExternal(path: string, doc: Doc, result: { text: string; revision: Doc['baseRevision'] }) {
+    const active = this.active;
+    const activeRow = active?.path === path ? this.rows(path, doc.text).find(row => row.line === active.line) : undefined;
+    this.clearSelection();
+    this.undo.length = 0;
+    this.redo.length = 0;
+    if (this.zoom?.path === path) this.zoom = null;
+    doc.text = result.text;
+    doc.baseRevision = result.revision;
+    if (active && activeRow) {
+      const row = this.rows(path, doc.text).find(value => value.key === activeRow.key);
+      this.active = row ? { ...active, line: row.line } : null;
+    }
+  }
+
   private async poll() {
     if (this.destroyed || this.busy || this.polling) return;
     this.polling = true;
+    // A resume request that arrives while this poll reads is handled by the next poll.
+    const resume = this.resumeRequested;
+    this.resumeRequested = false;
     let changed = false;
+    let pending = false;
     try {
       for (const [path, doc] of this.docs) {
         try {
           const result = await this.adapter.read(path);
           if (result.revision === doc.baseRevision) continue;
           if (doc.dirty) { if (!doc.conflict) changed = true; doc.conflict = true; }
-          else if (this.active || this.composing) { this.deferred = true; }
+          else if (this.composing || !resume && this.editing()) pending = true;
           else {
-            this.clearSelection();
-            this.undo.length = 0;
-            this.redo.length = 0;
-            if (this.zoom?.path === path) this.zoom = null;
-            doc.text = result.text;
-            doc.baseRevision = result.revision;
+            this.applyExternal(path, doc, result);
             changed = true;
           }
         } catch (error) { if (this.message !== this.describe(error)) changed = true; this.message = this.describe(error); }
       }
-      const focused = this.activeElement;
-      const editingControl = !!focused && !!this.container?.contains(focused) && ['INPUT', 'TEXTAREA', 'SELECT'].includes(focused.tagName) && (focused as HTMLInputElement).type !== 'checkbox';
-      if (changed || this.deferred && !editingControl) {
+      this.externalPending = pending;
+      const editing = this.editing();
+      if (changed || this.deferred && !editing) {
         await this.loadEmbeds(this.current);
-        if (this.active || this.composing || editingControl) { this.deferred = true; } else this.render();
+        // render() puts the focus and the caret back on the edited item.
+        if (this.composing || editing && !resume) { this.deferred = true; } else this.render();
       }
     } finally { this.polling = false; this.updateStatus(); }
   }
