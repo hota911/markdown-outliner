@@ -2,15 +2,21 @@
   import Outline from './Outline.svelte';
   import SlashMenu from './SlashMenu.svelte';
   import type { Controller, Drop, ItemView } from './controller.svelte.ts';
-  import { linkParts, syncValue, tagAt } from './controller.svelte.ts';
+  import { syncValue, tagAt, titleParts } from './controller.svelte.ts';
+  import { markPieces, matchRanges, type Piece } from './filter.ts';
   import { grow } from './motion.ts';
 
   let { ctrl, item }: { ctrl: Controller; item: ItemView } = $props();
+  const uid = $props.id();
 
   let editing = $state(false);
-  // The links follow the textarea when it loses focus, before the next render updates the row.
+  // The links and marks follow the textarea when it loses focus, before the next render updates the row.
   let shownTitle = $derived(item.row.title);
-  const display = $derived(linkParts(shownTitle) ?? [{ text: shownTitle, start: 0 }]);
+  const marks = $derived(item.highlight ? matchRanges(shownTitle, item.highlight) : []);
+  // The rendered title is laid over the textarea while it is not edited, for links, tags and filter matches.
+  const overlay = $derived(item.titleParts !== null || marks.length > 0);
+  const display = $derived((titleParts(shownTitle) ?? [{ text: shownTitle, start: 0 }])
+    .map(part => ({ ...part, pieces: markPieces(part.text, part.start, marks) })));
   let titleNode: HTMLTextAreaElement | undefined = $state();
 
   const titleEvents = $derived(ctrl.fieldEvents(item.path, () => item.row, 'title'));
@@ -58,7 +64,10 @@
   }
 </script>
 
-<div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} style:--depth={item.depth} in:grow>
+<!-- Plain text pieces carry their offset in the title, so a click on them, marked or not, can put the caret there. -->
+{#snippet marked(pieces: Piece[], plain: boolean)}{#each pieces as piece, index (index)}{#if piece.mark}<mark data-start={plain ? piece.start : undefined}>{piece.text}</mark>{:else if plain}<span data-start={piece.start}>{piece.text}</span>{:else}{piece.text}{/if}{/each}{/snippet}
+
+<div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} class:is-context={item.context} style:--depth={item.depth} in:grow>
   {#if item.embed}
     <div class="outline-line">
       <button type="button" class="icon fold" title={ctrl.t.item.fold} onclick={() => ctrl.toggleFold(item.path, item.row.line)}>{item.collapsed ? '▸' : '▾'}</button>
@@ -102,7 +111,7 @@
       {:else}
         <span class="bullet">•</span>
       {/if}
-      <div class="title-area" class:has-links={item.links !== null} class:is-editing={editing}>
+      <div class="title-area" class:has-overlay={overlay} class:is-editing={editing}>
         <textarea
           bind:this={titleNode}
           class="title-input"
@@ -111,6 +120,7 @@
           {@attach syncValue(() => item.row.title)}
           placeholder={item.row.kind === 'task' ? ctrl.t.item.taskPlaceholder : ctrl.t.item.bulletPlaceholder}
           aria-label={ctrl.t.item.title}
+          aria-describedby={item.context ? uid + '-context' : undefined}
           data-path={item.path}
           data-line={item.row.line}
           data-field="title"
@@ -121,14 +131,17 @@
           onfocus={event => { titleEvents.onfocus(event); editing = true; }}
           onblur={event => { editing = false; shownTitle = event.currentTarget.value; titleEvents.onblur(); }}
         ></textarea>
+        {#if item.context}
+          <span id={uid + '-context'} class="visually-hidden">{ctrl.t.item.filterContext}</span>
+        {/if}
         {#if slashMenu}
           <SlashMenu {ctrl} menu={slashMenu} />
         {/if}
-        {#if item.links !== null}
+        {#if overlay}
           <!-- The textarea stays the keyboard target; clicking the rendered text only forwards focus. -->
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
           <div class="title-display" onclick={displayClick}>
-            {#each display as part, index (index)}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else if part.tag}<span class="tag" data-tag={part.tag}>{part.text}</span>{:else}<span data-start={part.start}>{part.text}</span>{/if}{/each}
+            {#each display as part, index (index)}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{@render marked(part.pieces, false)}</a>{:else if part.tag}<span class="tag" data-tag={part.tag}>{@render marked(part.pieces, false)}</span>{:else}{@render marked(part.pieces, true)}{/if}{/each}
           </div>
         {/if}
       </div>

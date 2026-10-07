@@ -3,6 +3,7 @@ import * as core from '../core.ts';
 import type { Status } from '../core.ts';
 import { merge3, type Side } from '../three-way-merge.ts';
 import { RowKeys, type KeyedRow } from './keys.ts';
+import { filterActive, rowMatches, type FilterQuery, type TextQuery } from './filter.ts';
 import { errorText, messages, type Messages } from './messages.ts';
 import type { Adapter, Bookmark, Doc, MountOptions, Preferences, Revision, StatusFilter } from './types.ts';
 
@@ -61,19 +62,21 @@ const markdownLink = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/;
 // A tag is a whole whitespace-separated word, the same rule the search box uses.
 // The leading space is captured rather than looked behind for, which iOS before 16.4 lacks.
 const tagWord = /(^|\s)(#[^#\s]+)(?=\s|$)/g;
-// `start` is the offset of the part in the title, so a click on the rendered text can put the caret there.
-export interface LinkPart { text: string; start: number; href?: string; tag?: string }
+// `start` is the offset of the shown text in the title, so that a click on the rendered text can
+// put the caret there and filter matches can be marked in it.
+export interface TitlePart { text: string; start: number; href?: string; tag?: string }
 
 // The title split into http(s) links, #tags and plain text; null when it has neither links nor tags.
-export function linkParts(title: string): LinkPart[] | null {
+export function titleParts(title: string): TitlePart[] | null {
   const links = [...title.matchAll(new RegExp(markdownLink, 'g'))]
-    .map(match => ({ start: match.index, end: match.index + match[0].length, part: { text: match[1], start: match.index, href: match[2] } }));
+    // The shown link text follows the opening bracket.
+    .map(match => ({ start: match.index, end: match.index + match[0].length, part: { text: match[1], start: match.index + 1, href: match[2] } }));
   const tags = [...title.matchAll(tagWord)]
     .map(match => ({ start: match.index + match[1].length, end: match.index + match[0].length, tag: match[2] }))
     .map(({ start, end, tag }) => ({ start, end, part: { text: tag, start, tag: tag.slice(1) } }))
     .filter(tag => !links.some(link => tag.start < link.end && link.start < tag.end));
   if (!links.length && !tags.length) return null;
-  const parts: LinkPart[] = [];
+  const parts: TitlePart[] = [];
   let offset = 0;
   for (const token of [...links, ...tags].sort((a, b) => a.start - b.start)) {
     if (token.start > offset) parts.push({ text: title.slice(offset, token.start), start: offset });
@@ -110,7 +113,11 @@ export interface ItemView {
   hasChildren: boolean;
   showNote: boolean;
   status: { icon: string; label: string; next: Status } | null;
-  links: LinkPart[] | null;
+  titleParts: TitlePart[] | null;
+  // Shown only because a descendant matches the active filter; rendered dimmed.
+  context: boolean;
+  // The search box words and #tags to mark in the title; null without a text filter and for context rows.
+  highlight: TextQuery | null;
   embed: { target: string | null; error: string | null; outline: OutlineView | null } | null;
   // Drop targets after the last shown descendant of each ancestor that ends here, innermost first.
   ends: { key: string; parentLine: number; depth: number; label: string }[];
@@ -934,24 +941,42 @@ export class Controller {
     this.render();
   };
 
-  private shown(path: string, text: string) {
-    const tagFilters = this.tagList();
+  private query(): FilterQuery {
+    return { status: this.filter, tags: this.tagList(), text: this.textSearch.trim() };
+  }
+
+  // The lines to show, each mapped to whether the row matches the filter itself (true) or is shown
+  // only as an ancestor of a match (false). An embed matches when anything in its file matches.
+  // `chain` holds the files embedding this one, as in outlineView(), to stop at cycles.
+  private shown(path: string, text: string, chain: string[] = []): Map<number, boolean> {
+    const query = this.query(), active = filterActive(query);
     const rows = this.rows(path, text);
     const byLine = new Map(rows.map(row => [row.line, row]));
     const keptLines = new Set(this.keepFor(path));
-    const visible = new Set<number>();
+    const shown = new Map<number, boolean>();
     for (const row of rows) {
-      const words = (row.title + '\n' + row.note).split(/\s+/);
-      const matches = (this.filter === 'all' || (this.filter === 'not-done' ? row.status !== 'done' : row.status === this.filter)) && tagFilters.every(tag => words.includes('#' + tag))
-        && row.title.toLowerCase().includes(this.textSearch.trim().toLowerCase());
-      if (!keptLines.has(row.line) && !matches) continue;
-      let ancestor: KeyedRow | undefined = row;
-      while (ancestor) {
-        visible.add(ancestor.line);
-        ancestor = ancestor.parentLine === null ? undefined : byLine.get(ancestor.parentLine);
+      const matches = !active || keptLines.has(row.line)
+        || (row.kind === 'embed' ? this.embedMatches(path, row, chain) : rowMatches(row, query));
+      if (!matches) continue;
+      shown.set(row.line, true);
+      // Ancestors come before their descendants, so an ancestor already shown has its own ancestors shown too.
+      for (let ancestor = row.parentLine === null ? undefined : byLine.get(row.parentLine); ancestor && !shown.has(ancestor.line);
+        ancestor = ancestor.parentLine === null ? undefined : byLine.get(ancestor.parentLine)) {
+        shown.set(ancestor.line, false);
       }
     }
-    return visible;
+    return shown;
+  }
+
+  // Whether anything in the embedded file matches the filter. A cycle, an invalid path or a file
+  // that is not loaded has nothing to match.
+  private embedMatches(path: string, row: KeyedRow, chain: string[]) {
+    let target: string;
+    try { target = this.normalize(path, row.embed); }
+    catch { return false; }
+    const doc = this.docs.get(target);
+    if (!doc || chain.includes(target) || target === path) return false;
+    return [...this.shown(target, doc.text, [...chain, path]).values()].some(Boolean);
   }
 
   selectRow = (path: string, row: KeyedRow, event: MouseEvent) => {
@@ -1363,7 +1388,9 @@ export class Controller {
     const doc = this.docs.get(path);
     if (!doc) return { kind: 'missing' };
     const rows = this.rows(path, doc.text);
-    const visible = this.shown(path, doc.text);
+    const visible = this.shown(path, doc.text, chain);
+    const query = this.query();
+    const highlight = query.text || query.tags.length ? { text: query.text, tags: query.tags } : null;
     const byLine = new Map(rows.map(row => [row.line, row]));
     const zoom = this.zoom;
     const rootRow = zoom && zoom.path === path ? byLine.get(zoom.line) ?? null : null;
@@ -1372,7 +1399,7 @@ export class Controller {
     const itemByLine = new Map<number, ItemView>();
     for (const row of rows) {
       if (rootRow && !(row.line > rootRow.line && row.line < rootRow.end)) continue;
-      if (!visible.has(row.line) && row.kind !== 'embed') continue;
+      if (!visible.has(row.line)) continue;
       let hidden = false;
       for (let ancestor = row.parentLine === null ? undefined : byLine.get(row.parentLine); ancestor; ancestor = ancestor.parentLine === null ? undefined : byLine.get(ancestor.parentLine)) {
         if (this.collapsed.has(this.key(path, ancestor.line))) { hidden = true; break; }
@@ -1390,7 +1417,10 @@ export class Controller {
         hasChildren: rows.some(child => child.parentLine === row.line),
         showNote: row.kind !== 'embed' && (!!row.note || this.isActive(path, row.line, 'note')),
         status: this.statusView(row, false),
-        links: row.kind === 'embed' ? null : linkParts(row.title),
+        titleParts: row.kind === 'embed' ? null : titleParts(row.title),
+        context: visible.get(row.line) === false,
+        // Context rows did not match, so any words they share with the query are not marked.
+        highlight: visible.get(row.line) ? highlight : null,
         embed: null,
         ends: [],
       };

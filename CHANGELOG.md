@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - At 600px wide or narrower, the bookmarks stack above the outline instead of sitting beside it.
 - Short animations (150ms): a new item, and the children shown by expanding an item or an embedded file, slide open; the bookmarks sidebar changes its width smoothly when collapsed or expanded. Opening a file or zooming does not animate the items, the new item has the focus at once, and with the system's reduced-motion setting nothing animates.
 - `#tags` in an item's text are shown like links (in Obsidian, with the theme's tag colors). Clicking or tapping a tag adds it to the search box filter, which applies right away; a tag already in the filter is not added again. Clicking elsewhere in the text starts editing with the caret where you clicked. While the text is being edited, ⌘-click (Ctrl-click on Windows and Linux) on a tag does the same.
+- While the search box filters by words or `#tags`, the matched words and tags are highlighted in item titles, including inside link text. The highlight disappears while you edit the title.
 
 ### Changed
 
@@ -24,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The command and ribbon icon are named "Open outliner" in English and "アウトライナーを開く" in Japanese, following the display language.
 - When a file changes on disk while it has unsaved input, changes on different lines are now merged automatically instead of being reported as a save conflict. The merge clears the undo history, and a message says so. If both sides changed the same line, the conflicting lines are listed as "Your input" and "External version", and "Keep my lines" or "Use external lines" picks one version for those lines.
 - Enter with the cursor at the start of an item's text adds the new item above it instead of below, as in WorkFlowy and Logseq. The item keeps its note and children, and the cursor stays at its start. On an empty text, elsewhere in the text, or on the zoomed item, Enter works as before.
+- While a status or search filter is active, an item that does not match but has a matching item under it is shown dimmed, so that the matches keep their place in the outline. Screen readers announce it as shown because an item under it matches. Dimmed items can be edited as usual.
 
 ### Fixed
 
@@ -32,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The bar for selected items (Not started / In progress / ...) wraps instead of overflowing at narrow widths.
 - The outliner always opened `tasks.md` first, and listed it in the file picker even when the folder or vault had no such file. It now reopens the file shown last, or the first Markdown file in the list if that file is gone, and shows a message when there are no Markdown files. A file opened explicitly, such as an "Open as outline" tab or a single file given to the web server, still opens directly.
 - The web server kept the page and the list of built files from startup, so after `npm run build:web` while it ran, the page loaded deleted files and failed until the server restarted. The page and its files are now read on each request, so reloading the browser picks up a new build. A request for a missing file returns 404 instead of 500.
+- While a status or search filter was active, an embedded file was always shown, even with nothing matching inside, and without its parent items when they did not match, so it appeared under the wrong item. An embed is now shown only when something in the embedded file matches, with its parents dimmed.
 
 ## [0.1.2] - 2026-10-07
 
