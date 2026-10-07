@@ -1,10 +1,10 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium, test as base, expect, type Browser, type Page } from '@playwright/test';
+import { chromium, test as base, expect, type Page } from '@playwright/test';
 
 export { expect };
 
@@ -19,26 +19,53 @@ export const skipReason = process.platform !== 'darwin'
   : existsSync(executable) ? null : `Obsidian not found at ${obsidianApp}; set OBSIDIAN_APP to the Obsidian.app bundle.`;
 
 export interface Obsidian {
-  /** The Obsidian window. */
-  page: Page;
+  /** The window of the running Obsidian; a new page after relaunch(). */
+  readonly page: Page;
   /** Absolute path of the test vault. */
   vault: string;
-  /** Console errors and uncaught exceptions of the window since launch. */
-  errors: string[];
+  /** Console errors and uncaught exceptions of the window since the last launch. */
+  readonly errors: string[];
   /** Reads a file of the vault from disk. */
   readFile: (relative: string) => Promise<string>;
-  /** Runs a command by id, such as `markdown-outliner:open-outliner`. Fails if the command does not exist. */
+  /** Runs a command by id, such as `markdown-outliner:open-outliner`. Fails if the command is unavailable. */
   runCommand: (id: string) => Promise<void>;
-  /** Opens a vault file in a new tab. */
+  /** Opens a vault file in a new tab with its default view (the Markdown editor for .md). */
   openFile: (relative: string) => Promise<void>;
+  /** The view type and file of the active tab. */
+  activeView: () => Promise<{ type: string; file: string | null; title: string }>;
+  /** Sets the view state of the active tab, as Obsidian's own view switches do. */
+  setActiveViewState: (state: { type: string; state?: Record<string, unknown> }) => Promise<void>;
   /** Switches Obsidian's base color scheme. */
   setTheme: (scheme: 'light' | 'dark') => Promise<void>;
   /** Sets Obsidian's interface language and reloads the app, as the language setting does. */
   setLanguage: (language: string) => Promise<void>;
+  /** Saves the workspace layout, quits Obsidian and starts it again with the same profile and vault. */
+  relaunch: () => Promise<void>;
 }
 
 /** Vault files to write over the copy of samples/, by vault-relative path. */
 export type VaultFiles = Record<string, string>;
+
+// The parts of Obsidian's global `app` that the tests use; commands, plugins, changeTheme and
+// the workspace's activeLeaf internals are not all in the public API typings.
+interface ViewLeaf {
+  view: { getViewType: () => string; getDisplayText: () => string; file?: { path: string } | null };
+  setViewState: (state: { type: string; state?: Record<string, unknown>; active?: boolean }) => Promise<void>;
+}
+type AppWindow = Window & {
+  app: {
+    workspace: {
+      layoutReady: boolean;
+      getLeaf: (kind: 'tab') => { openFile: (file: unknown) => Promise<void> };
+      getMostRecentLeaf: () => ViewLeaf | null;
+      requestSaveLayout: { run: () => Promise<void> | void };
+    };
+    vault: { getFileByPath: (path: string) => unknown };
+    plugins: { plugins: Record<string, unknown> };
+    commands: { executeCommandById: (id: string) => boolean };
+    changeTheme: (theme: 'obsidian' | 'moonstone') => void;
+  };
+};
 
 async function waitForFile(file: string) {
   for (let attempt = 0; attempt < 150; attempt++) {
@@ -52,21 +79,47 @@ async function waitForFile(file: string) {
 async function waitForPlugin(page: Page) {
   await page.waitForFunction(id => {
     const { app } = window as Partial<AppWindow>;
-    return !!app?.workspace.layoutReady && !!app.plugins.plugins[id];
+    return !!app?.workspace?.layoutReady && !!app.plugins?.plugins[id];
   }, pluginId, { timeout: 30_000 });
 }
 
-// The parts of Obsidian's global `app` that the tests use; commands, plugins and changeTheme
-// are not in the public API typings.
-type AppWindow = Window & {
-  app: {
-    workspace: { layoutReady: boolean; getLeaf: (kind: 'tab') => { openFile: (file: unknown) => Promise<void> } };
-    vault: { getFileByPath: (path: string) => unknown };
-    plugins: { plugins: Record<string, unknown> };
-    commands: { executeCommandById: (id: string) => boolean };
-    changeTheme: (theme: 'obsidian' | 'moonstone') => void;
+// Starts Obsidian on `profile` and attaches Playwright to its window. Playwright's
+// _electron.launch needs the Node inspector, which the packaged app disables, so the app is
+// started with a DevTools port and Playwright connects over CDP.
+async function launch(profile: string) {
+  const portFile = path.join(profile, 'DevToolsActivePort');
+  await rm(portFile, { force: true });
+  const child = spawn(executable, [`--user-data-dir=${profile}`, '--remote-debugging-port=0', '--lang=en-US'], { stdio: 'ignore' });
+  const exited = new Promise(resolve => child.once('exit', resolve));
+  const quit = async () => {
+    child.kill();
+    // A hung app ignores SIGTERM; never leave an Obsidian process behind.
+    const timer = setTimeout(() => child.kill('SIGKILL'), 10_000);
+    await exited;
+    clearTimeout(timer);
   };
-};
+  try {
+    const port = (await waitForFile(portFile)).split('\n')[0];
+    const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+    const context = browser.contexts()[0];
+    const page = context.pages()[0] ?? await context.waitForEvent('page');
+    const errors: string[] = [];
+    page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+    page.on('pageerror', error => errors.push(error.message));
+    return {
+      page,
+      errors,
+      close: async () => {
+        // Disconnect first so Playwright does not react to the window closing.
+        await browser.close();
+        await quit();
+      },
+    };
+  } catch (error) {
+    await quit();
+    throw error;
+  }
+}
 
 export const test = base.extend<{ vaultFiles: VaultFiles; obsidian: Obsidian }>({
   vaultFiles: [{}, { option: true }],
@@ -89,52 +142,55 @@ export const test = base.extend<{ vaultFiles: VaultFiles; obsidian: Obsidian }>(
       await cp(path.join(root, 'dist', asset), path.join(pluginDir, asset));
     }
     await writeFile(path.join(vault, '.obsidian', 'community-plugins.json'), JSON.stringify([pluginId]));
+    // On macOS Obsidian shows native menus by default, which Playwright cannot see and which
+    // block the app while open; HTML menus can be clicked like the rest of the window.
+    await writeFile(path.join(vault, '.obsidian', 'app.json'), JSON.stringify({ nativeMenus: false }));
     // Opens the test vault on launch instead of the vault picker, and skips the update download.
     await writeFile(path.join(profile, 'obsidian.json'), JSON.stringify({
       updateDisabled: true,
       vaults: { '0123456789abcdef': { path: vault, ts: Date.now(), open: true } },
     }));
 
-    // Playwright's _electron.launch needs the Node inspector, which the packaged app disables,
-    // so the app is started with a DevTools port and Playwright attaches over CDP.
-    const app: ChildProcess = spawn(executable, [`--user-data-dir=${profile}`, '--remote-debugging-port=0', '--lang=en-US'], { stdio: 'ignore' });
-    const exited = new Promise(resolve => app.once('exit', resolve));
-    let browser: Browser | undefined;
+    let session = await launch(profile);
     try {
-      const port = (await waitForFile(path.join(profile, 'DevToolsActivePort'))).split('\n')[0];
-      browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
-      const context = browser.contexts()[0];
-      const page = context.pages()[0] ?? await context.waitForEvent('page');
-      const errors: string[] = [];
-      page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-      page.on('pageerror', error => errors.push(error.message));
-
       // A vault with community plugins first opens in Restricted mode and asks whether to trust its author.
-      await page.getByRole('button', { name: 'Trust author and enable plugins' }).click({ timeout: 30_000 });
-      await waitForPlugin(page);
+      // Trusting it then opens the community plugin settings, which cover the workspace.
+      await session.page.getByRole('button', { name: 'Trust author and enable plugins' }).click({ timeout: 30_000 });
+      await waitForPlugin(session.page);
+      await session.page.locator('.modal.mod-settings').waitFor();
+      await session.page.keyboard.press('Escape');
+      await expect(session.page.locator('.modal-container')).toHaveCount(0);
 
       await use({
-        page,
+        get page() { return session.page; },
+        get errors() { return session.errors; },
         vault,
-        errors,
         readFile: relative => readFile(path.join(vault, relative), 'utf8'),
         runCommand: async id => {
-          const found = await page.evaluate(id => (window as AppWindow).app.commands.executeCommandById(id), id);
-          if (!found) throw new Error(`No command ${id}`);
+          const found = await session.page.evaluate(id => (window as AppWindow).app.commands.executeCommandById(id), id);
+          if (!found) throw new Error(`Command ${id} is missing or unavailable`);
         },
         openFile: async relative => {
-          await page.evaluate(async relative => {
+          await session.page.evaluate(async relative => {
             const { app } = window as AppWindow;
             const file = app.vault.getFileByPath(relative);
             if (!file) throw new Error(`No file ${relative}`);
             await app.workspace.getLeaf('tab').openFile(file);
           }, relative);
         },
+        activeView: () => session.page.evaluate(() => {
+          const { view } = (window as AppWindow).app.workspace.getMostRecentLeaf()!;
+          return { type: view.getViewType(), file: view.file?.path ?? null, title: view.getDisplayText() };
+        }),
+        setActiveViewState: async state => {
+          await session.page.evaluate(state => (window as AppWindow).app.workspace.getMostRecentLeaf()!.setViewState({ ...state, active: true }), state);
+        },
         setTheme: async scheme => {
-          await page.evaluate(theme => (window as AppWindow).app.changeTheme(theme), scheme === 'dark' ? 'obsidian' : 'moonstone');
-          await expect(page.locator('body')).toHaveClass(new RegExp(`\\btheme-${scheme}\\b`));
+          await session.page.evaluate(theme => (window as AppWindow).app.changeTheme(theme), scheme === 'dark' ? 'obsidian' : 'moonstone');
+          await expect(session.page.locator('body')).toHaveClass(new RegExp(`\\btheme-${scheme}\\b`));
         },
         setLanguage: async language => {
+          const { page } = session;
           await page.evaluate(language => localStorage.setItem('language', language), language);
           await Promise.all([
             page.waitForEvent('load'),
@@ -142,12 +198,16 @@ export const test = base.extend<{ vaultFiles: VaultFiles; obsidian: Obsidian }>(
           ]);
           await waitForPlugin(page);
         },
+        relaunch: async () => {
+          // Obsidian writes the layout shortly after it changes; flush it instead of waiting.
+          await session.page.evaluate(() => (window as AppWindow).app.workspace.requestSaveLayout.run());
+          await session.close();
+          session = await launch(profile);
+          await waitForPlugin(session.page);
+        },
       });
     } finally {
-      // Disconnect first so Playwright does not react to the window closing.
-      await browser?.close();
-      app.kill();
-      await exited;
+      await session.close();
       await rm(dir, { recursive: true, force: true });
     }
   },
