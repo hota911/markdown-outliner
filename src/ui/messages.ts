@@ -90,7 +90,8 @@ const en = {
   },
 
   opening: 'Opening file…',
-  help: '↑↓: move the cursor · Enter: add · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several',
+  noFiles: 'There are no Markdown files in this folder.',
+  help: '↑↓: move the cursor · Enter: add (at the start of the text: above) · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several',
   closeToast: 'Close notification',
 
   bookmarks: {
@@ -147,6 +148,19 @@ const en = {
     extractTitle: 'Move the item with its children and notes to a new file and embed it',
     extract: 'Move to file',
     childrenEnd: (title: string) => `End of the children of ${title}`,
+  },
+
+  // The bar shown above the soft keyboard on touch screens, for the keys a soft keyboard lacks.
+  touchBar: {
+    label: 'Edit the item',
+    indent: 'Indent (Tab)',
+    outdent: 'Outdent (Shift+Tab)',
+    moveUp: 'Move up (Alt+↑)',
+    moveDown: 'Move down (Alt+↓)',
+    status: 'Change the task status',
+    note: 'Switch between text and note (Shift+Enter)',
+    undo: 'Undo the last change',
+    redo: 'Redo the undone change',
   },
 
   edit: {
@@ -305,7 +319,8 @@ const ja: Messages = {
   },
 
   opening: 'ファイルを開いています…',
-  help: '↑↓: カーソル移動 · Enter: 追加 · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択',
+  noFiles: 'このフォルダには Markdown ファイルがありません。',
+  help: '↑↓: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択',
   closeToast: '通知を閉じる',
 
   bookmarks: {
@@ -361,6 +376,18 @@ const ja: Messages = {
     extractTitle: '項目を子とノートごと新しいファイルへ移して埋め込みにする',
     extract: 'ファイルにする',
     childrenEnd: title => title + ' の子項目の末尾',
+  },
+
+  touchBar: {
+    label: '項目の編集',
+    indent: '字下げ（Tab）',
+    outdent: '字下げを戻す（Shift+Tab）',
+    moveUp: '上へ移動（Alt+↑）',
+    moveDown: '下へ移動（Alt+↓）',
+    status: 'タスクの状態を切り替える',
+    note: '本文とノートを切り替える（Shift+Enter）',
+    undo: '直前の変更を元に戻す',
+    redo: '元に戻した変更をやり直す',
   },
 
   edit: {

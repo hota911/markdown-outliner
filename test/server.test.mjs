@@ -27,6 +27,8 @@ before(async () => {
   const html = await (await fetch(origin)).text();
   token = configOf(html).token;
   assert.match(token, /^[a-f0-9]{48}$/);
+  // A folder names no initial file; the page opens the last file shown or the first listed one.
+  assert.equal(configOf(html).initialFile, undefined);
 });
 after(async () => { await new Promise(resolve => server.close(resolve)); });
 

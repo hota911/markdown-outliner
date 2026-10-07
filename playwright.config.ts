@@ -12,5 +12,9 @@ export default defineConfig({
     locale: 'en-US',
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /mobile\.spec\.ts/ },
+    // Chromium emulating an Android phone: touch input, a coarse pointer and a 412px wide viewport.
+    { name: 'android', use: { ...devices['Pixel 7'] }, testMatch: /mobile\.spec\.ts/ },
+  ],
 });

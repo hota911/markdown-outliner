@@ -30,9 +30,21 @@ Headings, code blocks, and other non-list content are preserved but not shown.
 2. Put them in `<vault>/.obsidian/plugins/markdown-outliner/`.
 3. Reload Obsidian and enable "Markdown Outliner" in Settings > Community plugins.
 
-Open the outliner from the ribbon icon or the command "Open outliner" ("アウトライナーを開く" in Japanese). The plugin edits any `.md` file in the vault. Unsaved input is kept in memory while the plugin is enabled; save before quitting Obsidian or disabling the plugin. The plugin has been used on desktop; mobile has not been tested.
+Open the outliner from the ribbon icon or the command "Open outliner" ("アウトライナーを開く" in Japanese). The plugin edits any `.md` file in the vault, and opens the file shown last, or the first Markdown file of the vault. Unsaved input is kept in memory while the plugin is enabled; save before quitting Obsidian or disabling the plugin. The plugin has been used on desktop; on phones see [Touch screens](#touch-screens).
 
 Experimental: a single file can also open as an outline in its own tab. Choose "Open as outline" ("アウトラインで開く") from a `.md` file's menu, or run the command of the same name to switch the active Markdown editor to the outline. From a tab's own menu it switches that tab; from the file explorer or a link's menu it opens a new tab. The tab is titled with the file name, works with back and forward navigation, and is restored when Obsidian restarts. "Open as Markdown" in the tab's menu switches it back to the regular editor. The file picker in the toolbar still lists the whole vault, so it can show another file inside the same tab.
+
+## Touch screens
+
+On a device whose main pointer is a finger (CSS `pointer: coarse`, such as a phone or Obsidian mobile), a bar appears at the bottom of the outliner while an item's text or note is being edited. Soft keyboards have no Tab, Alt or Shift+Enter, so the bar has these commands: outdent (Shift+Tab), indent (Tab), move up and down (Alt+Up/Down), change the task status, switch between the text and the note (Shift+Enter), undo and redo. The buttons do not take the focus, so the keyboard stays open. The status button cycles not started, in progress, done like the status icon of the item, unlike Cmd+Enter, which only marks the item done.
+
+Other differences on touch screens:
+
+- The buttons of an item (add a child, zoom, move to a file) appear under the item that is being edited, not on the item under the finger. The note and move buttons are in the bar instead.
+- Tapping the ⠿ handle selects the item. Dragging by touch is not supported; use the bar's move buttons, or select items and use the selection bar.
+- Buttons are at least 36px high, the keyboard shortcut help is hidden, and on screens 600px wide or narrower the bookmarks are shown above the outline.
+
+The touch layout is tested in Chromium emulating a Pixel 7 (`e2e/mobile.spec.ts`). It has not been checked on a real Android or iOS device or in the Obsidian mobile app.
 
 ## Web version
 
@@ -44,7 +56,7 @@ npm run build:web
 node server.mjs [folder-or-file] [port]
 ```
 
-Then open `http://127.0.0.1:<port>/` (default port 4317). Without arguments the server edits the bundled `samples/` folder in place, so copy it first if you want to keep the originals. Passing a single `.md` file restricts the server to that file. The server only listens on 127.0.0.1, serves the built app from `dist/web/`, and bookmarks are stored in the browser's local storage. `npm start` builds the web app and runs the server with the defaults.
+Then open `http://127.0.0.1:<port>/` (default port 4317). Without arguments the server edits the bundled `samples/` folder in place, so copy it first if you want to keep the originals. Passing a single `.md` file restricts the server to that file. For a folder, the page opens the file shown last, or the first Markdown file of the folder. The server only listens on 127.0.0.1, serves the built app from `dist/web/`, and bookmarks and the file shown last are stored in the browser's local storage. `npm start` builds the web app and runs the server with the defaults.
 
 ## Desktop app (Tauri prototype)
 
@@ -80,7 +92,7 @@ npm run typecheck   # svelte-check over src/, e2e/, obsidian-e2e/ and the Vite a
 npm test            # run test:node and test:ui
 npm run test:node   # core, row key, server and packaging tests with node --test
 npm run test:ui     # screen tests (test/ui/) and Obsidian adapter tests with Vitest and jsdom
-npm run test:e2e    # build the web app, then run the drag and drop tests (e2e/) in Chromium with Playwright
+npm run test:e2e    # build the web app, then run the browser tests (e2e/) in Chromium with Playwright, on desktop and as a Pixel 7
 npm run test:obsidian # macOS only: build the plugin, then test it inside the Obsidian desktop app (obsidian-e2e/)
 npm run build       # write dist/web/ and the plugin files dist/main.js, manifest.json, styles.css
 ```
@@ -109,7 +121,8 @@ Source layout:
 - `vite.web.config.ts`: the web app build and dev server.
 - `vite.tauri.config.ts`: the desktop app's page build and dev server.
 - `scripts/package-plugin.mjs`: builds the plugin and copies `manifest.json` and `styles.css` into `dist/`.
-- `e2e/`: Playwright tests in Chromium (drag and drop); `playwright.config.ts` configures them.
+- `scripts/changelog-section.mjs`: prints one version's section of `CHANGELOG.md`, used as the release notes.
+- `e2e/`: Playwright tests in Chromium (drag and drop, layout, and the touch screen layout in `mobile.spec.ts`); `playwright.config.ts` runs `mobile.spec.ts` as a Pixel 7 and the rest as desktop Chrome.
 - `obsidian-e2e/`: Playwright tests of the plugin in the Obsidian desktop app, with their own `playwright.config.ts`; `fixtures.ts` starts Obsidian and has helpers to open a file, run a command by id, and read a vault file.
 
 The plugin build bundles Svelte and the shared code into `main.js`, so the released `main.js` only requires `obsidian`.
@@ -117,10 +130,13 @@ The plugin build bundles Svelte and the shared code into `main.js`, so the relea
 ## Release
 
 1. On a branch, run `npm version <patch|minor|major> --no-git-tag-version`. This updates `package.json`, `package-lock.json`, `manifest.json`, and `versions.json` (the `version` script copies the version and `minAppVersion`).
-2. Commit the changes, open a PR, and merge it to `main`.
-3. On the updated `main`, push a tag equal to the version, without a `v` prefix: `git tag 0.1.0 && git push origin 0.1.0`.
+2. In the same branch, move the entries under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) to a new `## [X.Y.Z] - YYYY-MM-DD` heading, leave `## [Unreleased]` empty, and update the compare links at the bottom. `npm test` fails if CHANGELOG.md has no entries for the version in `package.json`.
+3. Commit the changes, open a PR, and merge it to `main`.
+4. On the updated `main`, push a tag equal to the version, without a `v` prefix: `git tag 0.1.0 && git push origin 0.1.0`.
 
-The `Release` workflow checks that the tag matches the versions, runs lint, typecheck, tests, and the build, attests build provenance, then publishes a GitHub Release with `main.js`, `manifest.json`, and `styles.css` attached.
+The `Release` workflow checks that the tag matches the versions, runs lint, typecheck, tests, and the build, attests build provenance, then publishes a GitHub Release with `main.js`, `manifest.json`, and `styles.css` attached. The release notes are the tag's section of CHANGELOG.md (`node scripts/changelog-section.mjs <version>` prints it); the workflow fails if that section is missing or empty.
+
+Pull requests with user-facing changes add an entry under `## [Unreleased]` in CHANGELOG.md, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) (Added, Changed, Fixed, Security, and so on). Changes that only affect development, such as tests, CI, or dependency updates that do not reach the released files, need no entry.
 
 ## 概要（日本語）
 

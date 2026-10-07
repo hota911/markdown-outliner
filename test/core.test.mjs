@@ -49,6 +49,18 @@ test('状態を指定せず箇条書きを兄弟の子とノートの後へ追�
   });
 });
 
+test('項目の前に同じ階層の兄弟を追加し、項目のノートと子を保つ', () => {
+  const text = '- [ ] first\n- [x] parent\n  note\n  - [ ] child\n';
+  assert.deepEqual(core.insert(text, 1, { kind: 'task', before: true, status: 'todo', tags: ['work'] }), {
+    text: '- [ ] first\n- [ ] #work\n- [x] parent\n  note\n  - [ ] child\n', line: 1
+  });
+  assert.deepEqual(core.insert('- parent\n\t- child\n', 1, { kind: 'bullet', before: true, tags: [] }), {
+    text: '- parent\n\t- \n\t- child\n', line: 1
+  });
+  assert.throws(() => core.insert(text, 1, { kind: 'task', before: true, child: true, status: 'todo', tags: [] }), { code: 'invalidInsert' });
+  assert.throws(() => core.insert(text, null, { kind: 'task', before: true, status: 'todo', tags: [] }), { code: 'invalidInsert' });
+});
+
 test('追加する種類とタスクの状態とタグを検証する', () => {
   assert.throws(() => core.insert('- parent\n', 0, { kind: 'ordered', child: false, status: 'todo', tags: [] }), { code: 'invalidInsert' });
   assert.throws(() => core.insert('- parent\n', 0, { kind: 'task', child: false, status: 'unknown', tags: [] }), { code: 'invalidInsert' });
