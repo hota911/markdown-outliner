@@ -40,12 +40,15 @@ export interface Bookmark {
 export interface Preferences {
   bookmarks: unknown[];
   sidebarCollapsed?: boolean;
+  // The file shown last; reopened on the next start while it is still in the file list.
+  lastFile?: string;
 }
 
 export interface MountOptions {
   adapter: Adapter;
   // Obsidian keeps drafts on the plugin so unsaved input survives closing the view.
   drafts?: Map<string, Doc>;
+  // The file to show first. Without it, the last file shown or else the first listed file opens.
   initialFile?: string;
   // Display language, chosen by the host: Obsidian's language or the browser's.
   language: Language;

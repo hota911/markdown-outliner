@@ -84,7 +84,9 @@ export interface BookmarkView { bookmark: unknown; label: string; title: string 
 
 export interface View {
   fileList: string[];
-  current: string;
+  // Null until the first file is chosen, and while the folder has no Markdown files.
+  current: string | null;
+  noFiles: boolean;
   filter: StatusFilter;
   searchValue: string;
   canOpenSource: boolean;
@@ -133,9 +135,10 @@ export class Controller {
   private readonly preferences: Preferences;
   private readonly savePreferences?: (value: Preferences) => Promise<void>;
   private preferenceSave: Promise<void> = Promise.resolve();
-  private readonly initialFile: string;
-  private current: string;
-  private fileList: string[];
+  private readonly initialFile?: string;
+  private current: string | null = null;
+  private fileList: string[] = [];
+  private noFiles = false;
   private filter: StatusFilter = 'all';
   private tags = '';
   private textSearch = '';
@@ -175,13 +178,11 @@ export class Controller {
   private renderCount = 0;
   private readonly recorded = new WeakMap<HTMLElement, number>();
 
-  constructor({ adapter, drafts, initialFile = 'tasks.md', language, preferences = { bookmarks: [] }, savePreferences }: MountOptions) {
+  constructor({ adapter, drafts, initialFile, language, preferences = { bookmarks: [] }, savePreferences }: MountOptions) {
     this.t = messages[language];
     this.adapter = adapter;
     this.docs = drafts || new Map<string, Doc>();
     this.initialFile = initialFile;
-    this.current = initialFile;
-    this.fileList = [initialFile];
     this.preferences = preferences;
     this.savePreferences = savePreferences;
   }
@@ -209,8 +210,15 @@ export class Controller {
     view.document.addEventListener('visibilitychange', this.resume);
     this.render();
     this.adapter.list().then(list => {
-      this.fileList = [...new Set([this.initialFile, ...list])];
-      return this.openFile(this.current);
+      this.fileList = list;
+      // lastFile comes from user-editable storage, so it is only used when it matches a listed file.
+      const first = this.initialFile ?? list.find(file => file === this.preferences.lastFile) ?? list.at(0);
+      if (first === undefined) {
+        this.noFiles = true;
+        this.render();
+        return;
+      }
+      return this.openFile(first);
     }).catch((error: unknown) => { this.message = this.describe(error); this.render(); });
   }
 
@@ -359,7 +367,8 @@ export class Controller {
     return true;
   };
 
-  private mutate(path: string, fn: (text: string) => core.EditResult, focus: Field | null) {
+  // `focusOffset` moves the focus that many lines below `result.line`, which stays visible too.
+  private mutate(path: string, fn: (text: string) => core.EditResult, focus: Field | null, focusOffset = 0) {
     const doc = this.docs.get(path)!;
     let result: core.EditResult;
     try { result = fn(doc.text); }
@@ -378,8 +387,8 @@ export class Controller {
     }
     this.kept.clear();
     if (focus && result.line !== null) {
-      this.kept.set(path, new Set([result.line]));
-      this.active = { path, line: result.line, field: focus };
+      this.kept.set(path, new Set([result.line, result.line + focusOffset]));
+      this.active = { path, line: result.line + focusOffset, field: focus };
     } else this.active = null;
     if (this.zoom && this.zoom.path === path) {
       const zoomLine = this.zoom.line;
@@ -430,6 +439,13 @@ export class Controller {
     const nextKind = kind || (source?.kind === 'bullet' ? 'bullet' : 'task');
     this.mutate(path, text => core.insert(text, line, { ...this.insertion(child), kind: nextKind }), 'title');
   };
+
+  // Enter at the start of a title: the new item goes above, and the caret stays at the start of
+  // the item, so repeated Enter keeps pushing it down.
+  private addAbove(path: string, row: KeyedRow) {
+    const kind = row.kind === 'bullet' ? 'bullet' : 'task';
+    this.mutate(path, text => core.insert(text, row.line, { ...this.insertion(false), kind, before: true }), 'title', 1);
+  }
 
   private merge(path: string, row: KeyedRow, backwards: boolean) {
     let column: number | undefined;
@@ -547,24 +563,21 @@ export class Controller {
     if (field === 'note') {
       if (event.key === 'Enter' && event.shiftKey) {
         event.preventDefault();
-        this.active = { path, line: row.line, field: 'title' };
-        this.render();
+        this.toggleNote(path, row.line, field);
       }
       return;
     }
     const collapsedSelection = node.selectionStart === node.selectionEnd;
     const atStart = event.key === 'Backspace' && node.selectionStart === 0;
     const atEnd = event.key === 'Delete' && node.selectionEnd === node.value.length;
-    const zoom = this.zoom;
-    const zoomRoot = zoom?.path === path ? this.rows(path).find(value => value.line === zoom.line) : null;
+    const zoomRoot = this.zoomRoot(path);
     if (zoomRoot && row.line === zoomRoot.line) {
       if (event.key === 'Enter') {
         event.preventDefault();
-        if (event.shiftKey) this.focusNote(path, row.line);
+        if (event.shiftKey) this.toggleNote(path, row.line, field);
         else this.add(path, row.line, true);
         return;
       }
-      if (event.key === 'Tab' || event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key)) { event.preventDefault(); return; }
       if (collapsedSelection && (atStart || atEnd)) return;
     }
     if (collapsedSelection && (atStart || atEnd) && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
@@ -577,15 +590,15 @@ export class Controller {
       this.merge(path, row, atStart);
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      if (event.shiftKey) this.focusNote(path, row.line);
+      if (event.shiftKey) this.toggleNote(path, row.line, field);
+      else if (collapsedSelection && node.selectionStart === 0 && node.value && !event.altKey) this.addAbove(path, row);
       else this.add(path, row.line, false);
     } else if (event.key === 'Tab') {
       event.preventDefault();
-      if (zoomRoot && event.shiftKey && row.parentLine === zoomRoot.line) return;
-      this.mutate(path, text => event.shiftKey ? core.outdent(text, row.line) : core.indent(text, row.line), 'title');
+      this.shift(path, row, event.shiftKey, field);
     } else if (event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key)) {
       event.preventDefault();
-      this.mutate(path, text => core.move(text, row.line, event.key === 'ArrowUp' ? 'up' : 'down'), 'title');
+      this.moveItem(path, row, event.key === 'ArrowUp' ? 'up' : 'down', field);
     } else if (['ArrowUp', 'ArrowDown'].includes(event.key) && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
       event.preventDefault();
       const titles = [...this.container!.querySelectorAll<HTMLTextAreaElement>('[data-field="title"]')];
@@ -598,6 +611,57 @@ export class Controller {
       }
     }
   }
+
+  // --- Item commands shared by the keyboard and the touch bar --------------------------------
+
+  private zoomRoot(path: string) {
+    const zoom = this.zoom;
+    return zoom?.path === path ? this.rows(path).find(value => value.line === zoom.line) ?? null : null;
+  }
+
+  // Tab / Shift+Tab. The zoomed item and its direct children keep their level.
+  private shift(path: string, row: KeyedRow, outdent: boolean, field: Field) {
+    const zoomRoot = this.zoomRoot(path);
+    if (zoomRoot && (row.line === zoomRoot.line || outdent && row.parentLine === zoomRoot.line)) return;
+    this.mutate(path, text => outdent ? core.outdent(text, row.line) : core.indent(text, row.line), field);
+  }
+
+  // Alt+Up / Alt+Down. The zoomed item stays in place.
+  private moveItem(path: string, row: KeyedRow, direction: 'up' | 'down', field: Field) {
+    if (this.zoomRoot(path)?.line === row.line) return;
+    this.mutate(path, text => core.move(text, row.line, direction), field);
+  }
+
+  // Shift+Enter: from the title to the note of the same item and back.
+  private toggleNote(path: string, line: number, field: Field) {
+    if (field === 'title') { this.focusNote(path, line); return; }
+    this.active = { path, line, field: 'title' };
+    this.render();
+  }
+
+  // Runs a touch bar command on the item whose field has focus. A soft keyboard keeps the word
+  // being typed in IME composition, and render() waits for the composition to end; blurring the
+  // field commits the word first. The field gets the focus back unless the command's render()
+  // already focused it.
+  private fromTouchBar(command: (path: string, row: KeyedRow, field: Field) => void) {
+    const focus = this.active;
+    const node = this.activeElement;
+    if (!focus || !(node instanceof HTMLTextAreaElement)) return;
+    if (this.composing) node.blur();
+    const row = this.rows(focus.path).find(value => value.line === focus.line);
+    if (row) command(focus.path, row, focus.field);
+    if (node.isConnected && !(this.activeElement instanceof HTMLTextAreaElement)) node.focus();
+  }
+
+  indentActive = (outdent: boolean) => this.fromTouchBar((path, row, field) => this.shift(path, row, outdent, field));
+  moveActive = (direction: 'up' | 'down') => this.fromTouchBar((path, row, field) => this.moveItem(path, row, direction, field));
+  toggleActiveNote = () => this.fromTouchBar((path, row, field) => this.toggleNote(path, row.line, field));
+  historyFromTouchBar = (back: boolean) => this.fromTouchBar(() => this.history(back));
+  // Same order as the status button: not started → in progress → done → not started.
+  cycleActiveStatus = () => this.fromTouchBar((path, row, field) => {
+    const status = row.kind === 'task' ? row.status : null;
+    if (status) this.mutate(path, text => core.updateStatus(text, row.line, nextStatus(status)), field);
+  });
 
   // --- Row actions --------------------------------------------------------------------------
 
@@ -822,7 +886,9 @@ export class Controller {
   };
 
   openSource = async () => {
-    try { await this.adapter.openSource!(this.zoom ? this.zoom.path : this.current); }
+    const path = this.zoom ? this.zoom.path : this.current;
+    if (path === null) return;
+    try { await this.adapter.openSource!(path); }
     catch (error) { this.message = this.describe(error); this.render(); }
   };
 
@@ -868,6 +934,7 @@ export class Controller {
   }
 
   addBookmark = (kind: 'file' | 'search') => {
+    if (this.current === null) return;
     if (!Array.isArray(this.preferences.bookmarks)) {
       this.showToast(this.t.bookmarks.listUnreadable);
       return;
@@ -1005,10 +1072,11 @@ export class Controller {
   view(): View {
     // Reading the version makes every derived view re-run on render().
     void this.version;
-    const outline = this.docs.has(this.current) ? this.outlineView(this.zoom ? this.zoom.path : this.current) : null;
+    const outline = this.current !== null && this.docs.has(this.current) ? this.outlineView(this.zoom ? this.zoom.path : this.current) : null;
     return {
       fileList: [...this.fileList],
       current: this.current,
+      noFiles: this.noFiles,
       filter: this.filter,
       searchValue: this.searchValue(),
       canOpenSource: !!this.adapter.openSource,
@@ -1115,15 +1183,21 @@ export class Controller {
   // --- Files --------------------------------------------------------------------------------
 
   openFile = async (path: string) => {
-    if (!this.fileList.includes(path)) this.fileList.push(path);
     this.current = path;
     this.clearSelection();
     this.zoom = null;
     this.active = null;
     this.message = '';
     this.render();
-    try { await this.loadEmbeds(path); }
-    catch (error) { this.message = this.describe(error); }
+    try {
+      await this.loadEmbeds(path);
+      // Only a file that could be read joins the list and is remembered for the next start.
+      if (!this.fileList.includes(path)) this.fileList.push(path);
+      if (this.preferences.lastFile !== path) {
+        this.preferences.lastFile = path;
+        this.persistPreferences();
+      }
+    } catch (error) { this.message = this.describe(error); }
     this.render();
   };
 
@@ -1194,7 +1268,7 @@ export class Controller {
         }
       } catch (error) { this.message = this.describe(error); }
     }
-    await this.loadEmbeds(this.current);
+    if (this.current !== null) await this.loadEmbeds(this.current);
     if (this.composing || this.active && !rerender) { this.deferred = true; this.updateStatus(); } else this.render();
   };
 
@@ -1286,7 +1360,7 @@ export class Controller {
       this.externalPending = pending;
       const editing = this.editing();
       if (changed || this.deferred && !editing) {
-        await this.loadEmbeds(this.current);
+        if (this.current !== null) await this.loadEmbeds(this.current);
         // render() puts the focus and the caret back on the edited item. A merge moves lines and a
         // conflict needs a decision, so either is rendered even while a field is being edited.
         if (this.composing || editing && !resume && !rerender) { this.deferred = true; } else this.render();

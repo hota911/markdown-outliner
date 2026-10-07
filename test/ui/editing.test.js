@@ -74,10 +74,55 @@ describe('keyboard structure editing', () => {
     expect(await saved()).toBe('- a\n- b\n');
   });
 
+  it('Enter at the start of a text adds an item above and keeps the caret at the start of the item', async () => {
+    const { user, title, titles, saved } = await setup({ 'tasks.md': '- [ ] a\n- [/] b\n  memo\n  - [ ] child\n' });
+    await user.click(title('b'));
+    title('b').setSelectionRange(0, 0);
+    await user.keyboard('{Enter}{Enter}');
+    expect(titles().map(node => node.value)).toEqual(['a', '', '', 'b', 'child']);
+    expect(document.activeElement).toBe(titles()[3]);
+    expect(titles()[3].selectionStart).toBe(0);
+    await user.keyboard('x');
+    expect(await saved()).toBe('- [ ] a\n- [ ] \n- [ ] \n- [/] xb\n  memo\n  - [ ] child\n');
+  });
+
+  it('Enter at the start of a bullet adds a bullet above, and one undo removes it', async () => {
+    const { user, title, titleValues, saved } = await setup({ 'tasks.md': '- a\n' });
+    await user.click(title('a'));
+    title('a').setSelectionRange(0, 0);
+    await user.keyboard('{Enter}');
+    expect(await saved()).toBe('- \n- a\n');
+    await user.keyboard('{Control>}z{/Control}');
+    expect(titleValues()).toEqual(['a']);
+  });
+
+  it('Enter at the start of an empty text or with selected text adds an item after it', async () => {
+    const { user, title, titleValues } = await setup({ 'tasks.md': '- [ ] \n- [ ] ab\n' });
+    await user.click(title(''));
+    await user.keyboard('{Enter}');
+    expect(titleValues()).toEqual(['', '', 'ab']);
+    await user.click(title('ab'));
+    title('ab').setSelectionRange(0, 1);
+    await user.keyboard('{Enter}');
+    expect(titleValues()).toEqual(['', '', 'ab', '']);
+  });
+
+  it('Enter at the start of the zoomed item adds a child', async () => {
+    const { user, screen, row, titleValues } = await setup({ 'tasks.md': '- [ ] a\n  - [ ] child\n' });
+    await user.click(row('a').getByTitle('この項目にズーム'));
+    const zoomTitle = screen.getByRole('textbox', { name: 'ズーム対象のタイトル' });
+    await user.click(zoomTitle);
+    zoomTitle.setSelectionRange(0, 0);
+    await user.keyboard('{Enter}');
+    expect(titleValues()).toEqual(['', 'child']);
+  });
+
   it('Enter during IME composition does not add a task', async () => {
     const { title, titleValues, adapter } = await setup({ 'tasks.md': '- [ ] a\n' });
     const node = title('a');
     node.focus();
+    // The caret at the start would add the item above without composition.
+    node.setSelectionRange(0, 0);
     fireEvent.compositionStart(node);
     fireEvent.keyDown(node, { key: 'Enter', keyCode: 229, isComposing: true });
     fireEvent.compositionEnd(node);
@@ -85,6 +130,17 @@ describe('keyboard structure editing', () => {
     fireEvent.keyDown(node, { key: 'Enter', keyCode: 229 });
     expect(titleValues()).toEqual(['a']);
     expect(adapter.files.get('tasks.md')).toBe('- [ ] a\n');
+  });
+
+  // Soft keyboards keep the word being typed in composition; the touch bar commits it first.
+  it('the touch bar indents an item whose title is in IME composition, and the title keeps the focus', async () => {
+    const { user, screen, title, saved } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n' });
+    const node = title('b');
+    await user.click(node);
+    fireEvent.compositionStart(node);
+    await user.click(screen.getByRole('button', { name: '字下げ（Tab）' }));
+    expect(document.activeElement).toBe(title('b'));
+    expect(await saved()).toBe('- [ ] a\n  - [ ] b\n');
   });
 
   it('Tab indents and Shift+Tab outdents', async () => {

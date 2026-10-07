@@ -8,7 +8,8 @@ import type { Adapter, Preferences } from '../ui/types.ts';
 // Written into the page by server.mjs (see injectConfig).
 interface WebConfig {
   token: string;
-  initialFile: string;
+  // Set only when the server was started on a single file.
+  initialFile?: string;
   canCreate: boolean;
   preferencesKey: string;
 }

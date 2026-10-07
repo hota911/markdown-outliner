@@ -18,6 +18,12 @@
   - [ ] IME composition, save conflicts, dragging an item under another, and editing alongside the regular Markdown editor
   - [ ] The status button in Safari and with touch input
   - [ ] Embedded files created with 「ファイルにする」 (move to a file)
+- [ ] Phones and Obsidian mobile
+  - [x] Touch bar, row buttons, handle and narrow layout for touch screens
+    A bar with indent, outdent, move, status, note, undo and redo appears while editing on a coarse pointer; row buttons show only for the edited item; the handle only selects; the bookmarks stack above the outline at 600px or narrower. Tested in Chromium emulating a Pixel 7 (`e2e/mobile.spec.ts`).
+  - [ ] Check on a real Android phone and in the Obsidian mobile app
+    Not yet checked: whether the keyboard stays open and does not flicker when a bar button commits Gboard's composition, whether the bar stays above the keyboard in Obsidian, and how it sits next to Obsidian's own mobile toolbar.
+  - [ ] Drag items by touch (for example after a long press)
 - [x] Screen tests for drag and drop
   jsdom cannot reproduce dragging, so these run in Chromium with Playwright (`e2e/`, `npm run test:e2e`).
 - [x] Match the theme colors

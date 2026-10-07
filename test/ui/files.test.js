@@ -247,3 +247,43 @@ describe('external changes and conflicts', () => {
     await waitFor(() => expect(titleValues()).toEqual(['polled']), { timeout: 4000 });
   });
 });
+
+describe('initial file', () => {
+  const files = { 'a.md': '- [ ] in a\n', 'b.md': '- [ ] in b\n' };
+  const fileSelect = screen => screen.getByRole('combobox', { name: '開くファイル' });
+  const options = screen => [...fileSelect(screen).options].map(option => option.value);
+
+  it('opens the first listed file when no file is given, and lists only existing files', async () => {
+    const { screen, titleValues } = await setup(files, { initialFile: null });
+    expect(titleValues()).toEqual(['in a']);
+    expect(fileSelect(screen).value).toBe('a.md');
+    expect(options(screen)).toEqual(['a.md', 'b.md']);
+  });
+
+  it('reopens the last file shown when it still exists', async () => {
+    const stored = [];
+    const first = await setup(files, { initialFile: null, savePreferences: async value => { stored.push(value); } });
+    await first.user.selectOptions(fileSelect(first.screen), 'b.md');
+    await waitFor(() => expect(stored.at(-1)).toEqual({ bookmarks: [], lastFile: 'b.md' }));
+
+    const { titleValues } = await setup(files, { initialFile: null, preferences: stored.at(-1) });
+    expect(titleValues()).toEqual(['in b']);
+  });
+
+  it('opens the first listed file when the last file shown no longer exists', async () => {
+    const { titleValues } = await setup(files, { initialFile: null, preferences: { bookmarks: [], lastFile: 'deleted.md' } });
+    expect(titleValues()).toEqual(['in a']);
+  });
+
+  it('opens the file given by the host even when another file was shown last', async () => {
+    const { titleValues } = await setup(files, { initialFile: 'b.md', preferences: { bookmarks: [], lastFile: 'a.md' } });
+    expect(titleValues()).toEqual(['in b']);
+  });
+
+  it('shows that there is nothing to open when the folder has no Markdown files', async () => {
+    const { screen, titles } = await setup({}, { initialFile: null });
+    expect(screen.getByText('このフォルダには Markdown ファイルがありません。')).toBeTruthy();
+    expect(titles()).toEqual([]);
+    expect(options(screen)).toEqual([]);
+  });
+});
