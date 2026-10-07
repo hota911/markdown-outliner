@@ -200,7 +200,7 @@ describe('using the / menu', () => {
     const { user, screen, title, adapter } = await setup({ 'tasks.md': '- [ ] Plan\n' });
     await user.type(title('Plan'), ' /ファイルにする');
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(screen.getByText('ファイル: Plan.md')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Plan.md', { selector: '.embed-title' })).toBeTruthy());
     expect(adapter.files.get('Plan.md')).toBe('- [ ] Plan\n');
   });
 });
@@ -217,7 +217,7 @@ describe('embedding an existing file from the / menu', () => {
     await user.keyboard('wor');
     expect(options(screen)).toEqual(['notes/work.md']);
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(screen.getByText('ファイル: work.md')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('work.md', { selector: '.embed-title' })).toBeTruthy());
     expect(title('Work task')).toBeTruthy();
     expect(await saved('notes/tasks.md')).toBe('- [ ] Plan\n- ![[work.md]]\n');
     // The embed and the removal of the /query text are one undo step.
@@ -232,7 +232,7 @@ describe('embedding an existing file from the / menu', () => {
     await user.click(screen.getByRole('option', { name: '既存のファイルを埋め込む' }));
     await waitFor(() => expect(options(screen)).toContain('other/ref.md'));
     await user.click(within(menu(screen)).getByRole('option', { name: 'other/ref.md' }));
-    await waitFor(() => expect(screen.getByText('ファイル: ../other/ref.md')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('../other/ref.md', { selector: '.embed-title' })).toBeTruthy());
     expect(title('Ref task')).toBeTruthy();
     expect(await saved('notes/tasks.md')).toBe('- [ ] Plan\n- ![[../other/ref.md]]\n- [ ] \n');
   });

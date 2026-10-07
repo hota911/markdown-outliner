@@ -388,6 +388,23 @@ test('埋め込み行と不正なファイル名は切り出さない', () => {
   assert.throws(() => core.extractToFile('- [ ] task\n', 0, 'task'), { code: 'invalidFileName' });
 });
 
+test('名前の変更ではフォルダーを残してファイル名だけを差し替える', () => {
+  assert.equal(core.renamedEmbed('sub/work.md', 'done jobs'), 'sub/done jobs.md');
+  assert.equal(core.renamedEmbed('../work.md', '作業'), '../作業.md');
+  for (const name of ['', ' x', '.hidden', 'a/b', 'a\\b', 'a:b', 'a*b', 'a?b', 'a"b', 'a<b', 'a>b', 'a|b', 'a#b', 'a^b', 'a[b', 'a]b', 'a\nb']) {
+    assert.equal(core.usableBaseName(name), false, JSON.stringify(name));
+    assert.throws(() => core.renamedEmbed('work.md', name), { code: 'invalidFileName' });
+  }
+  assert.equal(core.usableBaseName('done jobs 2'), true);
+});
+
+test('埋め込み行の参照先だけを書き換え、ホストが書き換えた拡張子なしのリンクも置き換える', () => {
+  assert.deepEqual(core.retargetEmbed('- [ ] a\n  - ![[sub/work.md]]\n', 1, 'sub/jobs.md'), { text: '- [ ] a\n  - ![[sub/jobs.md]]\n', line: 1 });
+  assert.equal(core.retargetEmbed('- ![[jobs]]\n', 0, 'jobs.md').text, '- ![[jobs.md]]\n');
+  assert.throws(() => core.retargetEmbed('- [ ] task\n', 0, 'jobs.md'), { code: 'notEmbed' });
+  assert.throws(() => core.retargetEmbed('- ![[work.md]]\n', 0, 'jobs'), { code: 'invalidFileName' });
+});
+
 test('タスクの状態を外して箇条書きにし、記号と字下げとノートを保つ', () => {
   assert.deepEqual(core.toBullet('- parent\r\n\t* [/] Task #work\r\n\t  note\r\n', 1), { text: '- parent\r\n\t* Task #work\r\n\t  note\r\n', line: 1 });
   assert.deepEqual(core.toBullet('- bullet\n', 0), { text: '- bullet\n', line: 0 });

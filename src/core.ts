@@ -9,7 +9,7 @@ export type CoreErrorCode =
   | 'mergeBothHaveContent' | 'unsafeIndent' | 'invalidMoveDirection' | 'invalidReorder' | 'reorderSiblingsOnly'
   | 'reorderAcrossText' | 'invalidReparent' | 'reparentIntoSelf' | 'reparentSiblingsOnly'
   | 'invalidInsertPosition' | 'insertPositionInSelection' | 'reparentIntoEmbed' | 'reparentAcrossText'
-  | 'invalidFileNameInput' | 'invalidFileName' | 'extractEmbed' | 'invalidFilter';
+  | 'invalidFileNameInput' | 'invalidFileName' | 'extractEmbed' | 'invalidFilter' | 'notEmbed';
 
 // Edits refuse with a code; the UI turns it into text in the display language (src/ui/messages.ts).
 export class CoreError extends Error {
@@ -414,6 +414,31 @@ export function extractToFile(text: string, line: number, name: string): EditRes
   const extracted = dedent(doc.lines.slice(line, doc.row.end), doc.row.depth * 2).join(doc.newline) + doc.newline;
   doc.lines.splice(line, doc.row.end - line, item(doc.lines[line])![1] + '- ![[' + name + ']]');
   return { ...result(doc, line), extracted };
+}
+
+// Whether a base name (without `.md`) typed by the user can name a file: not empty, no
+// surrounding spaces, no leading dot (a hidden file the file list skips), no control characters,
+// and none of the characters that break file names or embeds (as removed by `fileName`).
+export function usableBaseName(name: string): boolean {
+  return typeof name === 'string' && name !== '' && name === name.trim() && !name.startsWith('.')
+    && !/[/\\:*?"<>|#^[\]]/.test(name) && !/\p{Cc}/u.test(name);
+}
+
+// The embed target after its file is renamed to `baseName`; the folder part stays as written.
+export function renamedEmbed(embed: string, baseName: string): string {
+  if (typeof embed !== 'string' || !usableBaseName(baseName)) throw new CoreError('invalidFileName');
+  return embed.replace(/[^/\\]*$/, baseName + '.md');
+}
+
+// Points the embed on `line` at `embed`. Obsidian may already have rewritten the link when it
+// renamed the file, possibly without `.md`, so any `![[...]]` item counts as the embed.
+export function retargetEmbed(text: string, line: number, embed: string): EditResult {
+  if (typeof embed !== 'string' || !/^[^[\]#|^]+\.md$/.test(embed)) throw new CoreError('invalidFileName');
+  const doc = target(text, line);
+  if (!/^!\[\[[^\]]+\]\]$/.test(doc.row.title)) throw new CoreError('notEmbed');
+  const source = doc.lines[line];
+  doc.lines[line] = source.slice(0, source.length - doc.row.title.length) + '![[' + embed + ']]';
+  return result(doc, line);
 }
 
 // The tags written as `#tag` in a text, without the `#`, in order of first appearance. As in

@@ -159,8 +159,8 @@ describe('filtering', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'todo');
     expect(titleValues()).toEqual(['host', 'project', 'step', 'other']);
     expect(contextTitles(screen)).toEqual(['host', 'project']);
-    expect(screen.getByText('ファイル: work.md')).toBeTruthy();
-    expect(screen.queryByText('ファイル: home.md')).toBeNull();
+    expect(screen.getByText('work.md', { selector: '.embed-title' })).toBeTruthy();
+    expect(screen.queryByText('home.md', { selector: '.embed-title' })).toBeNull();
   });
 
   it('shows #tags like links; clicking one filters by it once, clicking other text edits', async () => {

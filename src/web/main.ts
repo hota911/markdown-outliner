@@ -40,6 +40,9 @@ const adapter: Adapter = {
 if (config.canCreate) {
   adapter.create = (file, text) =>
     request(fileUrl(file), { method: 'POST', headers: writeHeaders, body: JSON.stringify({ text }) });
+  adapter.rename = async (from, to) => {
+    await request('/api/rename', { method: 'POST', headers: writeHeaders, body: JSON.stringify({ from, to }) });
+  };
 }
 
 let preferences: Preferences = { bookmarks: [] };

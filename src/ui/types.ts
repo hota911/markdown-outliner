@@ -11,6 +11,10 @@ export interface Adapter {
   save(path: string, text: string, revision: Revision): Promise<{ revision: Revision }>;
   // Missing when the web app was opened on a single file.
   create?(path: string, text: string): Promise<{ revision: Revision }>;
+  // Renames a file within its folder and fails if `newPath` exists. Obsidian also updates links
+  // in other files, as the user's settings say; the web server leaves them as they are.
+  // Missing when the web app was opened on a single file.
+  rename?(path: string, newPath: string): Promise<void>;
   openSource?(path: string): Promise<void>;
   // Tags in use across the host's files, without `#`, for the `#` menu. Obsidian has them from its
   // metadata cache; without this method the menu offers the tags of the files the outliner has read.

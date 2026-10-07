@@ -259,6 +259,10 @@ export class Controller {
     this.savePreferences = savePreferences;
   }
 
+  get canRename() {
+    return !!this.adapter.rename;
+  }
+
   private describe(error: unknown) {
     return errorText(this.t, error);
   }
@@ -569,6 +573,111 @@ export class Controller {
     await this.saveAll();
     this.showToast(this.t.edit.extracted(name));
   };
+
+  // Renames the file embedded at `line` of `path` within its folder, then points the embed at
+  // the new name. Other files that embed or link the old name are left to the host.
+  renameEmbed = async (path: string, line: number, baseName: string) => {
+    const row = this.rows(path).find(value => value.line === line);
+    if (row?.kind !== 'embed' || !row.embed) return;
+    const name = baseName.trim();
+    if (name === row.embed.replace(/^.*[/\\]/, '').replace(/\.md$/, '')) return;
+    if (!core.usableBaseName(name)) { this.showToast(this.t.edit.renameInvalidName); return; }
+    // The button is shown only when the host can rename.
+    const rename = this.adapter.rename?.bind(this.adapter);
+    if (!rename) return;
+    if (this.busy || this.polling) { this.showToast(this.t.edit.renameBusy); return; }
+    let target: string, embed: string, newTarget: string;
+    try {
+      target = this.normalize(path, row.embed);
+      embed = core.renamedEmbed(row.embed, name);
+      newTarget = this.normalize(path, embed);
+    } catch (error) { this.showToast(this.t.edit.renameFailed(this.describe(error))); return; }
+    // The host renames the file on disk, so unsaved input is saved first.
+    await this.saveAll();
+    if ([path, target].some(file => this.docs.get(file)?.dirty || this.docs.get(file)?.conflict)) {
+      this.showToast(this.t.edit.renameUnsaved);
+      return;
+    }
+    if (this.busy || this.polling) { this.showToast(this.t.edit.renameBusy); return; }
+    this.busy = true;
+    this.updateStatus();
+    try {
+      await rename(target, newTarget);
+    } catch (error) {
+      this.busy = false;
+      this.updateStatus();
+      this.showToast(this.t.edit.renameFailed(this.describe(error)));
+      return;
+    }
+    this.moveFile(target, newTarget);
+    // Obsidian may already have rewritten the embed while updating links, so the embedding file
+    // is read again before the line is changed.
+    let containing: { text: string; revision: Revision } | null = null;
+    try { containing = await this.adapter.read(path); } catch { /* Without it, the embed line is updated on the text already loaded. */ }
+    this.busy = false;
+    this.updateStatus();
+    const doc = this.docs.get(path)!;
+    const fileName = newTarget.split('/').pop()!;
+    if (containing && containing.revision !== doc.baseRevision && !doc.dirty) this.replaceText(path, doc, containing.text, containing);
+    // Snapshots hold the old path, and undo cannot rename the file back.
+    this.undo.length = 0;
+    this.redo.length = 0;
+    // Lines may have moved since Enter, through typing or an external change, so the line is
+    // found again rather than trusted.
+    const current = this.embedLineOf(path, line, [target, newTarget]);
+    if (current === null) {
+      this.render();
+      this.showToast(this.t.edit.renameEmbedNotFound(fileName));
+      return;
+    }
+    const id = this.key(path, current);
+    const folded = this.collapsed.has(id);
+    this.mutate(path, text => core.retargetEmbed(text, current, embed), null);
+    if (folded) this.collapsed.add(id);
+    this.render();
+    await this.saveAll();
+    this.showToast(this.t.edit.renamed(fileName));
+  };
+
+  // Moves every piece of state keyed by a file path after the host renamed that file.
+  private moveFile(from: string, to: string) {
+    const doc = this.docs.get(from);
+    if (doc) { this.docs.delete(from); this.docs.set(to, doc); }
+    this.fileList = [...this.fileList.filter(file => file !== from && file !== to), to].sort();
+    for (const id of [...this.collapsed]) {
+      if (!id.startsWith(from + ':')) continue;
+      this.collapsed.delete(id);
+      this.collapsed.add(to + id.slice(from.length));
+    }
+    const kept = this.kept.get(from);
+    if (kept) { this.kept.delete(from); this.kept.set(to, kept); }
+    if (this.current === from) this.current = to;
+    if (this.zoom?.path === from) this.zoom = { ...this.zoom, path: to };
+    if (this.active?.path === from) this.active = { ...this.active, path: to };
+    if (this.selectedPath === from) this.selectedPath = to;
+    let changed = false;
+    if (this.preferences.lastFile === from) { this.preferences.lastFile = to; changed = true; }
+    if (Array.isArray(this.preferences.bookmarks)) {
+      for (const bookmark of this.preferences.bookmarks) {
+        if (validBookmark(bookmark) && bookmark.file === from) { bookmark.file = to; changed = true; }
+      }
+    }
+    if (changed) this.persistPreferences();
+  }
+
+  // The line of `path` whose `![[...]]` item resolves to one of `targets`: `line` when it still
+  // does, else the only such line. Null when there is none or more than one, so nothing is guessed.
+  // A link without `.md` counts, as Obsidian writes it that way when it updates links.
+  private embedLineOf(path: string, line: number, targets: string[]) {
+    const lines = this.rows(path).filter(row => {
+      const link = /^!\[\[([^\]]+)\]\]$/.exec(row.title)?.[1];
+      if (!link) return false;
+      try { return targets.includes(this.normalize(path, link.endsWith('.md') ? link : link + '.md')); }
+      catch { return false; }
+    }).map(row => row.line);
+    if (lines.includes(line)) return line;
+    return lines.length === 1 ? lines[0] : null;
+  }
 
   // --- Field events -------------------------------------------------------------------------
 

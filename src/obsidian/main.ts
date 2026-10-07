@@ -75,6 +75,14 @@ function mountInView(view: ItemView, plugin: MarkdownOutlinerPlugin, drafts: Map
         await vault.create(path, text);
         return { revision: text };
       },
+      // FileManager#renameFile also updates links to the file across the vault, as the user's
+      // "Automatically update internal links" setting says.
+      rename: async (relative, newRelative) => {
+        const file = resolve(relative);
+        const path = vaultPath(newRelative);
+        if (vault.getFileByPath(path) || vault.getFolderByPath(path)) throw new Error(t.fileExists);
+        await view.app.fileManager.renameFile(file, path);
+      },
     },
   });
 }
