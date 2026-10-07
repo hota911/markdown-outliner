@@ -54,17 +54,22 @@
 .outliner .title-input { display: block; border: 0; border-radius: 0; background: transparent; padding: 2px 0; flex: 1; min-width: 100px; min-height: 28px; height: var(--title-height, 28px); line-height: 24px; font-size: 15px; box-shadow: none; resize: none; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 .outliner .title-input:focus, .outliner .title-input:focus-visible { background: transparent; outline: none; border: 0; box-shadow: none; }
 .outliner .is-done > .outline-line .title-input { color: var(--text-faint); text-decoration: line-through; }
-/* The row buttons float over the right end of the line, so the title keeps the full width when they are hidden. */
+/* On hover the row buttons float over the right end of the line, so the title keeps the full width when they are hidden. */
 .outliner .row-actions { position: absolute; top: 0; right: 0; height: 28px; display: flex; align-items: center; gap: 2px; padding: 0 2px 0 6px; background: var(--background-primary); visibility: hidden; }
 .outliner .outline-line:hover .row-actions, .outliner .outline-line:focus-within .row-actions { visibility: visible; }
 .outliner .outline-line:hover .row-actions { background: var(--background-primary-alt); }
 .outliner .is-selected > .outline-line .row-actions { background: linear-gradient(var(--text-selection), var(--text-selection)), var(--background-primary); }
 .outliner .row-actions .quiet { font-size: 11px; padding: 2px 4px; }
-/* Too narrow to float the buttons without covering the handle: they take a row of their own under the title instead. */
+/* While the title is being edited, floating buttons would cover its end and the caret, so they hang just
+   below the line instead, over whatever follows. They stay out of the flow: if they pushed the next lines
+   down, those lines would jump back up when the title loses focus, between the press and the release of
+   a click on them. They stay below while one of them takes the focus from the title, for the same reason;
+   a focused handle does not count. */
+.outliner .outline-line:has(.title-input:focus, .row-actions :focus) .row-actions,
+.outliner .is-selected > .outline-line:has(.title-input:focus, .row-actions :focus) .row-actions { top: 100%; z-index: 1; background: var(--background-primary); }
+/* Too narrow to float the buttons over the title without covering the handle: they always hang below. */
 @container (max-width: 360px) {
-  .outliner .outline-line { flex-wrap: wrap; }
-  .outliner .row-actions { position: static; flex-basis: 100%; justify-content: flex-end; display: none; }
-  .outliner .outline-line:hover .row-actions, .outliner .outline-line:focus-within .row-actions { display: flex; }
+  .outliner .row-actions, .outliner .outline-line:hover .row-actions, .outliner .is-selected > .outline-line .row-actions { top: 100%; z-index: 1; background: var(--background-primary); }
 }
 .outliner .fold { color: var(--text-faint); flex: 0 0 18px; width: 18px; }
 .outliner .drag-handle { width: 14px; flex: 0 0 14px; cursor: grab; color: var(--text-faint); opacity: .25; }
