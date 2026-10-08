@@ -11,6 +11,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.web.config.ts",
+    "demo": "npm run build:web && node scripts/demo.mjs",
     "build": "npm run build:web && npm run build:plugin",
     "build:plugin": "node scripts/package-plugin.mjs",
     "dev:plugin": "node scripts/dev-plugin.mjs",
