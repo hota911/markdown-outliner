@@ -99,9 +99,10 @@ npm run typecheck   # svelte-check over src/, e2e/, obsidian-e2e/ and the Vite a
 npm test            # run test:node and test:ui
 npm run test:node   # core, row key, server and packaging tests with node --test
 npm run test:ui     # screen tests (test/ui/) and Obsidian adapter tests with Vitest and jsdom
-npm run test:e2e    # build the web app, then run the browser tests (e2e/) in Chromium with Playwright, on desktop and as a Pixel 7
+npm run test:e2e    # build the web app and the preview, then run the browser tests (e2e/) in Chromium with Playwright, on desktop and as a Pixel 7
 npm run test:obsidian # macOS only: build the plugin, then test it inside the Obsidian desktop app (obsidian-e2e/)
 npm run build       # write dist/web/ and the plugin files dist/main.js, manifest.json, styles.css
+npm run build:preview # write dist/preview/, a static build of the web app on the files of samples/
 ```
 
 `npm run dev` edits `samples/` by default; set `OUTLINER_WORKSPACE` to a folder or a single Markdown file to edit something else.
@@ -114,6 +115,19 @@ The screen tests drive the rendered DOM with keyboard and pointer events against
 
 CI runs lint, typecheck, `npm test`, `npm run test:e2e` and `npm run build` on pull requests and on pushes to `main`. A separate workflow (`.github/workflows/tauri.yml`) runs the Rust tests of the desktop app on macOS only when `src-tauri/` or `package.json` changes; it is not a required check, because a macOS runner and a cold Tauri build take several minutes.
 
+### Static preview
+
+`npm run build:preview` builds the web app without the server into `dist/preview/`: the files of `samples/` are embedded at build time and kept in memory (`src/preview/adapter.ts`), so edits work but a reload starts again from the samples, and bookmarks are not kept. The output is plain static files with relative paths, so it can be served from any URL; to try it locally, serve the folder with any static file server, for example `npx vite preview --config vite.preview.config.ts`. `e2e/preview.spec.ts` serves the built folder and checks that it loads, saves an edit, and resets on reload.
+
+The preview is meant for pull request preview deployments on Cloudflare Pages. This is to be connected by the maintainer; the project settings to enter are:
+
+- Framework preset: None
+- Build command: `npm run build:preview` (Pages installs the dependencies from `package-lock.json` before the build)
+- Build output directory: `dist/preview`
+- Root directory: empty (the repository root)
+- Environment variable: `NODE_VERSION` = `24` (the version the web version requires; CI uses the current LTS)
+- Production branch: `main`; preview deployments: all non-production branches, so each pull request gets its own URL
+
 Source layout:
 
 - `src/core.ts`: Markdown parsing and editing operations, shared by both versions.
@@ -121,12 +135,14 @@ Source layout:
 - `src/obsidian/`: the Obsidian plugin entry point (`main.ts`).
 - `src/web/`: the standalone web page.
 - `src/tauri/`: the page of the desktop app; `adapter.ts` calls the Rust commands.
+- `src/preview/`: the static preview page; `adapter.ts` keeps the files of `samples/` in memory.
 - `src-tauri/`: the desktop app. `src/workspace.rs` is the file access ported from `server.mjs`, with its tests; `src/lib.rs` has the commands, the folder dialog, the menu and the window.
 - `src/styles.css`: styles for both versions. Colors and fonts use Obsidian's theme variables, so the plugin follows the Obsidian theme; `src/web/theme.css` defines them for the web page in light and dark sets that follow the system setting.
 - `server.mjs`: the local web server and file API, also mounted by the dev server.
 - `vite.config.ts`: the plugin build (a single CommonJS `main.js`).
 - `vite.web.config.ts`: the web app build and dev server.
 - `vite.tauri.config.ts`: the desktop app's page build and dev server.
+- `vite.preview.config.ts`: the static preview build.
 - `scripts/package-plugin.mjs`: builds the plugin and copies `manifest.json` and `styles.css` into `dist/`.
 - `scripts/changelog-section.mjs`: prints one version's section of `CHANGELOG.md`, used as the release notes.
 - `e2e/`: Playwright tests in Chromium (drag and drop, layout, and the touch screen layout in `mobile.spec.ts`); `playwright.config.ts` runs `mobile.spec.ts` as a Pixel 7 and the rest as desktop Chrome.

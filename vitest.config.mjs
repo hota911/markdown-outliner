@@ -12,7 +12,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     // The .mjs files in test/ use node:test and run with `npm run test:node`.
-    include: ['test/ui/**/*.test.js', 'test/obsidian.test.js', 'test/tauri.test.js'],
+    include: ['test/ui/**/*.test.js', 'test/obsidian.test.js', 'test/tauri.test.js', 'test/preview.test.js'],
     setupFiles: ['test/ui/setup.js'],
   },
 });
