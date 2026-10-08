@@ -90,11 +90,12 @@ npm run test:tauri    # the Rust tests (cargo test)
 
 ## 開発
 
-UI は Svelte 5 と TypeScript で書かれ、Vite でビルドする。未着手の開発タスクは [TODO.md](TODO.md) にある。
+UI は Svelte 5 と TypeScript で書かれ、Vite でビルドする。未着手の開発タスクは [TODO.md](TODO.md) にある。プルリクエストを作る前に実行・確認することは、コントリビューターとコーディングエージェント向けに [AGENTS.md](AGENTS.md) にまとめてある。
 
 ```sh
 npm ci              # install the development tools
 npm run dev         # Vite dev server with hot reload and the file API on http://127.0.0.1:5173/
+npm run demo        # build the web app and serve a temporary copy of samples/ on a free port
 npm run dev:plugin  # watch mode: rebuild the Obsidian plugin into $OBSIDIAN_VAULT/.obsidian/plugins/markdown-outliner/
 npm run lint        # ESLint with eslint-plugin-obsidianmd and eslint-plugin-svelte
 npm run typecheck   # svelte-check over src/, e2e/, obsidian-e2e/ and the Vite and Playwright configs
@@ -107,6 +108,8 @@ npm run build       # write dist/web/ and the plugin files dist/main.js, manifes
 ```
 
 `npm run dev` は既定で `samples/` を編集する。別のものを編集するには、`OUTLINER_WORKSPACE` にフォルダーか Markdown ファイル 1 つを設定する。
+
+`npm run demo` は `samples/` を新しい一時フォルダーにコピーし、そのコピーを `server.mjs` で配信するので、編集が `samples/` に届くことはない。フォルダーと URL を表示する。`npm run demo -- <フォルダーまたはファイル> [ポート]` とすると、別のフォルダーか Markdown ファイルをコピーし、指定したポートで配信する。
 
 `npm run dev:plugin` は開発中のビルドを Obsidian に読み込ませる。`OBSIDIAN_VAULT` に Vault（`.obsidian/` があるフォルダー）のパスを設定する。未設定か、フォルダーが Vault でない場合、スクリプトはメッセージを出して終了する。ソースが変わるたびに `main.js` を再ビルドし、`manifest.json` と `styles.css` をその隣にコピーする。Obsidian は新しいファイルを自分では検知しない。コミュニティプラグイン [Hot Reload](https://github.com/pjeby/hot-reload) をインストールしてプラグインのフォルダーに空の `.hotreload` ファイルを置き、変更時に再読み込みされるようにするか、ビルドのたびに Obsidian のコミュニティプラグイン設定で Markdown Outliner をオフにしてからオンに戻す。
 
@@ -130,6 +133,7 @@ CI は、プルリクエストと `main` への push で lint、typecheck、`npm
 - `vite.web.config.ts`：Web アプリのビルドと開発サーバー。
 - `vite.tauri.config.ts`：デスクトップアプリのページのビルドと開発サーバー。
 - `scripts/package-plugin.mjs`：プラグインをビルドし、`manifest.json` と `styles.css` を `dist/` にコピーする。
+- `scripts/demo.mjs`：`npm run demo` のために `samples/` の一時コピーを配信する。
 - `scripts/changelog-section.mjs`：`CHANGELOG.md` から 1 つのバージョンの節を出力する。リリースノートに使う。
 - `e2e/`：Chromium での Playwright テスト（ドラッグ＆ドロップ、レイアウト、`mobile.spec.ts` のタッチスクリーン用レイアウト）。`playwright.config.ts` は `mobile.spec.ts` を Pixel 7 として、それ以外をデスクトップの Chrome として実行する。
 - `obsidian-e2e/`：Obsidian デスクトップアプリでのプラグインの Playwright テスト。専用の `playwright.config.ts` を持つ。`fixtures.ts` は Obsidian を起動し、ファイルを開く、ID でコマンドを実行する、Vault のファイルを読む、といったヘルパーを持つ。
