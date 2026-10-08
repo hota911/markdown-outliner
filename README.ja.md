@@ -53,6 +53,16 @@ Markdown のタスクリストをアウトラインとして編集するツー�
 
 タッチ用のレイアウトは、Pixel 7 をエミュレートした Chromium でテストしている（`e2e/mobile.spec.ts`）。実機の Android や iOS、Obsidian モバイルアプリでは確認していない。
 
+## エージェントスキル
+
+このリポジトリには Agent Skills 形式のスキル [`skills/markdown-outliner/`](skills/markdown-outliner/SKILL.md) が含まれている。Claude Code、Codex、Cursor、Gemini CLI などのコーディングエージェントにこのファイルの構造を伝え、編集しても項目、階層、状態、ノート、タグ、埋め込みが崩れないようにする。[`skills`](https://github.com/vercel-labs/skills) CLI でインストールする：
+
+```sh
+npx skills add hota911/markdown-outliner
+```
+
+または、`skills/markdown-outliner/` フォルダーをエージェントのスキル用フォルダー（Claude Code なら `~/.claude/skills/`、プロジェクトなら `.agents/skills/` など）にコピーする。スキルに載せた例は、`test/skill.test.mjs` がアウトライナーの解析処理と編集操作で確認している。
+
 ## Web 版
 
 Node.js 24 以降が必要である。
@@ -129,6 +139,7 @@ CI は、プルリクエストと `main` への push で lint、typecheck、`npm
 - `src-tauri/`：デスクトップアプリ。`src/workspace.rs` は `server.mjs` から移植したファイルアクセスとそのテスト、`src/lib.rs` はコマンド、フォルダー選択ダイアログ、メニュー、ウィンドウを持つ。
 - `src/styles.css`：両方の版のスタイル。色とフォントは Obsidian のテーマ変数を使うので、プラグインは Obsidian のテーマに従う。`src/web/theme.css` は Web ページ用にこれらの変数を定義し、システムの設定に従うライトとダークの 2 組を持つ。
 - `server.mjs`：ローカル Web サーバーとファイル API。開発サーバーにも組み込まれる。
+- `skills/markdown-outliner/`：これらのファイルを編集するためのエージェントスキル。プラグインにも Web 版のビルドにも含まれない。
 - `vite.config.ts`：プラグインのビルド（CommonJS の `main.js` 1 ファイル）。
 - `vite.web.config.ts`：Web アプリのビルドと開発サーバー。
 - `vite.tauri.config.ts`：デスクトップアプリのページのビルドと開発サーバー。
