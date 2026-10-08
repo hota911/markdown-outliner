@@ -1,6 +1,6 @@
 ---
 name: markdown-outliner
-description: Read and edit Markdown files used with Markdown Outliner (the Obsidian plugin and local web app) without breaking their outline. Use when a Markdown file is a nested task list with `- [ ]` / `- [/]` / `- [x]` items, indented notes under items, `#tags`, or `- ![[file.md]]` embed lines, or when the user says the file is opened in Markdown Outliner.
+description: Create and edit TODO lists, task lists, and checklists as Markdown files that Markdown Outliner (the Obsidian plugin and local web app) can show as an outline. Use this skill whenever you create a TODO list or add, complete, reorder, or annotate tasks in a Markdown file, even if the user does not mention Markdown Outliner, and whenever a Markdown file is a nested list with `- [ ]` / `- [/]` / `- [x]` items, indented notes under items, `#tags`, or `- ![[file.md]]` embed lines.
 ---
 
 # Markdown Outliner files
@@ -32,6 +32,30 @@ Markdown Outliner shows the list items of a plain Markdown file as an outline. I
 - Everything else (headings, paragraphs, tables, frontmatter at the top, fenced code blocks, numbered lists) is kept but not shown. List lines inside frontmatter or code fences are not items. A line of non-list text that starts at column 0 ends the outline above it: the items after it are not children of any item above it.
 
 The outliner shows `[text](url)` links (http, https, mailto), bare http(s) URLs, `**bold**`, `*italic*` / `_italic_`, `` `code` ``, and `~~strike~~` in titles and notes. `[[wiki links]]` are kept but shown as plain text.
+
+## Writing a new TODO list
+
+Write the tasks as one nested list, so the whole list is one outline the user can fold, filter by status, and rearrange:
+
+```markdown example
+# Move to the new flat
+
+- [ ] Paperwork
+  - [ ] Submit the moving-out notice at the city office
+  - [ ] Change the address for the bank
+- [ ] Packing
+  Start with the books; the kitchen goes last.
+  - [ ] Get boxes
+  - [ ] Pack the books
+- [ ] Book the movers
+```
+
+- Give every actionable line a `[ ]` box, so the user can mark it in progress or done and filter by status. Leave the box off only for lines that are not tasks, such as reference bullets.
+- Group related tasks under a parent item rather than under headings. Items under different headings are separate outlines, and the outliner cannot move tasks between them; one heading at the top as a title is fine.
+- Put details, deadlines, and context in a note under the task instead of making the title long, since a title is one line.
+- Add `#tags` when the user sorts tasks by context or priority, using tags that already appear in the user's files when there are any.
+
+When updating an existing list, mark progress with the status box (`[/]` when started, `[x]` when done) instead of deleting or striking out lines, unless the user asks to remove them.
 
 ## Rules for edits
 

@@ -74,7 +74,7 @@ const pitfalls = {
 };
 
 test('SKILL.md の例と検査の対応が過不足ない', () => {
-  assert.equal(blocks.filter(block => block.label === 'example').length, 1);
+  assert.equal(blocks.filter(block => block.label === 'example').length, 2);
   assert.deepEqual([...named('before').keys()].sort(), Object.keys(edits).sort());
   assert.deepEqual([...named('after').keys()].sort(), Object.keys(edits).sort());
   assert.deepEqual([...named('pitfall').keys()].sort(), Object.keys(pitfalls).sort());
@@ -102,6 +102,19 @@ test('SKILL.md の例のファイルを説明どおりに読む', () => {
     [0, 'embed', null, '![[work.md]]', ''],
   ]);
   assert.deepEqual(core.tagsIn(text), ['work', 'home']);
+});
+
+test('SKILL.md の新しい TODO リストの例は、見出しの下の一つのアウトラインになる', () => {
+  const text = blocks.filter(block => block.label === 'example')[1].text;
+  assert.deepEqual(core.parse(text).map(row => [row.depth, row.kind, row.status, row.title, row.note]), [
+    [0, 'task', 'todo', 'Paperwork', ''],
+    [1, 'task', 'todo', 'Submit the moving-out notice at the city office', ''],
+    [1, 'task', 'todo', 'Change the address for the bank', ''],
+    [0, 'task', 'todo', 'Packing', 'Start with the books; the kitchen goes last.'],
+    [1, 'task', 'todo', 'Get boxes', ''],
+    [1, 'task', 'todo', 'Pack the books', ''],
+    [0, 'task', 'todo', 'Book the movers', ''],
+  ]);
 });
 
 test('SKILL.md の編集例の結果は outliner 自身の操作の結果と一致する', () => {
