@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures.ts';
+import { expect, t, test } from './fixtures.ts';
 
 // Dragging uses HTML5 drag and drop on the ⠿ handle, which jsdom cannot run (test/ui), so
 // these tests drive a real Chromium with the mouse against server.mjs and a file on disk.
@@ -22,6 +22,15 @@ test.describe('drag and drop', () => {
     const outliner = await openOutliner('- [ ] a\n- [ ] b\n- [ ] c\n');
     await outliner.drag('c', 'a', { edge: 'child' });
     await expect.poll(outliner.saved).toBe('- [ ] a\n  - [ ] c\n- [ ] b\n');
+  });
+
+  test('a folded item stays folded when it is dragged under another item', async ({ openOutliner }) => {
+    const outliner = await openOutliner('- [ ] a\n  - [ ] a1\n- [ ] b\n- [ ] c\n');
+    await (await outliner.line('a')).getByTitle(t.item.fold).click();
+    expect(await outliner.titles()).toEqual(['a', 'b', 'c']);
+    await outliner.drag('a', 'c', { edge: 'child' });
+    await expect.poll(outliner.saved).toBe('- [ ] b\n- [ ] c\n  - [ ] a\n    - [ ] a1\n');
+    expect(await outliner.titles()).toEqual(['b', 'c', 'a']);
   });
 
   test('the indent of the insertion line sets the level: at the child title the item joins the children', async ({ openOutliner }) => {
@@ -76,7 +85,7 @@ test.describe('drag and drop of embed lines', () => {
 
   test('an embed line is dragged by its handle before an item', async ({ openOutliner, page }) => {
     const outliner = await openOutliner('- [ ] a\n- [ ] b\n- ![[other.md]]\n');
-    await dragTo(page, embedLine(page).getByTitle('Select, or drag to move'), await outliner.line('a'), 'before');
+    await dragTo(page, embedLine(page).getByTitle(t.item.dragHandle), await outliner.line('a'), 'before');
     await expect.poll(outliner.saved).toBe('- ![[other.md]]\n- [ ] a\n- [ ] b\n');
   });
 

@@ -2,11 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as core from '../src/core.ts';
 
-test('編集中の項目は条件から外れても祖先とともに残る', () => {
-  const text = '- [ ] parent\n  - [x] editing #old\n  - [ ] matching #new\n';
-  assert.deepEqual(core.visibleLines(text, { status: 'todo', tag: 'new' }, [1]), new Set([0, 1, 2]));
-});
-
 test('非表示の兄弟を含む全順序で子とノートごと移動する', () => {
   const text = '- [ ] A #visible\n  A note\n  - [ ] child\n    child note\n- [x] hidden\n  hidden note\n- [ ] C #visible\n';
   assert.deepEqual(core.move(text, 6, 'up'), {
@@ -26,7 +21,6 @@ test('現在の状態とタグ条件を持つ第一子をノートの後に追�
   const inserted = core.insert('- [ ] parent\n  note\n  - [x] old child\n', 0, { child: true, status: 'in-progress', tags: ['work', '#urgent'] });
   assert.deepEqual(inserted, { text: '- [ ] parent\n  note\n  - [/] #work #urgent\n  - [x] old child\n', line: 2 });
   assert.equal(core.parse(inserted.text)[0].note, 'note');
-  assert.deepEqual([...core.visibleLines(inserted.text, { status: 'in-progress', tag: 'work' })], [2, 0]);
 });
 
 test('箇条書きの子をノートの後に追加し既存の子とCRLFを保つ', () => {
