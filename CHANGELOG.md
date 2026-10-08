@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The header with the file picker, the filter, the search box and the buttons stays at the top of the view while a long file scrolls, together with the zoom bar when an item is zoomed in. Moving between items with the keyboard keeps the focused item below it.
+
 ## [0.1.3] - 2026-10-08
 
 ### Added
