@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fireEvent, within } from '@testing-library/dom';
+import { fireEvent, waitFor, within } from '@testing-library/dom';
 import { flush, setup } from './harness.js';
 
 describe('status button', () => {
@@ -417,6 +417,9 @@ describe('highlighting filter matches', () => {
   });
 });
 
+// The fold button of the item whose title field is `title`, for items that share a title.
+const fold = title => within(title.closest('.outline-item')).getByTitle('子項目を折りたたむ／開く');
+
 describe('outline view', () => {
   it('collapsing an item hides its children', async () => {
     const { user, row, titleValues } = await setup({ 'tasks.md': '- [ ] a\n  - [ ] child\n- [ ] b\n' });
@@ -424,6 +427,43 @@ describe('outline view', () => {
     expect(titleValues()).toEqual(['a', 'b']);
     await user.click(row('a').getByTitle('子項目を折りたたむ／開く'));
     expect(titleValues()).toEqual(['a', 'child', 'b']);
+  });
+
+  // Regression: folds used to be restored after an edit by matching titles, so every item with
+  // the same title as a folded one was folded too.
+  it('an edit keeps only the folded item folded when another item has the same title', async () => {
+    const { user, titles, row, titleValues } = await setup({ 'tasks.md': '- [ ] a\n  - [ ] c1\n- [ ] a\n  - [ ] c2\n- [ ] b\n' });
+    await user.click(fold(titles()[0]));
+    expect(titleValues()).toEqual(['a', 'a', 'c2', 'b']);
+    await user.click(row('b').getByRole('button', { name: '未着手（クリックで進行中）' }));
+    expect(titleValues()).toEqual(['a', 'a', 'c2', 'b']);
+  });
+
+  // Regression: folds were kept by line number, so lines inserted above moved the fold.
+  it('a folded item stays folded when an external change inserts lines above it', async () => {
+    const { user, row, titleValues, adapter } = await setup({ 'tasks.md': '- [ ] x\n- [ ] a\n  - [ ] child a\n- [ ] b\n  - [ ] child b\n' });
+    await user.click(row('a').getByTitle('子項目を折りたたむ／開く'));
+    expect(titleValues()).toEqual(['x', 'a', 'b', 'child b']);
+    adapter.externalWrite('tasks.md', '- [ ] new 1\n- [ ] new 2\n- [ ] x\n- [ ] a\n  - [ ] child a\n- [ ] b\n  - [ ] child b\n');
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => expect(titleValues()).toEqual(['new 1', 'new 2', 'x', 'a', 'b', 'child b']));
+  });
+
+  it('Alt+ArrowUp keeps the moved item folded, and only it', async () => {
+    const { user, titles, titleValues } = await setup({ 'tasks.md': '- [ ] a\n  - [ ] c1\n- [ ] b\n- [ ] a\n  - [ ] c2\n' });
+    await user.click(fold(titles()[3]));
+    expect(titleValues()).toEqual(['a', 'c1', 'b', 'a']);
+    await user.click(titles()[3]);
+    await user.keyboard('{Alt>}{ArrowUp}{/Alt}');
+    expect(titleValues()).toEqual(['a', 'c1', 'a', 'b']);
+  });
+
+  it('Tab keeps the indented item folded, and only it', async () => {
+    const { user, titles, titleValues } = await setup({ 'tasks.md': '- [ ] a\n  - [ ] c1\n- [ ] b\n- [ ] a\n  - [ ] c2\n' });
+    await user.click(fold(titles()[3]));
+    await user.click(titles()[3]);
+    await user.keyboard('{Tab}');
+    expect(titleValues()).toEqual(['a', 'c1', 'b', 'a']);
   });
 
   it('zooming into an item shows it as a heading with only its children', async () => {

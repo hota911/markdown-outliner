@@ -24,6 +24,15 @@ test.describe('drag and drop', () => {
     await expect.poll(outliner.saved).toBe('- [ ] a\n  - [ ] c\n- [ ] b\n');
   });
 
+  test('a folded item stays folded when it is dragged under another item', async ({ openOutliner }) => {
+    const outliner = await openOutliner('- [ ] a\n  - [ ] a1\n- [ ] b\n- [ ] c\n');
+    await (await outliner.line('a')).getByTitle('Collapse or expand children').click();
+    expect(await outliner.titles()).toEqual(['a', 'b', 'c']);
+    await outliner.drag('a', 'c', { edge: 'child' });
+    await expect.poll(outliner.saved).toBe('- [ ] b\n- [ ] c\n  - [ ] a\n    - [ ] a1\n');
+    expect(await outliner.titles()).toEqual(['b', 'c', 'a']);
+  });
+
   test('the indent of the insertion line sets the level: at the child title the item joins the children', async ({ openOutliner }) => {
     const outliner = await openOutliner('- [ ] a\n  - [ ] a1\n- [ ] b\n- [ ] c\n');
     await outliner.drag('c', 'a1', { edge: 'after' });
