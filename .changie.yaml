@@ -1,0 +1,28 @@
+# Changie (https://changie.dev) builds CHANGELOG.md from one fragment per change in
+# .changes/unreleased. See "Changelog" in README.md for the workflow.
+changesDir: .changes
+unreleasedDir: unreleased
+headerPath: header.tpl.md
+changelogPath: CHANGELOG.md
+versionExt: md
+versionFormat: '## [{{.Version}}] - {{.Time.Format "2006-01-02"}}'
+kindFormat: '### {{.Kind}}'
+changeFormat: '- {{.Body}}'
+# Reference link for the version heading, written at the end of each version's section.
+footerFormat: '[{{.Version}}]: https://github.com/hota911/markdown-outliner/compare/{{.PreviousVersion}}...{{.Version}}'
+# Sub-second precision so that two fragments created in the same second do not overwrite each other.
+fragmentFileFormat: '{{.Kind}}-{{.Time.Format "20060102-150405.000000000"}}'
+kinds:
+  - label: Added
+  - label: Changed
+  - label: Deprecated
+  - label: Removed
+  - label: Fixed
+  - label: Security
+newlines:
+  beforeChangelogVersion: 1
+  beforeKind: 1
+  afterKind: 1
+  beforeFooterTemplate: 1
+  endOfVersion: 1
+envPrefix: CHANGIE_

@@ -22,5 +22,5 @@ To try a change in the browser, run `npm run demo`. It serves a temporary copy o
 
 ## Documentation
 
-- Pull requests with user-facing changes add an entry to CHANGELOG.md, as described at the end of [Release in README.md](README.md#release).
+- Pull requests with user-facing changes add a Changie fragment to `.changes/unreleased/` (`npx changie new --kind <Added|Changed|Deprecated|Removed|Fixed|Security> --body "..." --interactive=false`) instead of editing CHANGELOG.md. CHANGELOG.md is generated, and `npm test` fails if it was edited by hand. A fix to a change that is not released yet edits that change's fragment instead of adding a new one. See [Changelog in README.md](README.md#changelog).
 - Update the README for user-facing changes. When a Japanese README exists next to it, update it in the same pull request.

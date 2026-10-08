@@ -146,21 +146,31 @@ CI は、プルリクエストと `main` への push で lint、typecheck、`npm
 - `scripts/package-plugin.mjs`：プラグインをビルドし、`manifest.json` と `styles.css` を `dist/` にコピーする。
 - `scripts/demo.mjs`：`npm run demo` のために `samples/` の一時コピーを配信する。
 - `scripts/changelog-section.mjs`：`CHANGELOG.md` から 1 つのバージョンの節を出力する。リリースノートに使う。
+- `.changie.yaml`、`.changes/`：Changie の設定、未リリースの変更履歴の断片（fragment）、CHANGELOG.md の生成元になるリリース済みの各バージョン。
 - `e2e/`：Chromium での Playwright テスト（ドラッグ＆ドロップ、レイアウト、`mobile.spec.ts` のタッチスクリーン用レイアウト）。`playwright.config.ts` は `mobile.spec.ts` を Pixel 7 として、それ以外をデスクトップの Chrome として実行する。
 - `obsidian-e2e/`：Obsidian デスクトップアプリでのプラグインの Playwright テスト。専用の `playwright.config.ts` を持つ。`fixtures.ts` は Obsidian を起動し、ファイルを開く、ID でコマンドを実行する、Vault のファイルを読む、といったヘルパーを持つ。
 
 プラグインのビルドは Svelte と共有コードを `main.js` にまとめるので、リリースした `main.js` が必要とするのは `obsidian` だけである。
 
+## 変更履歴
+
+[CHANGELOG.md](CHANGELOG.md) は [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) に従い、[Changie](https://changie.dev)（バージョンを固定した devDependency。`npx changie` で実行する）で生成する。CHANGELOG.md を直接編集しない。`npx changie merge` が `.changes/` から作る内容と異なると `npm test` が失敗する。
+
+- 利用者に見える変更を含むプルリクエストは、`npx changie new` で `.changes/unreleased/` に fragment を追加する（種別は Added、Changed、Deprecated、Removed、Fixed、Security から選び、既存の項目と同じ書き方で 1 行に書く）。`npx changie new --kind Fixed --body "..." --interactive=false` とすれば対話なしで同じことができる。変更ごとに別のファイルになるので、並行するプルリクエストがコンフリクトしない。
+- まだリリースしていないものの修正や変更は、Fixed や Changed の項目を足さず、`.changes/unreleased/` にあるその機能の fragment を直す。リリースノートには、前のリリースの利用者から見て変わることだけを書くためである。
+- テスト、CI、リリースするファイルに影響しない依存関係の更新のように、開発だけに関わる変更には fragment は不要である。
+- リリース済みのバージョンは `.changes/<version>.md` にある。リリースノートを直すには、そのファイルを編集して `npx changie merge` を実行する。`.changes/header.tpl.md` は各バージョンより上に置く文章である。
+
+利用者に見える変更では、README.md と README.ja.md の両方を更新する。
+
 ## リリース
 
-1. ブランチで `npm version <patch|minor|major> --no-git-tag-version` を実行する。これで `package.json`、`package-lock.json`、`manifest.json`、`versions.json` が更新される（`version` スクリプトがバージョンと `minAppVersion` をコピーする）。
-2. 同じブランチで、[CHANGELOG.md](CHANGELOG.md) の `## [Unreleased]` の下の項目を新しい `## [X.Y.Z] - YYYY-MM-DD` の見出しへ移し、`## [Unreleased]` を空にして、末尾の比較リンクを更新する。`package.json` のバージョンの項目が CHANGELOG.md になければ `npm test` が失敗する。
-3. 変更をコミットして PR を作り、`main` にマージする。
+1. 最新の `main` から切ったブランチで `npm version <patch|minor|major> --no-git-tag-version` を実行する。これで `package.json` と `package-lock.json` が更新され、続いて `version` スクリプトが、バージョンを `manifest.json` と `versions.json` にコピーし（`minAppVersion` も）、`.changes/unreleased/` の fragment を今日の日付の `.changes/X.Y.Z.md` にまとめ（`changie batch`）、CHANGELOG.md を生成し直す（`changie merge`）。`package.json` のバージョンの項目が CHANGELOG.md になければ `npm test` が失敗する。
+2. CHANGELOG.md の新しい節を確認する。直すときは `.changes/X.Y.Z.md` を編集して `npx changie merge` を実行する。
+3. 削除された fragment も含めて変更をコミットし、PR を作って `main` にマージする。
 4. 更新された `main` で、バージョンと同じ名前のタグを `v` を付けずに push する：`git tag 0.1.0 && git push origin 0.1.0`。
 
 `Release` ワークフローは、タグがバージョンと一致することを確認し、lint、typecheck、テスト、ビルドを実行してビルドの来歴（build provenance）を証明したうえで、`main.js`、`manifest.json`、`styles.css` を添付した GitHub Release を公開する。リリースノートは CHANGELOG.md のそのタグの節である（`node scripts/changelog-section.mjs <version>` で出力できる）。その節がないか空なら、ワークフローは失敗する。
-
-利用者に見える変更を含むプルリクエストは、[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) に従って CHANGELOG.md の `## [Unreleased]` の下に項目を追加する（Added、Changed、Fixed、Security など）。テスト、CI、リリースするファイルに影響しない依存関係の更新のように、開発だけに関わる変更には項目は不要である。利用者に見える変更では、README.md と README.ja.md の両方を更新する。
 
 ## ライセンス
 

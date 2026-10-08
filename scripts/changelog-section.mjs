@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // Returns the body of the `## [<version>]` section of a Keep a Changelog file, without its
-// heading. The section ends at the next `## ` heading or at the link definitions at the end.
+// heading. The section ends at the next `## ` heading or at a link definition, which `changie merge`
+// writes at the end of each version.
 // Throws if the section is missing or has no entries, so a release never goes out without notes.
 export function changelogSection(changelog, version) {
   const lines = changelog.split(/\r?\n/);
@@ -21,6 +22,6 @@ export function changelogSection(changelog, version) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const version = process.argv[2];
-  if (!version) throw new Error('Usage: node scripts/changelog-section.mjs <version | Unreleased>');
+  if (!version) throw new Error('Usage: node scripts/changelog-section.mjs <version>');
   process.stdout.write(`${changelogSection(await readFile(path.join(root, 'CHANGELOG.md'), 'utf8'), version)}\n`);
 }
