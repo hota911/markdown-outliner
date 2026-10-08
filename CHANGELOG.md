@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- An agent skill, `skills/markdown-outliner/`, that teaches coding agents such as Claude Code, Codex, Cursor and Gemini CLI the file format: items, nesting, statuses, notes, tags and embeds, the rules that keep a file readable by the outliner, and examples of common edits. Install it with `npx skills add hota911/markdown-outliner` or copy the folder into an agent's skills folder.
+
 ## [0.1.3] - 2026-10-08
 
 ### Added

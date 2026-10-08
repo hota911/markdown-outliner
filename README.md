@@ -51,6 +51,16 @@ Other differences on touch screens:
 
 The touch layout is tested in Chromium emulating a Pixel 7 (`e2e/mobile.spec.ts`). It has not been checked on a real Android or iOS device or in the Obsidian mobile app.
 
+## Agent skill
+
+The repository includes an Agent Skills skill, [`skills/markdown-outliner/`](skills/markdown-outliner/SKILL.md), that tells coding agents such as Claude Code, Codex, Cursor and Gemini CLI how these files are structured, so that their edits keep items, nesting, statuses, notes, tags and embeds intact. Install it with the [`skills`](https://github.com/vercel-labs/skills) CLI:
+
+```sh
+npx skills add hota911/markdown-outliner
+```
+
+Alternatively, copy the `skills/markdown-outliner/` folder into your agent's skills folder, such as `~/.claude/skills/` for Claude Code or `.agents/skills/` in a project. The skill's examples are checked against the outliner's parser and editing operations by `test/skill.test.mjs`.
+
 ## Web version
 
 Requires Node.js 24 or later.
@@ -124,6 +134,7 @@ Source layout:
 - `src-tauri/`: the desktop app. `src/workspace.rs` is the file access ported from `server.mjs`, with its tests; `src/lib.rs` has the commands, the folder dialog, the menu and the window.
 - `src/styles.css`: styles for both versions. Colors and fonts use Obsidian's theme variables, so the plugin follows the Obsidian theme; `src/web/theme.css` defines them for the web page in light and dark sets that follow the system setting.
 - `server.mjs`: the local web server and file API, also mounted by the dev server.
+- `skills/markdown-outliner/`: the agent skill for editing these files, not part of the plugin or the web build.
 - `vite.config.ts`: the plugin build (a single CommonJS `main.js`).
 - `vite.web.config.ts`: the web app build and dev server.
 - `vite.tauri.config.ts`: the desktop app's page build and dev server.
@@ -147,7 +158,7 @@ Pull requests with user-facing changes add an entry under `## [Unreleased]` in C
 
 ## 概要（日本語）
 
-Markdown のタスクリストをアウトラインとして編集するツールである。Obsidian プラグインとローカルで動く Web 版があり、編集処理と画面は共通である。絞り込み中もタスク・子タスク・ノートを追加して階層を編集でき、`- ![[work.md]]` のような埋め込み先へも書き戻す。ファイルは普通の Markdown のままなので、Git や他のエディタ、コーディングエージェントと同じファイルを扱える。
+Markdown のタスクリストをアウトラインとして編集するツールである。Obsidian プラグインとローカルで動く Web 版があり、編集処理と画面は共通である。絞り込み中もタスク・子タスク・ノートを追加して階層を編集でき、`- ![[work.md]]` のような埋め込み先へも書き戻す。ファイルは普通の Markdown のままなので、Git や他のエディタ、コーディングエージェントと同じファイルを扱える。コーディングエージェントがこの形式を崩さずに編集するためのスキルを `skills/markdown-outliner/` に同梱しており、`npx skills add hota911/markdown-outliner` で導入できる。
 
 ## License
 

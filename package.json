@@ -18,7 +18,7 @@
     "build:tauri": "cargo tauri build --bundles app",
     "tauri:dev": "cargo tauri dev",
     "test": "npm run test:node && npm run test:ui",
-    "test:node": "node --test test/core.test.mjs test/inline.test.mjs test/keys.test.mjs test/three-way-merge.test.mjs test/server.test.mjs test/package-plugin.test.mjs test/version-bump.test.mjs test/changelog-section.test.mjs",
+    "test:node": "node --test test/core.test.mjs test/inline.test.mjs test/keys.test.mjs test/three-way-merge.test.mjs test/server.test.mjs test/package-plugin.test.mjs test/version-bump.test.mjs test/changelog-section.test.mjs test/skill.test.mjs",
     "test:ui": "vitest run",
     "test:e2e": "npm run build:web && playwright test",
     "test:obsidian": "npm run build:plugin && playwright test --config obsidian-e2e/playwright.config.ts",
