@@ -36,6 +36,12 @@
     {@const zoom = outline.zoom}
     {@const path = outline.path}
     {@const slashMenu = ctrl.slashMenu(path, zoom.row.line)}
+    {#if zoom.row.kind === 'heading'}
+      <!-- A zoomed heading stays read-only. -->
+      <section class="zoom-heading">
+        <div class="zoom-title heading-title" role="heading" aria-level={zoom.row.level} data-level={zoom.row.level}>{zoom.row.title}</div>
+      </section>
+    {:else}
     <section class="zoom-heading">
       <textarea
         class="title-input zoom-title"
@@ -72,6 +78,7 @@
         ></textarea>
       {/if}
     </section>
+    {/if}
   {/if}
   <!-- Opening another file or zooming rebuilds the list, so only items added within the same list
        play their local intro, not every item of the new one. -->
