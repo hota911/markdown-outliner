@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The header with the file picker, the filter, the search box and the buttons stays at the top of the view while a long file scrolls, together with the zoom bar when an item is zoomed in. Moving between items with the keyboard keeps the focused item below it.
 
+### Fixed
+
+- A collapsed item stays collapsed by itself. Before, an edit also collapsed every other item with the same text, and a change made outside the outliner that added or removed lines above a collapsed item collapsed a different item instead. An item whose own line is changed outside the outliner now expands.
+
 ## [0.1.3] - 2026-10-08
 
 ### Added

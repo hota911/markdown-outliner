@@ -1,11 +1,11 @@
-import { expect, test } from './fixtures.ts';
+import { expect, t, test } from './fixtures.ts';
 
 test.describe('inline Markdown in titles and notes', () => {
   test('clicking rendered text starts editing at the clicked character', async ({ openOutliner, page }) => {
     const outliner = await openOutliner('- [ ] read [docs](https://example.com) now\n  see **bold** text\n');
     // The left edge of the first character puts the caret before it.
     await page.locator('.note-display strong').click({ position: { x: 1, y: 5 } });
-    await expect(page.getByRole('textbox', { name: 'Item note' })).toBeFocused();
+    await expect(page.getByRole('textbox', { name: t.item.noteLabel })).toBeFocused();
     await page.keyboard.type('X');
     await page.locator('.title-display span').last().click({ position: { x: 1, y: 5 } });
     await page.keyboard.type('Y');
@@ -34,6 +34,6 @@ test.describe('inline Markdown in titles and notes', () => {
     const popup = page.waitForEvent('popup');
     await page.locator('.note-display a').click();
     await expect.poll(async () => (await popup).url()).toBe('https://example.com/docs');
-    await expect(page.getByRole('textbox', { name: 'Item note' })).not.toBeFocused();
+    await expect(page.getByRole('textbox', { name: t.item.noteLabel })).not.toBeFocused();
   });
 });

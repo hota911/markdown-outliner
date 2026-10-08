@@ -1,7 +1,8 @@
 <script lang="ts">
   import Bookmarks from './Bookmarks.svelte';
   import Outline from './Outline.svelte';
-  import { filterIcons, filters, statuses, syncValue, type Controller } from './controller.svelte.ts';
+  import { filterIcons, syncValue, type Controller } from './controller.svelte.ts';
+  import { filters, statuses } from './filter.ts';
   import type { StatusFilter } from './types.ts';
 
   let { ctrl }: { ctrl: Controller } = $props();

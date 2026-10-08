@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures.ts';
+import { expect, t, test } from './fixtures.ts';
 
 // Two pages on the same server stand in for two browser tabs editing the same file.
-const fields = (page: Page) => page.getByRole('textbox', { name: 'Item text' });
+const fields = (page: Page) => page.getByRole('textbox', { name: t.item.title });
 const status = (page: Page) => page.locator('.save-state');
 
 // Adds "inserted" right after "top" in another tab, above the item focused in the first tab.
@@ -25,7 +25,7 @@ test.describe('external changes while a field has focus', () => {
     await insertFromOtherTab(page);
     await expect.poll(outliner.saved).toBe('- [ ] top\n- [ ] inserted\n- [ ] alpha\n');
     // Headless Chromium treats every page as visible and focused, like a tab switch that keeps the focus.
-    await expect(status(page)).toHaveText('Changed elsewhere (shown when you leave the field)');
+    await expect(status(page)).toHaveText(t.saveState.externalPending);
     expect(await outliner.titles()).toEqual(['top', 'alpha']);
 
     // page.bringToFront() fires no event in headless Chromium, so the event of a tab switch is sent here.
@@ -34,7 +34,7 @@ test.describe('external changes while a field has focus', () => {
     await expect(fields(page).nth(2)).toBeFocused();
     await page.keyboard.type('!');
     await expect.poll(outliner.saved).toBe('- [ ] top\n- [ ] inserted\n- [ ] al!pha\n');
-    await expect(status(page)).toHaveText('Saved');
+    await expect(status(page)).toHaveText(t.saveState.saved);
   });
 
   test('show while the outliner is hidden, as in a background Obsidian tab', async ({ openOutliner, page }) => {
@@ -47,6 +47,6 @@ test.describe('external changes while a field has focus', () => {
     await expect.poll(outliner.saved).toBe('- [ ] top\n- [ ] inserted\n- [ ] alpha\n');
     await page.locator('#app').evaluate((node: HTMLElement) => { node.style.display = ''; });
     await expect.poll(outliner.titles).toEqual(['top', 'inserted', 'alpha']);
-    await expect(status(page)).toHaveText('Saved');
+    await expect(status(page)).toHaveText(t.saveState.saved);
   });
 });

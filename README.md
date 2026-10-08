@@ -1,3 +1,5 @@
+English | [日本語](README.ja.md)
+
 # Markdown Outliner
 
 An outliner for Markdown task lists. It runs as an Obsidian plugin and as a small local web app, and both share the same editing core. Files stay plain Markdown, so they can be edited side by side with Git, other editors, and coding agents.
@@ -88,11 +90,12 @@ Limits:
 
 ## Development
 
-The UI is written in Svelte 5 and TypeScript and built with Vite. Open development tasks are listed in [TODO.md](TODO.md).
+The UI is written in Svelte 5 and TypeScript and built with Vite. Open development tasks are listed in [TODO.md](TODO.md). [AGENTS.md](AGENTS.md) lists what to run and check before opening a pull request, for contributors and coding agents.
 
 ```sh
 npm ci              # install the development tools
 npm run dev         # Vite dev server with hot reload and the file API on http://127.0.0.1:5173/
+npm run demo        # build the web app and serve a temporary copy of samples/ on a free port
 npm run dev:plugin  # watch mode: rebuild the Obsidian plugin into $OBSIDIAN_VAULT/.obsidian/plugins/markdown-outliner/
 npm run lint        # ESLint with eslint-plugin-obsidianmd and eslint-plugin-svelte
 npm run typecheck   # svelte-check over src/, e2e/, obsidian-e2e/ and the Vite and Playwright configs
@@ -105,6 +108,8 @@ npm run build       # write dist/web/ and the plugin files dist/main.js, manifes
 ```
 
 `npm run dev` edits `samples/` by default; set `OUTLINER_WORKSPACE` to a folder or a single Markdown file to edit something else.
+
+`npm run demo` copies `samples/` to a new temporary folder and serves the copy with `server.mjs`, so edits never reach `samples/`. It prints the folder and the URL. `npm run demo -- <folder-or-file> [port]` copies another folder or Markdown file instead, and serves it on the given port.
 
 `npm run dev:plugin` loads the in-progress build into Obsidian. Set `OBSIDIAN_VAULT` to the path of a vault (a folder with `.obsidian/`); the script exits with a message if it is unset or the folder is not a vault. It rebuilds `main.js` on every source change and copies `manifest.json` and `styles.css` next to it. Obsidian does not notice the new files by itself: install the [Hot Reload](https://github.com/pjeby/hot-reload) community plugin and add an empty `.hotreload` file to the plugin folder so it reloads on change, or toggle Markdown Outliner off and on in Obsidian's community plugin settings after each build.
 
@@ -128,6 +133,7 @@ Source layout:
 - `vite.web.config.ts`: the web app build and dev server.
 - `vite.tauri.config.ts`: the desktop app's page build and dev server.
 - `scripts/package-plugin.mjs`: builds the plugin and copies `manifest.json` and `styles.css` into `dist/`.
+- `scripts/demo.mjs`: serves a temporary copy of `samples/` for `npm run demo`.
 - `scripts/changelog-section.mjs`: prints one version's section of `CHANGELOG.md`, used as the release notes.
 - `e2e/`: Playwright tests in Chromium (drag and drop, layout, and the touch screen layout in `mobile.spec.ts`); `playwright.config.ts` runs `mobile.spec.ts` as a Pixel 7 and the rest as desktop Chrome.
 - `obsidian-e2e/`: Playwright tests of the plugin in the Obsidian desktop app, with their own `playwright.config.ts`; `fixtures.ts` starts Obsidian and has helpers to open a file, run a command by id, and read a vault file.
@@ -143,11 +149,7 @@ The plugin build bundles Svelte and the shared code into `main.js`, so the relea
 
 The `Release` workflow checks that the tag matches the versions, runs lint, typecheck, tests, and the build, attests build provenance, then publishes a GitHub Release with `main.js`, `manifest.json`, and `styles.css` attached. The release notes are the tag's section of CHANGELOG.md (`node scripts/changelog-section.mjs <version>` prints it); the workflow fails if that section is missing or empty.
 
-Pull requests with user-facing changes add an entry under `## [Unreleased]` in CHANGELOG.md, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) (Added, Changed, Fixed, Security, and so on). Changes that only affect development, such as tests, CI, or dependency updates that do not reach the released files, need no entry.
-
-## 概要（日本語）
-
-Markdown のタスクリストをアウトラインとして編集するツールである。Obsidian プラグインとローカルで動く Web 版があり、編集処理と画面は共通である。絞り込み中もタスク・子タスク・ノートを追加して階層を編集でき、`- ![[work.md]]` のような埋め込み先へも書き戻す。ファイルは普通の Markdown のままなので、Git や他のエディタ、コーディングエージェントと同じファイルを扱える。
+Pull requests with user-facing changes add an entry under `## [Unreleased]` in CHANGELOG.md, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) (Added, Changed, Fixed, Security, and so on). Changes that only affect development, such as tests, CI, or dependency updates that do not reach the released files, need no entry. User-facing changes update both README.md and README.ja.md.
 
 ## License
 

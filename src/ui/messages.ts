@@ -239,7 +239,6 @@ const en = {
     invalidFileNameInput: 'Invalid options for the file name.',
     invalidFileName: 'Invalid file name.',
     extractEmbed: 'An embed line cannot be moved to a file.',
-    invalidFilter: 'Invalid status filter.',
     notEmbed: 'There is no embed on that line.',
   } satisfies Record<CoreErrorCode, string>,
 
@@ -502,7 +501,6 @@ const ja: Messages = {
     invalidFileNameInput: 'ファイル名の条件が不正です',
     invalidFileName: 'ファイル名が不正です',
     extractEmbed: '埋め込みの行はファイルにできません',
-    invalidFilter: 'フィルター状態が不正です',
     notEmbed: '指定行に埋め込みがありません',
   },
 
