@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, test, type Outliner } from './fixtures.ts';
+import { expect, t, test, type Outliner } from './fixtures.ts';
 
 // A row button that moves between the press and the release of the mouse gets no click. These
 // tests press and release once at the center of the button, as a person does, instead of using
@@ -20,35 +20,35 @@ async function clickOnce(page: Page, outliner: Outliner, title: string, button: 
 
 const effects: { button: string; title: string; check: (page: Page, outliner: Outliner) => Promise<void> }[] = [
   {
-    button: 'Add a child task',
+    button: t.item.addChildTask,
     title: 'b',
     check: async (_page, outliner) => expect.poll(outliner.titles).toEqual(['a', 'a1', 'b', '']),
   },
   {
-    button: 'Edit the note',
+    button: t.item.editNoteTitle,
     title: 'b',
-    check: async page => expect(page.getByRole('textbox', { name: 'Item note' })).toBeVisible(),
+    check: async page => expect(page.getByRole('textbox', { name: t.item.noteLabel })).toBeVisible(),
   },
   {
-    button: 'Zoom into this item',
+    button: t.item.zoomIn,
     title: 'a',
-    check: async page => expect(page.getByTitle('Leave the zoomed item')).toBeVisible(),
+    check: async page => expect(page.getByTitle(t.toolbar.zoomOutTitle)).toBeVisible(),
   },
   {
-    button: 'Move the item up',
+    button: t.item.moveUp,
     title: 'b',
     check: async (_page, outliner) => expect.poll(outliner.saved).toBe('- [ ] b\n- [ ] a\n  - [ ] a1\n'),
   },
   {
-    button: 'Move the item down',
+    button: t.item.moveDown,
     title: 'a',
     check: async (_page, outliner) => expect.poll(outliner.saved).toBe('- [ ] b\n- [ ] a\n  - [ ] a1\n'),
   },
   {
     // The web host opened a single file, so the click only explains why no file was created.
-    button: 'Move the item with its children and notes to a new file and embed it',
+    button: t.item.extractTitle,
     title: 'b',
-    check: async page => expect(page.getByRole('status')).toHaveText('Cannot create new files when a single file was opened.'),
+    check: async page => expect(page.getByRole('status')).toHaveText(t.edit.extractSingleFile),
   },
 ];
 
@@ -62,7 +62,7 @@ test.describe('a single click on a row button runs it', () => {
 
     test(`${button}, while the title of its line is edited`, async ({ openOutliner, page }) => {
       const outliner = await openOutliner(markdown);
-      await (await outliner.line(title)).getByRole('textbox', { name: 'Item text' }).click();
+      await (await outliner.line(title)).getByRole('textbox', { name: t.item.title }).click();
       await clickOnce(page, outliner, title, button);
       await check(page, outliner);
     });
@@ -71,7 +71,7 @@ test.describe('a single click on a row button runs it', () => {
       const outliner = await openOutliner(markdown);
       // Not the line just above: the buttons of the edited line hang over the next line and cover its own.
       const other = title === 'a' ? 'b' : 'a';
-      await (await outliner.line(other)).getByRole('textbox', { name: 'Item text' }).click();
+      await (await outliner.line(other)).getByRole('textbox', { name: t.item.title }).click();
       await clickOnce(page, outliner, title, button);
       await check(page, outliner);
     });

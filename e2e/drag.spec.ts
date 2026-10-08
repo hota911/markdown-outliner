@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures.ts';
+import { expect, t, test } from './fixtures.ts';
 
 // Dragging uses HTML5 drag and drop on the ⠿ handle, which jsdom cannot run (test/ui), so
 // these tests drive a real Chromium with the mouse against server.mjs and a file on disk.
@@ -76,7 +76,7 @@ test.describe('drag and drop of embed lines', () => {
 
   test('an embed line is dragged by its handle before an item', async ({ openOutliner, page }) => {
     const outliner = await openOutliner('- [ ] a\n- [ ] b\n- ![[other.md]]\n');
-    await dragTo(page, embedLine(page).getByTitle('Select, or drag to move'), await outliner.line('a'), 'before');
+    await dragTo(page, embedLine(page).getByTitle(t.item.dragHandle), await outliner.line('a'), 'before');
     await expect.poll(outliner.saved).toBe('- ![[other.md]]\n- [ ] a\n- [ ] b\n');
   });
 
