@@ -1,3 +1,5 @@
+English | [日本語](README.ja.md)
+
 # Markdown Outliner
 
 An outliner for Markdown task lists. It runs as an Obsidian plugin and as a small local web app, and both share the same editing core. Files stay plain Markdown, so they can be edited side by side with Git, other editors, and coding agents.
@@ -147,11 +149,7 @@ The plugin build bundles Svelte and the shared code into `main.js`, so the relea
 
 The `Release` workflow checks that the tag matches the versions, runs lint, typecheck, tests, and the build, attests build provenance, then publishes a GitHub Release with `main.js`, `manifest.json`, and `styles.css` attached. The release notes are the tag's section of CHANGELOG.md (`node scripts/changelog-section.mjs <version>` prints it); the workflow fails if that section is missing or empty.
 
-Pull requests with user-facing changes add an entry under `## [Unreleased]` in CHANGELOG.md, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) (Added, Changed, Fixed, Security, and so on). Changes that only affect development, such as tests, CI, or dependency updates that do not reach the released files, need no entry.
-
-## 概要（日本語）
-
-Markdown のタスクリストをアウトラインとして編集するツールである。Obsidian プラグインとローカルで動く Web 版があり、編集処理と画面は共通である。絞り込み中もタスク・子タスク・ノートを追加して階層を編集でき、`- ![[work.md]]` のような埋め込み先へも書き戻す。ファイルは普通の Markdown のままなので、Git や他のエディタ、コーディングエージェントと同じファイルを扱える。
+Pull requests with user-facing changes add an entry under `## [Unreleased]` in CHANGELOG.md, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) (Added, Changed, Fixed, Security, and so on). Changes that only affect development, such as tests, CI, or dependency updates that do not reach the released files, need no entry. User-facing changes update both README.md and README.ja.md.
 
 ## License
 
