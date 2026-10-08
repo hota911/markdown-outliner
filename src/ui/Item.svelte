@@ -1,9 +1,9 @@
 <script lang="ts">
+  import EmbedRow from './EmbedRow.svelte';
   import InlineText from './InlineText.svelte';
-  import Outline from './Outline.svelte';
   import SlashMenu from './SlashMenu.svelte';
   import type { Controller, Drop, ItemView } from './controller.svelte.ts';
-  import { syncNote, syncValue, tagAt } from './controller.svelte.ts';
+  import { syncNote, syncValue } from './controller.svelte.ts';
   import { matchRanges } from './filter.ts';
   import { parseInline } from './inline.ts';
   import { grow } from './motion.ts';
@@ -36,28 +36,23 @@
     ctrl.dragOver(item.path, event.currentTarget as HTMLElement, event, destination);
   }
 
+  // The row line is a drop target, both for an embed row and for any other row.
+  type LineEvent = DragEvent & { currentTarget: HTMLElement };
+  const lineEvents = {
+    ondragover: (event: LineEvent) => dragOver(event, lineDrop(event.currentTarget)),
+    ondragleave: () => ctrl.clearDrop(),
+    ondrop: (event: LineEvent) => ctrl.drop(item.path, event, lineDrop(event.currentTarget)),
+  };
+
   function keepFocus(event: Event) {
     event.preventDefault();
   }
 
-  // The embed heading itself turns into the rename field: only the base name is edited; the folder
-  // and .md stay as text around it.
-  let renaming = $state(false);
-  const embedFolder = (embed: string) => /^.*[/\\]/.exec(embed)?.[0] ?? '';
-  const baseName = (embed: string) => embed.slice(embedFolder(embed).length).replace(/\.md$/, '');
-  const focusAll = (node: HTMLInputElement) => { node.focus(); node.select(); };
-
-  function renameKey(event: KeyboardEvent) {
-    // Keeps outline shortcuts from acting on the item while the name is typed.
-    event.stopPropagation();
-    // keyCode 229 is the only IME signal some browsers give for the key that ends composition.
-    if (event.isComposing || event.keyCode === 229) return;
-    if (event.key === 'Escape') { event.preventDefault(); renaming = false; return; }
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    const value = (event.currentTarget as HTMLInputElement).value;
-    renaming = false;
-    void ctrl.renameEmbed(item.path, item.row.line, value);
+  // The tag (without `#`) of the whitespace-separated word around `offset`, or null when that word
+  // is not a tag. A word counts as a tag exactly when the search box would treat it as one.
+  function tagAt(text: string, offset: number): string | null {
+    const word = text.slice(0, offset).match(/\S*$/)![0] + text.slice(offset).match(/^\S*/)![0];
+    return /^#[^#\s]+$/.test(word) ? word.slice(1) : null;
   }
 
   // ⌘/Ctrl-click on a #tag adds it to the search. A plain click keeps placing the caret.
@@ -132,55 +127,11 @@
 
 <div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} class:is-context={item.context} style:--depth={item.depth} in:grow>
   {#if item.embed}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="outline-line"
-      ondragover={event => dragOver(event, lineDrop(event.currentTarget))}
-      ondragleave={ctrl.clearDrop}
-      ondrop={event => ctrl.drop(item.path, event, lineDrop(event.currentTarget))}
-    >
-      <button type="button" class="icon fold" title={ctrl.t.item.fold} onclick={() => ctrl.toggleFold(item.path, item.row.line)}>{item.collapsed ? '▸' : '▾'}</button>
-      {@render handle()}
-      {#if renaming}
-        {@const embed = item.row.embed!}
-        <span class="embed-title is-renaming">{embedFolder(embed)}<input
-            class="embed-rename"
-            aria-label={ctrl.t.outline.renameLabel(embed)}
-            title={ctrl.t.outline.renameHint}
-            value={baseName(embed)}
-            {@attach focusAll}
-            onkeydown={renameKey}
-            onblur={() => { renaming = false; }}
-          /><span class="rename-suffix">.md</span></span>
-      {:else}
-        <span class="embed-title">{item.row.embed}</span>
-      {/if}
-    </div>
-    {#if !item.collapsed}
-      <div class="embedded" in:grow>
-        {#if item.embed.error !== null}
-          <div class="notice">{item.embed.error}</div>
-        {:else}
-          {@const target = item.embed.target!}
-          <div class="embed-actions">
-            <button type="button" class="quiet" title={ctrl.t.outline.openEmbeddedTitle} onclick={() => ctrl.openFile(target)}>{ctrl.t.outline.openEmbedded}</button>
-            {#if ctrl.canRename && item.embed.outline?.kind === 'outline'}
-              <button type="button" class="quiet" title={ctrl.t.outline.renameTitle} onclick={() => { renaming = true; }}>{ctrl.t.outline.rename}</button>
-            {/if}
-          </div>
-          <Outline {ctrl} outline={item.embed.outline!} />
-        {/if}
-      </div>
-    {/if}
+    <EmbedRow {ctrl} {item} embed={item.embed} {handle} {lineEvents} />
   {:else}
     <!-- Drop target only; dragging is started from the handle button. -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="outline-line"
-      ondragover={event => dragOver(event, lineDrop(event.currentTarget))}
-      ondragleave={ctrl.clearDrop}
-      ondrop={event => ctrl.drop(item.path, event, lineDrop(event.currentTarget))}
-    >
+    <div class="outline-line" {...lineEvents}>
       <button type="button" class="icon fold" title={ctrl.t.item.fold} disabled={!item.hasChildren} onclick={() => ctrl.toggleFold(item.path, item.row.line)}>{item.collapsed ? '▸' : '▾'}</button>
       {@render handle()}
       {#if item.status}

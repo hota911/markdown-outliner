@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures.ts';
+import { expect, t, test } from './fixtures.ts';
 
-const search = (page: Page) => page.getByRole('searchbox', { name: 'Filter by words or tags' });
-const fields = (page: Page) => page.getByRole('textbox', { name: 'Item text' });
+const search = (page: Page) => page.getByRole('searchbox', { name: t.toolbar.search });
+const fields = (page: Page) => page.getByRole('textbox', { name: t.item.title });
 
 test.describe('#tags in item text', () => {
   test('are shown like links, and a click adds the tag to the search once and filters', async ({ openOutliner, page }) => {

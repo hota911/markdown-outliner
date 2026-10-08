@@ -1,3 +1,5 @@
+English | [日本語](README.ja.md)
+
 # Markdown Outliner
 
 An outliner for Markdown task lists. It runs as an Obsidian plugin and as a small local web app, and both share the same editing core. Files stay plain Markdown, so they can be edited side by side with Git, other editors, and coding agents.
@@ -51,6 +53,16 @@ Other differences on touch screens:
 
 The touch layout is tested in Chromium emulating a Pixel 7 (`e2e/mobile.spec.ts`). It has not been checked on a real Android or iOS device or in the Obsidian mobile app.
 
+## Agent skill
+
+The repository includes an Agent Skills skill, [`skills/markdown-outliner/`](skills/markdown-outliner/SKILL.md), that tells coding agents such as Claude Code, Codex, Cursor and Gemini CLI how these files are structured, so that their edits keep items, nesting, statuses, notes, tags and embeds intact. Install it with the [`skills`](https://github.com/vercel-labs/skills) CLI:
+
+```sh
+npx skills add hota911/markdown-outliner
+```
+
+Alternatively, copy the `skills/markdown-outliner/` folder into your agent's skills folder, such as `~/.claude/skills/` for Claude Code or `.agents/skills/` in a project. The skill's examples are checked against the outliner's parser and editing operations by `test/skill.test.mjs`.
+
 ## Web version
 
 Requires Node.js 24 or later.
@@ -88,11 +100,12 @@ Limits:
 
 ## Development
 
-The UI is written in Svelte 5 and TypeScript and built with Vite. Open development tasks are listed in [TODO.md](TODO.md).
+The UI is written in Svelte 5 and TypeScript and built with Vite. Open development tasks are listed in [TODO.md](TODO.md). [AGENTS.md](AGENTS.md) lists what to run and check before opening a pull request, for contributors and coding agents.
 
 ```sh
 npm ci              # install the development tools
 npm run dev         # Vite dev server with hot reload and the file API on http://127.0.0.1:5173/
+npm run demo        # build the web app and serve a temporary copy of samples/ on a free port
 npm run dev:plugin  # watch mode: rebuild the Obsidian plugin into $OBSIDIAN_VAULT/.obsidian/plugins/markdown-outliner/
 npm run lint        # ESLint with eslint-plugin-obsidianmd and eslint-plugin-svelte
 npm run typecheck   # svelte-check over src/, e2e/, obsidian-e2e/ and the Vite and Playwright configs
@@ -105,6 +118,8 @@ npm run build       # write dist/web/ and the plugin files dist/main.js, manifes
 ```
 
 `npm run dev` edits `samples/` by default; set `OUTLINER_WORKSPACE` to a folder or a single Markdown file to edit something else.
+
+`npm run demo` copies `samples/` to a new temporary folder and serves the copy with `server.mjs`, so edits never reach `samples/`. It prints the folder and the URL. `npm run demo -- <folder-or-file> [port]` copies another folder or Markdown file instead, and serves it on the given port.
 
 `npm run dev:plugin` loads the in-progress build into Obsidian. Set `OBSIDIAN_VAULT` to the path of a vault (a folder with `.obsidian/`); the script exits with a message if it is unset or the folder is not a vault. It rebuilds `main.js` on every source change and copies `manifest.json` and `styles.css` next to it. Obsidian does not notice the new files by itself: install the [Hot Reload](https://github.com/pjeby/hot-reload) community plugin and add an empty `.hotreload` file to the plugin folder so it reloads on change, or toggle Markdown Outliner off and on in Obsidian's community plugin settings after each build.
 
@@ -124,10 +139,12 @@ Source layout:
 - `src-tauri/`: the desktop app. `src/workspace.rs` is the file access ported from `server.mjs`, with its tests; `src/lib.rs` has the commands, the folder dialog, the menu and the window.
 - `src/styles.css`: styles for both versions. Colors and fonts use Obsidian's theme variables, so the plugin follows the Obsidian theme; `src/web/theme.css` defines them for the web page in light and dark sets that follow the system setting.
 - `server.mjs`: the local web server and file API, also mounted by the dev server.
+- `skills/markdown-outliner/`: the agent skill for editing these files, not part of the plugin or the web build.
 - `vite.config.ts`: the plugin build (a single CommonJS `main.js`).
 - `vite.web.config.ts`: the web app build and dev server.
 - `vite.tauri.config.ts`: the desktop app's page build and dev server.
 - `scripts/package-plugin.mjs`: builds the plugin and copies `manifest.json` and `styles.css` into `dist/`.
+- `scripts/demo.mjs`: serves a temporary copy of `samples/` for `npm run demo`.
 - `scripts/changelog-section.mjs`: prints one version's section of `CHANGELOG.md`, used as the release notes.
 - `.changie.yaml`, `.changes/`: the Changie configuration, the unreleased changelog fragments, and the released versions that CHANGELOG.md is generated from.
 - `e2e/`: Playwright tests in Chromium (drag and drop, layout, and the touch screen layout in `mobile.spec.ts`); `playwright.config.ts` runs `mobile.spec.ts` as a Pixel 7 and the rest as desktop Chrome.
@@ -144,6 +161,8 @@ The plugin build bundles Svelte and the shared code into `main.js`, so the relea
 - Changes that only affect development, such as tests, CI, or dependency updates that do not reach the released files, need no fragment.
 - Released versions live in `.changes/<version>.md`. To correct the notes of a release, edit that file and run `npx changie merge`. `.changes/header.tpl.md` is the text above the versions.
 
+User-facing changes also update both README.md and README.ja.md.
+
 ## Release
 
 1. On a branch from the latest `main`, run `npm version <patch|minor|major> --no-git-tag-version`. This updates `package.json` and `package-lock.json`, and the `version` script then copies the version into `manifest.json` and `versions.json` (with `minAppVersion`), collects the fragments in `.changes/unreleased/` into `.changes/X.Y.Z.md` dated today (`changie batch`), and regenerates CHANGELOG.md (`changie merge`). `npm test` fails if CHANGELOG.md has no entries for the version in `package.json`.
@@ -152,10 +171,6 @@ The plugin build bundles Svelte and the shared code into `main.js`, so the relea
 4. On the updated `main`, push a tag equal to the version, without a `v` prefix: `git tag 0.1.0 && git push origin 0.1.0`.
 
 The `Release` workflow checks that the tag matches the versions, runs lint, typecheck, tests, and the build, attests build provenance, then publishes a GitHub Release with `main.js`, `manifest.json`, and `styles.css` attached. The release notes are the tag's section of CHANGELOG.md (`node scripts/changelog-section.mjs <version>` prints it); the workflow fails if that section is missing or empty.
-
-## 概要（日本語）
-
-Markdown のタスクリストをアウトラインとして編集するツールである。Obsidian プラグインとローカルで動く Web 版があり、編集処理と画面は共通である。絞り込み中もタスク・子タスク・ノートを追加して階層を編集でき、`- ![[work.md]]` のような埋め込み先へも書き戻す。ファイルは普通の Markdown のままなので、Git や他のエディタ、コーディングエージェントと同じファイルを扱える。
 
 ## License
 

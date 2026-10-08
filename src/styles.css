@@ -29,6 +29,12 @@
 .outliner button:disabled { cursor: default; opacity: .32; }
 .outliner input, .outliner select, .outliner textarea { border: 1px solid var(--background-modifier-border); border-radius: 4px; color: var(--text-normal); background: var(--background-modifier-form-field); padding: 4px 7px; }
 .outliner button:focus-visible, .outliner input:focus-visible, .outliner select:focus-visible, .outliner textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+/* The header and the zoom bar stay at the top of the view while a long file scrolls: the page in the web
+   version, the view's container in Obsidian. Above the rows and their buttons, below the slash menu. */
+.outliner .pinned-header { position: sticky; top: 0; z-index: 2; display: flow-root; padding-top: 8px; background: var(--background-primary); }
+/* A row field focused or scrolled into view stops below the pinned header instead of under it. The height
+   is measured in Outliner.svelte, because the toolbar wraps onto more lines on narrow views. */
+.outliner .outline :is(textarea, button, input, select) { scroll-margin-top: var(--pinned-header-height, 0px); }
 .outliner .app-header { padding-bottom: 12px; border-bottom: 1px solid var(--background-modifier-border); display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .outliner .app-name { font-size: 19px; font-weight: 650; letter-spacing: -.4px; flex: 1; }
 .outliner .save-state { font-size: 12px; color: var(--text-muted); }
