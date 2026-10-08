@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A collapsed item stays collapsed by itself. Before, an edit also collapsed every other item with the same text, and a change made outside the outliner that added or removed lines above a collapsed item collapsed a different item instead. An item whose own line is changed outside the outliner now expands.
+
 ## [0.1.3] - 2026-10-08
 
 ### Added

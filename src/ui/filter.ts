@@ -1,5 +1,8 @@
-import type { Row } from '../core.ts';
+import type { Row, Status } from '../core.ts';
 import type { StatusFilter } from './types.ts';
+
+export const statuses: Status[] = ['todo', 'in-progress', 'done'];
+export const filters: StatusFilter[] = ['all', 'not-done', ...statuses];
 
 // The words and #tags typed in the search box. `text` is matched as one case-insensitive
 // substring of the title; each tag must appear as a whole word in the title or the note.
