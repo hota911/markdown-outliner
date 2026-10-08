@@ -1,5 +1,5 @@
 import type { Locator } from '@playwright/test';
-import { expect, horizontalOverflow, test } from './fixtures.ts';
+import { expect, horizontalOverflow, t, test } from './fixtures.ts';
 
 const title = '来週の定例に向けて打ち合わせの資料と議題を準備して関係者に共有する #work #priority/high';
 const markdown = `- [ ] ${title}\n  - [ ] 机の上を整理する #home\n`;
@@ -11,7 +11,7 @@ test.describe('item titles use the width of the page', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const outliner = await openOutliner(markdown);
     const line = await outliner.line(title);
-    const field = line.getByRole('textbox', { name: 'Item text' });
+    const field = line.getByRole('textbox', { name: t.item.title });
     expect((await rect(field)).right).toBeCloseTo((await rect(line)).right, 0);
     expect(await outliner.titleLines(title)).toBe(1);
     expect(await horizontalOverflow(page.locator('html'))).toBeLessThanOrEqual(0);
@@ -22,7 +22,7 @@ test.describe('item titles use the width of the page', () => {
     await page.setViewportSize({ width: 375, height: 800 });
     const outliner = await openOutliner(markdown);
     await (await outliner.handle(title)).click();
-    await expect(page.getByText('1 selected')).toBeVisible();
+    await expect(page.getByText(t.toolbar.selected(1))).toBeVisible();
     expect(await outliner.titleLines(title)).toBeGreaterThan(1);
     expect(await horizontalOverflow(page.locator('html'))).toBeLessThanOrEqual(0);
     expect(await horizontalOverflow(page.locator('.outline'))).toBeLessThanOrEqual(0);
@@ -32,7 +32,7 @@ test.describe('item titles use the width of the page', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const outliner = await openOutliner(markdown);
     const line = await outliner.line(title);
-    const addChild = line.getByTitle('Add a child task');
+    const addChild = line.getByTitle(t.item.addChildTask);
     await expect(addChild).toBeHidden();
     await line.hover();
     await expect(addChild).toBeVisible();
@@ -43,12 +43,12 @@ test.describe('item titles use the width of the page', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const outliner = await openOutliner(markdown);
     const line = await outliner.line(title);
-    const field = line.getByRole('textbox', { name: 'Item text' });
+    const field = line.getByRole('textbox', { name: t.item.title });
     // The title ends with #tags shown over the field until it is edited; click its start, not a tag.
     await field.locator('..').click({ position: { x: 2, y: 8 } });
     await page.keyboard.press('End');
     await line.hover();
-    const buttons = line.getByTitle('Add a child task').locator('..');
+    const buttons = line.getByTitle(t.item.addChildTask).locator('..');
     await expect(buttons).toBeVisible();
 
     const fieldBox = await rect(field);
@@ -58,20 +58,20 @@ test.describe('item titles use the width of the page', () => {
     expect(await outliner.titleLines(title)).toBe(1);
 
     // The buttons stay put when the click on one of them takes the focus from the title.
-    await line.getByTitle('Edit the note').click();
-    await expect(page.getByRole('textbox', { name: 'Item note' })).toBeVisible();
+    await line.getByTitle(t.item.editNoteTitle).click();
+    await expect(page.getByRole('textbox', { name: t.item.noteLabel })).toBeVisible();
   });
 
   test('with a mouse, the touch bar stays hidden while a title is edited', async ({ openOutliner, page }) => {
     const outliner = await openOutliner(markdown);
-    await (await outliner.line(title)).getByRole('textbox', { name: 'Item text' }).locator('..').click({ position: { x: 2, y: 8 } });
-    await expect(page.getByRole('toolbar', { name: 'Edit the item' })).toBeHidden();
+    await (await outliner.line(title)).getByRole('textbox', { name: t.item.title }).locator('..').click({ position: { x: 2, y: 8 } });
+    await expect(page.getByRole('toolbar', { name: t.touchBar.label })).toBeHidden();
   });
 
   test('while a title is edited, a click on the next line lands there', async ({ openOutliner, page }) => {
     const outliner = await openOutliner('- [ ] a\n- [ ] b\n');
-    await page.getByRole('textbox', { name: 'Item text' }).first().fill('a edited');
-    await (await outliner.line('b')).getByRole('button', { name: 'Not started (click for in progress)' }).click();
+    await page.getByRole('textbox', { name: t.item.title }).first().fill('a edited');
+    await (await outliner.line('b')).getByRole('button', { name: t.statusButton('todo', 'in-progress') }).click();
     await expect.poll(outliner.saved).toBe('- [ ] a edited\n- [/] b\n');
   });
 });

@@ -5,18 +5,18 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { createOutlinerServer } from '../server.mjs';
-import { expect, test } from './fixtures.ts';
+import { closeServer, expect, t, test } from './fixtures.ts';
 
 const menu = (page: Page) => page.getByRole('listbox');
 const option = (page: Page, name: string) => menu(page).getByRole('option', { name, exact: true });
 
 test('/done and Enter mark the item done and remove the typed text', async ({ openOutliner, page }) => {
   const outliner = await openOutliner('- [ ] Plan\n');
-  const field = page.getByRole('textbox', { name: 'Item text' });
+  const field = page.getByRole('textbox', { name: t.item.title });
   await field.click();
   await page.keyboard.press('End');
   await page.keyboard.type(' /done');
-  await expect(option(page, 'Done')).toBeVisible();
+  await expect(option(page, t.slash.command.done.label)).toBeVisible();
   await expect(field).toHaveAttribute('aria-activedescendant', /.+/);
   await page.keyboard.press('Enter');
   await expect(menu(page)).toBeHidden();
@@ -27,7 +27,7 @@ test('/done and Enter mark the item done and remove the typed text', async ({ op
 
 test('Escape closes the menu and keeps the text', async ({ openOutliner, page }) => {
   const outliner = await openOutliner('- [ ] Plan\n');
-  const field = page.getByRole('textbox', { name: 'Item text' });
+  const field = page.getByRole('textbox', { name: t.item.title });
   await field.click();
   await page.keyboard.press('End');
   await page.keyboard.type(' /do');
@@ -43,7 +43,7 @@ test('Escape closes the menu and keeps the text', async ({ openOutliner, page })
 
 test('# lists the tags in use, and Enter inserts the chosen one', async ({ openOutliner, page }) => {
   const outliner = await openOutliner('- [ ] Trip #travel\n- [ ] Read #reading\n- [ ] Plan\n');
-  const field = page.getByRole('textbox', { name: 'Item text' }).nth(2);
+  const field = page.getByRole('textbox', { name: t.item.title }).nth(2);
   await field.click();
   await page.keyboard.press('End');
   await page.keyboard.type(' #');
@@ -69,7 +69,7 @@ test.describe('embedding a file', () => {
   });
 
   test.afterEach(async () => {
-    for (const server of servers.splice(0)) await new Promise(resolve => server.close(resolve));
+    for (const server of servers.splice(0)) await closeServer(server);
     await rm(workspace, { recursive: true });
   });
 
@@ -79,17 +79,17 @@ test.describe('embedding a file', () => {
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     // server.mjs accepts only the 127.0.0.1 Host header.
     await page.goto(`http://127.0.0.1:${(server.address() as AddressInfo).port}/`);
-    const field = page.getByRole('textbox', { name: 'Item text' });
+    const field = page.getByRole('textbox', { name: t.item.title });
     await expect(field).toHaveValue('Plan');
     await field.click();
     await page.keyboard.press('End');
     await page.keyboard.type(' /');
-    await option(page, 'Embed existing file').click();
+    await option(page, t.slash.command.embed.label).click();
     await expect(option(page, 'notes/work.md')).toBeVisible();
     await expect(option(page, 'inbox.md')).toHaveCount(0);
     await option(page, 'notes/work.md').click();
     await expect(page.locator('.embed-title')).toHaveText('notes/work.md');
-    await expect(page.getByRole('textbox', { name: 'Item text' }).nth(1)).toHaveValue('Work task');
+    await expect(page.getByRole('textbox', { name: t.item.title }).nth(1)).toHaveValue('Work task');
     await expect.poll(() => readFile(path.join(workspace, 'inbox.md'), 'utf8')).toBe('- [ ] Plan\n- ![[notes/work.md]]\n');
   });
 });

@@ -5,12 +5,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { createOutlinerServer } from '../server.mjs';
-import { expect, test } from './fixtures.ts';
+import { closeServer, expect, t, test } from './fixtures.ts';
 
 // A folder without tasks.md: the outliner must not show a file that does not exist.
 const files = { 'alpha.md': '- [ ] in alpha\n', 'beta.md': '- [ ] in beta\n' };
-const fileSelect = (page: Page) => page.getByRole('combobox', { name: 'File to open' });
-const titles = (page: Page) => page.getByRole('textbox', { name: 'Item text' });
+const fileSelect = (page: Page) => page.getByRole('combobox', { name: t.toolbar.fileSelect });
+const titles = (page: Page) => page.getByRole('textbox', { name: t.item.title });
 
 let workspace: string;
 const servers: Server[] = [];
@@ -21,7 +21,7 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-  for (const server of servers.splice(0)) await new Promise(resolve => server.close(resolve));
+  for (const server of servers.splice(0)) await closeServer(server);
   await rm(workspace, { recursive: true });
 });
 
@@ -61,6 +61,6 @@ test('a single file given to the server is opened', async ({ page }) => {
 test('an empty folder shows that there are no Markdown files', async ({ page }) => {
   for (const name of Object.keys(files)) await rm(path.join(workspace, name));
   await open(page, workspace);
-  await expect(page.getByText('There are no Markdown files in this folder.')).toBeVisible();
+  await expect(page.getByText(t.noFiles)).toBeVisible();
   await expect(fileSelect(page).locator('option')).toHaveCount(0);
 });

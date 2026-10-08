@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures.ts';
+import { expect, t, test } from './fixtures.ts';
 
-const fields = (page: Page) => page.getByRole('textbox', { name: 'Item text' });
+const fields = (page: Page) => page.getByRole('textbox', { name: t.item.title });
 const undoKey = process.platform === 'darwin' ? 'Meta+z' : 'Control+z';
 
 async function caretAt(page: Page, index: number, position: number) {
@@ -42,7 +42,7 @@ test.describe('Enter in an item text', () => {
 test.describe('Enter in a note', () => {
   test('at the end starts a new line of the note', async ({ openOutliner, page }) => {
     const outliner = await openOutliner('- [ ] a\n  memo\n- [ ] b\n');
-    const note = page.getByRole('textbox', { name: 'Item note' });
+    const note = page.getByRole('textbox', { name: t.item.noteLabel });
     await note.click();
     await page.keyboard.press('End');
     await page.keyboard.press('Enter');

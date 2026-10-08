@@ -5,8 +5,23 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test as base, expect, type Locator, type Page } from '@playwright/test';
 import { createOutlinerServer } from '../server.mjs';
+import { messages } from '../src/ui/messages.ts';
 
 export { expect };
+
+/** The English UI labels; the tests read labels from here instead of repeating them (playwright.config.ts sets an English locale). */
+export const t = messages.en;
+
+/**
+ * Stops a server started by a test. The page is still open and polls the server, so a
+ * keep-alive connection can stay open after close(); closing every connection lets close() finish.
+ */
+export function closeServer(server: Server) {
+  return new Promise(resolve => {
+    server.close(resolve);
+    server.closeAllConnections();
+  });
+}
 
 /** Reads and drags the items of the outliner on a page. Shared with the Obsidian tests (obsidian-e2e/). */
 export interface OutlineItems {
@@ -37,10 +52,8 @@ export interface DropPoint {
   outdent?: number;
 }
 
-const itemText = 'Item text';
-
 async function itemLine(page: Page, title: string) {
-  const fields = page.getByRole('textbox', { name: itemText });
+  const fields = page.getByRole('textbox', { name: t.item.title });
   const index = (await fields.evaluateAll(nodes => nodes.map(node => (node as HTMLTextAreaElement).value))).indexOf(title);
   if (index < 0) throw new Error(`No item titled ${title}`);
   const field = fields.nth(index);
@@ -58,11 +71,10 @@ async function box(locator: Locator) {
   return result;
 }
 
-// The item labels are English, so the page must show the English UI.
 export function outlineItems(page: Page): OutlineItems {
-  const handle = async (title: string) => (await itemLine(page, title)).line.getByTitle('Select, or drag to move');
+  const handle = async (title: string) => (await itemLine(page, title)).line.getByTitle(t.item.dragHandle);
   return {
-    titles: () => page.getByRole('textbox', { name: itemText }).evaluateAll(nodes => nodes.map(node => (node as HTMLTextAreaElement).value)),
+    titles: () => page.getByRole('textbox', { name: t.item.title }).evaluateAll(nodes => nodes.map(node => (node as HTMLTextAreaElement).value)),
     handle,
     line: async title => (await itemLine(page, title)).line,
     drag: async (title, target, at) => {
@@ -97,10 +109,10 @@ export const test = base.extend<{ openOutliner: (markdown: string) => Promise<Ou
       await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
       // server.mjs accepts only this exact Host header, not localhost.
       await page.goto(`http://127.0.0.1:${(server.address() as AddressInfo).port}/`);
-      await expect(page.getByRole('textbox', { name: itemText }).first()).toBeVisible();
+      await expect(page.getByRole('textbox', { name: t.item.title }).first()).toBeVisible();
       return { saved: () => readFile(file, 'utf8'), ...outlineItems(page) };
     });
-    for (const server of servers) await new Promise(resolve => server.close(resolve));
+    for (const server of servers) await closeServer(server);
     await rm(workspace, { recursive: true });
   },
 });
