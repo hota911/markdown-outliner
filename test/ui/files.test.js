@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { waitFor } from '@testing-library/dom';
+import { waitFor, within } from '@testing-library/dom';
 import { flush, setup } from './harness.js';
 
 describe('extract to file', () => {
@@ -62,6 +62,18 @@ describe('rename an embedded file', () => {
     // Other files are left to the host; this mock rewrites them as Obsidian does.
     expect(env.adapter.files.get('other.md')).toBe('- ![[jobs]]\n');
     expect(env.title('job')).toBeTruthy();
+  });
+
+  it('keeps the folds in the renamed file and of other embed lines', async () => {
+    const env = await setup({ 'tasks.md': '- ![[work.md]]\n- ![[other.md]]\n', 'work.md': '- [ ] job\n  - [ ] step\n', 'other.md': '- [ ] x\n' });
+    const embedItem = name => within(env.screen.getByText(name, { selector: '.embed-title' }).closest('.outline-item'));
+    await env.user.click(env.row('job').getByTitle('子項目を折りたたむ／開く'));
+    await env.user.click(embedItem('other.md').getAllByTitle('子項目を折りたたむ／開く')[0]);
+    expect(env.titleValues()).toEqual(['job']);
+    await env.user.click(embedItem('work.md').getByRole('button', { name: '名前を変更' }));
+    await env.user.type(nameInput(env.screen, 'work.md'), '{Control>}a{/Control}jobs{Enter}');
+    await waitFor(() => expect(env.adapter.files.get('tasks.md')).toBe('- ![[jobs.md]]\n- ![[other.md]]\n'));
+    expect(env.titleValues()).toEqual(['job']);
   });
 
   it('remembers the new name as the last file when the renamed file is open', async () => {

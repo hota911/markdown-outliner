@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A collapsed item stays collapsed by itself. Before, an edit also collapsed every other item with the same text, and a change made outside the outliner that added or removed lines above a collapsed item collapsed a different item instead. An item whose own line is changed outside the outliner now expands.
+
+## [0.1.3] - 2026-10-08
+
 ### Added
 
 - English user interface. The Obsidian plugin follows Obsidian's display language (Obsidian 1.8.7 or later), and the web version follows the browser language. Japanese is used for Japanese; every other language, and Obsidian before 1.8.7, gets English.
@@ -35,9 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- A bookmark saved with the "Not done" status filter was shown as an unreadable bookmark. It now opens with that filter.
 - External changes were never shown while a field kept its focus across a switch to another browser tab or window, and the status still said the file was saved. The status now says that a change is waiting, and the change is shown when you leave the field or return to the tab or window, with the cursor kept on the same item.
-- Item titles wrapped after a few characters and the view scrolled horizontally in narrow panes such as an Obsidian tab, because hidden row buttons reserved space on every line. The buttons now float over the line on hover and appear below the line while you edit its title. Hidden buttons can no longer be clicked by accident.
+- Item titles wrapped after a few characters and the view scrolled horizontally in narrow panes such as an Obsidian tab, because hidden row buttons reserved space on every line. The buttons now float over the line on hover and appear below the line while you edit its title. Pressing a row button leaves the focus where it is, so the buttons stay put and one click or tap runs the command; Tab still reaches them. Hidden buttons can no longer be clicked by accident.
 - Enter at the end of a note did nothing: the new empty line was removed as soon as it was typed, and text typed next stayed on the same line. The new line now stays while you edit the note; empty lines left at its end are not saved.
 - The bar for selected items (Not started / In progress / ...) wraps instead of overflowing at narrow widths.
 - The outliner always opened `tasks.md` first, and listed it in the file picker even when the folder or vault had no such file. It now reopens the file shown last, or the first Markdown file in the list if that file is gone, and shows a message when there are no Markdown files. A file opened explicitly, such as an "Open as outline" tab or a single file given to the web server, still opens directly.
@@ -73,7 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Edit item-level embeds such as `- ![[work.md]]` in place and save them back to the embedded file.
 - Undo and redo, auto-save, and save conflict detection that keeps your input when the file changed on disk.
 
-[Unreleased]: https://github.com/hota911/markdown-outliner/compare/0.1.2...HEAD
+[Unreleased]: https://github.com/hota911/markdown-outliner/compare/0.1.3...HEAD
+[0.1.3]: https://github.com/hota911/markdown-outliner/compare/0.1.2...0.1.3
 [0.1.2]: https://github.com/hota911/markdown-outliner/compare/0.1.1...0.1.2
 [0.1.1]: https://github.com/hota911/markdown-outliner/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/hota911/markdown-outliner/releases/tag/0.1.0

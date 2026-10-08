@@ -67,8 +67,9 @@
 /* While the title is being edited, floating buttons would cover its end and the caret, so they hang just
    below the line instead, over whatever follows. They stay out of the flow: if they pushed the next lines
    down, those lines would jump back up when the title loses focus, between the press and the release of
-   a click on them. They stay below while one of them takes the focus from the title, for the same reason;
-   a focused handle does not count. */
+   a click on them. They stay below while Tab takes the focus from the title to one of them; a focused
+   handle does not count. A press on a button does not move the focus (Item.svelte), because the buttons
+   would move under the pointer and the release would land elsewhere, losing the click. */
 .outliner .outline-line:has(.title-input:focus, .row-actions :focus) .row-actions,
 .outliner .is-selected > .outline-line:has(.title-input:focus, .row-actions :focus) .row-actions { top: 100%; z-index: 1; background: var(--background-primary); }
 /* Too narrow to float the buttons over the title without covering the handle: they always hang below. */

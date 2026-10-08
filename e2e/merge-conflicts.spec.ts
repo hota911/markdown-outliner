@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures.ts';
+import { expect, t, test } from './fixtures.ts';
 
 // Two pages on the same server stand in for two browser tabs editing the same file.
-const fields = (page: Page) => page.getByRole('textbox', { name: 'Item text' });
+const fields = (page: Page) => page.getByRole('textbox', { name: t.item.title });
 const status = (page: Page) => page.locator('.save-state');
 
 async function openOtherTab(page: Page) {
@@ -28,10 +28,10 @@ test.describe('saving after another tab changed the file', () => {
     await typeAtEnd(page, 0, ' mine');
 
     await expect.poll(outliner.saved).toBe('- [ ] top mine\n- [ ] alpha theirs\n');
-    await expect(page.getByRole('status')).toHaveText('Merged external changes into tasks.md. The undo history was cleared.');
+    await expect(page.getByRole('status')).toHaveText(t.conflict.merged('tasks.md'));
     expect(await outliner.titles()).toEqual(['top mine', 'alpha theirs']);
     await expect(fields(page).first()).toBeFocused();
-    await expect(status(page)).toHaveText('Saved');
+    await expect(status(page)).toHaveText(t.saveState.saved);
   });
 
   test('shows the conflicting line when both tabs edit it, and keeps mine on request', async ({ openOutliner, page }) => {
@@ -43,14 +43,14 @@ test.describe('saving after another tab changed the file', () => {
     await typeAtEnd(page, 1, ' mine');
 
     const conflict = page.locator('.conflict');
-    await expect(conflict.getByText('tasks.md was also changed outside the outliner, and 1 place conflicts with your input.', { exact: false })).toBeVisible();
+    await expect(conflict.getByText(t.conflict.conflictingLines('tasks.md', 1))).toBeVisible();
     await expect(conflict.locator('pre')).toHaveText(['- [ ] alpha mine', '- [ ] alpha theirs']);
-    await expect(status(page)).toHaveText('Save conflict in 1 file (input kept)');
+    await expect(status(page)).toHaveText(t.saveState.conflicts(1));
     expect(await outliner.saved()).toBe('- [ ] top\n- [ ] alpha theirs\n');
 
-    await conflict.getByRole('button', { name: 'Keep my lines' }).click();
+    await conflict.getByRole('button', { name: t.conflict.keepMine }).click();
     await expect.poll(outliner.saved).toBe('- [ ] top\n- [ ] alpha mine\n');
     await expect(conflict).toHaveCount(0);
-    await expect(status(page)).toHaveText('Saved');
+    await expect(status(page)).toHaveText(t.saveState.saved);
   });
 });
