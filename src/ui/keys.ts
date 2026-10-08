@@ -108,4 +108,12 @@ export class RowKeys {
     this.cache.set(path, { text, rows: keyed });
     return keyed;
   }
+
+  // Keeps the keys of a file the host renamed.
+  rename(from: string, to: string) {
+    const cached = this.cache.get(from);
+    if (!cached) return;
+    this.cache.delete(from);
+    this.cache.set(to, cached);
+  }
 }

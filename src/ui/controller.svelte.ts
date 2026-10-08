@@ -219,6 +219,8 @@ export class Controller {
   private selectedLines = new Set<number>();
   private selectionAnchor: number | null = null;
   private dragging: { path: string; lines: number[] } | null = null;
+  // Row keys (see RowKeys) of folded items, so a fold follows its item when lines move or other
+  // items share its text. An item whose line is rewritten externally gets a new key and unfolds.
   private readonly collapsed = new Set<string>();
   private readonly kept = new Map<string, Set<number>>();
   private readonly undo: Snapshot[] = [];
@@ -332,7 +334,7 @@ export class Controller {
     this.toastTimer = window.setTimeout(this.clearToast, 4500);
   }
 
-  private key = (path: string, line: number) => path + ':' + line;
+  private rowKey = (path: string, line: number) => this.rows(path).find(row => row.line === line)?.key;
   private tagList = () => this.tags.trim().split(/\s+/).filter(Boolean).map(tag => tag.replace(/^#/, ''));
   private searchValue = () => [this.textSearch.trim(), this.tagList().map(tag => '#' + tag).join(' ')].filter(Boolean).join(' ');
 
@@ -433,15 +435,10 @@ export class Controller {
     this.message = '';
     if (result.text === doc.text) return;
     this.remember();
-    const folded = this.rows(path, doc.text).filter(row => this.collapsed.has(this.key(path, row.line)));
     doc.text = result.text;
     doc.dirty = true;
     this.clearSelection();
     this.scheduleSave();
-    for (const id of [...this.collapsed]) if (id.startsWith(path + ':')) this.collapsed.delete(id);
-    for (const row of this.rows(path, doc.text)) {
-      if (folded.some(previous => previous.kind === row.kind && previous.title === row.title && previous.embed === row.embed)) this.collapsed.add(this.key(path, row.line));
-    }
     this.kept.clear();
     if (focus && result.line !== null) {
       this.kept.set(path, new Set([result.line, result.line + focusOffset]));
@@ -472,11 +469,6 @@ export class Controller {
       if (this.selectedPath === path) {
         this.selectedLines = new Set([...this.selectedLines].map(value => value > line ? value + delta : value));
         if (this.selectionAnchor !== null && this.selectionAnchor > line) this.selectionAnchor += delta;
-      }
-      for (const id of [...this.collapsed]) {
-        if (!id.startsWith(path + ':')) continue;
-        const value = Number(id.slice(path.length + 1));
-        if (value > line) { this.collapsed.delete(id); this.collapsed.add(this.key(path, value + delta)); }
       }
     }
     doc.text = result.text;
@@ -611,10 +603,7 @@ export class Controller {
       this.showToast(this.t.edit.renameEmbedNotFound(fileName));
       return;
     }
-    const id = this.key(path, current);
-    const folded = this.collapsed.has(id);
     this.mutate(path, text => core.retargetEmbed(text, current, embed), null);
-    if (folded) this.collapsed.add(id);
     this.render();
     await this.saveAll();
     this.showToast(this.t.edit.renamed(fileName));
@@ -625,11 +614,7 @@ export class Controller {
     const doc = this.docs.get(from);
     if (doc) { this.docs.delete(from); this.docs.set(to, doc); }
     this.fileList = [...this.fileList.filter(file => file !== from && file !== to), to].sort();
-    for (const id of [...this.collapsed]) {
-      if (!id.startsWith(from + ':')) continue;
-      this.collapsed.delete(id);
-      this.collapsed.add(to + id.slice(from.length));
-    }
+    this.keys.rename(from, to);
     const kept = this.kept.get(from);
     if (kept) { this.kept.delete(from); this.kept.set(to, kept); }
     if (this.current === from) this.current = to;
@@ -1035,7 +1020,8 @@ export class Controller {
   showNote = (path: string, line: number) => this.focusNote(path, line);
 
   toggleFold = (path: string, line: number) => {
-    const id = this.key(path, line);
+    const id = this.rowKey(path, line);
+    if (id === undefined) return;
     if (this.collapsed.has(id)) this.collapsed.delete(id); else this.collapsed.add(id);
     this.active = null;
     this.render();
@@ -1043,7 +1029,8 @@ export class Controller {
 
   zoomTo = (path: string, line: number) => {
     this.zoom = { path, line };
-    this.collapsed.delete(this.key(path, line));
+    const id = this.rowKey(path, line);
+    if (id !== undefined) this.collapsed.delete(id);
     this.active = null;
     this.render();
   };
@@ -1248,7 +1235,8 @@ export class Controller {
     if (drop.parentLine !== null || lines.some(value => byLine.get(value)?.parentLine !== null)) {
       this.mutate(path, text => {
         const result = core.reparent(text, lines, drop.parentLine, drop.beforeLine);
-        if (drop.parentLine !== null) this.collapsed.delete(this.key(path, drop.parentLine));
+        const parent = drop.parentLine === null ? undefined : byLine.get(drop.parentLine);
+        if (parent) this.collapsed.delete(parent.key);
         return result;
       }, 'title');
     } else {
@@ -1571,10 +1559,10 @@ export class Controller {
       if (!visible.has(row.line)) continue;
       let hidden = false;
       for (let ancestor = row.parentLine === null ? undefined : byLine.get(row.parentLine); ancestor; ancestor = ancestor.parentLine === null ? undefined : byLine.get(ancestor.parentLine)) {
-        if (this.collapsed.has(this.key(path, ancestor.line))) { hidden = true; break; }
+        if (this.collapsed.has(ancestor.key)) { hidden = true; break; }
       }
       if (hidden) continue;
-      const collapsed = this.collapsed.has(this.key(path, row.line));
+      const collapsed = this.collapsed.has(row.key);
       const item: ItemView = {
         key: row.key,
         path,
