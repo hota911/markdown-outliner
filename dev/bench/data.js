@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791525840757,
+  "lastUpdate": 1791526377310,
   "repoUrl": "https://github.com/hota911/markdown-outliner",
   "entries": {
     "Performance": [
@@ -311,6 +311,110 @@ window.BENCHMARK_DATA = {
           {
             "name": "filter by a status (34000 items)",
             "value": 21.421954000000028,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "38419042+hota911@users.noreply.github.com",
+            "name": "Hiroyuki Ota",
+            "username": "hota911"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b6f1ca1c2d2a89f083c2a955236d341bd264d09e",
+          "message": "Wrap long bookmark names and scroll the bookmarks apart from the outline (#54)\n\nObsidian's stylesheet gives every button a fixed height and a centered\ninline-flex layout. The bookmark name button did not override them, so a\nlong name wrapped but spilled over the next bookmark. The bookmark buttons\nnow set display and height themselves.\n\nThe bookmarks sidebar is sticky with its own vertical scroll: max-height\n100dvh in the web version and 100cqh of Obsidian's view container (now a\nsize container). At 600px or narrower it stays above the outline, capped\nat 40% of the view height, and scrolls inside.\n\nCo-authored-by: Claude Opus 5.5 <noreply@anthropic.com>",
+          "timestamp": "2026-10-09T15:12:35+09:00",
+          "tree_id": "f1ed38581ba9b46929af35994125753f6144dacd",
+          "url": "https://github.com/hota911/markdown-outliner/commit/b6f1ca1c2d2a89f083c2a955236d341bd264d09e"
+        },
+        "date": 1791526377286,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "open: parse the file and key its rows (17000 items)",
+            "value": 34.91062899999997,
+            "unit": "ms"
+          },
+          {
+            "name": "open: parse the file and key its rows (34000 items)",
+            "value": 56.40908999999999,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (17000 items)",
+            "value": 57.85302999999999,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (34000 items)",
+            "value": 106.23524699999996,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (17000 items)",
+            "value": 44.08315299999998,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (34000 items)",
+            "value": 93.54754100000002,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (17000 items)",
+            "value": 75.80639500000001,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (34000 items)",
+            "value": 154.62482899999986,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (17000 items)",
+            "value": 4.8240260000000035,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (34000 items)",
+            "value": 10.473906999999997,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (17000 items)",
+            "value": 14.628010999999958,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (34000 items)",
+            "value": 28.49132099999997,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (17000 items)",
+            "value": 13.694504999999992,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (34000 items)",
+            "value": 27.25989900000002,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (17000 items)",
+            "value": 16.387845000000027,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (34000 items)",
+            "value": 21.630708000000027,
             "unit": "ms"
           }
         ]
