@@ -1,3 +1,0 @@
-kind: Added
-body: 'An agent skill, `skills/markdown-outliner/`, that teaches coding agents such as Claude Code, Codex, Cursor and Gemini CLI the file format: items, nesting, statuses, notes, tags and embeds, the rules that keep a file readable by the outliner, and examples of common edits. Install it with `npx skills add hota911/markdown-outliner` or copy the folder into an agent''s skills folder.'
-time: 2026-10-08T10:52:14.803085+09:00

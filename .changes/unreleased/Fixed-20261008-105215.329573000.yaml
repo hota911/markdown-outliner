@@ -1,3 +1,0 @@
-kind: Fixed
-body: A collapsed item stays collapsed by itself. Before, an edit also collapsed every other item with the same text, and a change made outside the outliner that added or removed lines above a collapsed item collapsed a different item instead. An item whose own line is changed outside the outliner now expands.
-time: 2026-10-08T10:52:15.329573+09:00
