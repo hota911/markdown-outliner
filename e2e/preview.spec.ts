@@ -20,7 +20,7 @@ test('the preview opens the samples from file://, saves an edit in memory, and s
   const fileSelect = page.getByRole('combobox', { name: 'File to open' });
 
   await page.goto(previewPage.href);
-  await expect(fileSelect.locator('option')).toHaveText(['tasks.md', 'work.md']);
+  await expect(fileSelect.locator('option')).toHaveText(['tasks.md', 'weekly.md', 'work.md']);
   await expect(first).toHaveValue(/週報をまとめる/);
   const original = await first.inputValue();
 
