@@ -36,7 +36,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }} # TEMPORARY: compare the head with itself to measure the noise
+          ref: e7286fab12a6440dc5a6f35c50d454bcee848c8a # TEMPORARY: compare with the commit before the slowdown
           path: base
           persist-credentials: false
       # The timed code imports nothing from node_modules and Node runs the TypeScript sources
