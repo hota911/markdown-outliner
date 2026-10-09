@@ -115,8 +115,6 @@ function apply(base: string[], start: number, end: number, hunks: Hunk[]): strin
 const sameLines = (a: string[], b: string[]) => a.length === b.length && a.every((line, index) => line === b[index]);
 
 export function merge3(baseText: string, oursText: string, theirsText: string): MergeResult {
-  // TEMPORARY slowdown to check the failing line of scripts/perf-compare.mjs; reverted before merge.
-  for (const until = performance.now() + 20; performance.now() < until;);
   const base = baseText.split('\n');
   const hunks = [...diff(base, oursText.split('\n'), 'ours'), ...diff(base, theirsText.split('\n'), 'theirs')]
     .sort((a, b) => a.start - b.start || a.end - b.end);
