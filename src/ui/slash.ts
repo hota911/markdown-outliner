@@ -45,11 +45,14 @@ export function fileOptions(query: string, files: string[], path: string): Slash
 }
 
 // The commands for a row of `kind`, matched by their English and Japanese labels and keywords.
-export function commandOptions(query: string, kind: Row['kind'], zoomed: boolean, t: Messages): SlashOption[] {
+// `fold` is the fold state of a row with children, and null for a row without children or the
+// zoomed-in row: Collapse is offered only for an expanded row, Expand only for a collapsed one.
+export function commandOptions(query: string, kind: Row['kind'], zoomed: boolean, fold: 'expanded' | 'collapsed' | null, t: Messages): SlashOption[] {
   const folded = foldKana(query);
   // Status commands also turn a bullet into a task, as core.updateStatus does.
   const commands = (Object.keys(t.slash.command) as SlashCommand[]).filter(command =>
-    !(command === 'task' && kind === 'task' || command === 'bullet' && kind !== 'task' || command === 'zoom' && zoomed));
+    !(command === 'task' && kind === 'task' || command === 'bullet' && kind !== 'task' || command === 'zoom' && zoomed
+      || command === 'collapse' && fold !== 'expanded' || command === 'expand' && fold !== 'collapsed'));
   return commands
     .filter(command => [messages.en, messages.ja].some(({ slash }) => foldKana(slash.command[command].label + ' ' + slash.command[command].keywords).includes(folded)))
     .map(command => ({ id: command, label: t.slash.command[command].label }));

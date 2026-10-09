@@ -25,6 +25,28 @@ test('/done and Enter mark the item done and remove the typed text', async ({ op
   await expect(field).toBeFocused();
 });
 
+test('/col collapses the item and /exp expands it again, keeping the focus in its title', async ({ openOutliner, page }) => {
+  const outliner = await openOutliner('- [ ] Parent\n  - [ ] Child\n');
+  const titles = page.getByRole('textbox', { name: t.item.title });
+  const field = titles.first();
+  await field.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' /col');
+  await expect(menu(page).getByRole('option')).toHaveText([t.slash.command.collapse.label]);
+  await page.keyboard.press('Enter');
+  await expect(menu(page)).toBeHidden();
+  await expect(titles).toHaveCount(1);
+  await expect(field).toHaveValue('Parent');
+  await expect(field).toBeFocused();
+  await page.keyboard.type(' /exp');
+  await option(page, t.slash.command.expand.label).click();
+  await expect(titles).toHaveCount(2);
+  await expect(titles.nth(1)).toHaveValue('Child');
+  await expect(field).toHaveValue('Parent');
+  await expect(field).toBeFocused();
+  await expect.poll(outliner.saved).toBe('- [ ] Parent\n  - [ ] Child\n');
+});
+
 test('Escape closes the menu and keeps the text', async ({ openOutliner, page }) => {
   const outliner = await openOutliner('- [ ] Plan\n');
   const field = page.getByRole('textbox', { name: t.item.title });
