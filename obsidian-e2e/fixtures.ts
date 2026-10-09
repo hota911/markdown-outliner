@@ -82,7 +82,10 @@ interface ElectronWindow {
   require: (module: '@electron/remote') => {
     getCurrentWindow: () => BrowserWindow;
     BrowserWindow: { getAllWindows: () => BrowserWindow[] };
-    app: { on: (event: 'browser-window-created', listener: (event: unknown, window: BrowserWindow) => void) => void };
+    app: {
+      on: (event: 'browser-window-created', listener: (event: unknown, window: BrowserWindow) => void) => void;
+      setActivationPolicy: (policy: 'regular' | 'accessory' | 'prohibited') => void;
+    };
   };
 }
 
@@ -180,6 +183,9 @@ async function launch(profile: string) {
       // the module is required directly. Without setFocusable(false), text the user typed with an
       // input method in another app could land in the window. Windows Obsidian opens later, such
       // as the settings window of 1.14, are hidden the same way when they are created.
+      // Even when started with `open -g`, Obsidian makes itself the active app about 0.5 s after
+      // launch and keeps the keyboard for a moment. The 'prohibited' activation policy turns it
+      // into a background-only app, so macOS never activates it (and it has no Dock icon).
       await page.evaluate(() => {
         const remote = (globalThis as unknown as ElectronWindow).require('@electron/remote');
         const hide = (window: BrowserWindow) => {
@@ -187,6 +193,7 @@ async function launch(profile: string) {
           window.setIgnoreMouseEvents(true);
           window.setFocusable(false);
         };
+        remote.app.setActivationPolicy('prohibited');
         hide(remote.getCurrentWindow());
         remote.app.on('browser-window-created', (_event, window) => hide(window));
       });
