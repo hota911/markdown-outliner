@@ -160,7 +160,7 @@ The plugin build bundles Svelte and the shared code into `main.js`, so the relea
 
 The Performance workflow (`.github/workflows/perf.yml`) runs on pull requests and on pushes to `main`. It is not a required check.
 
-- On a pull request, `scripts/perf-compare.mjs` checks out the base commit next to the pull request and times each operation on the larger file 6 times on each side, alternating between the two on the same runner. Times on shared runners vary from job to job, much more than within one job, so the pull request is compared with its base measured in the same job, not with earlier runs. There are two lines, `WARNING_RATIO` and `FAILING_RATIO` at the top of the script:
+- On a pull request, `scripts/perf-compare.mjs` checks out the base commit next to the pull request and times each operation on the larger file 6 times on each side, alternating between the two on the same runner. Times on shared runners vary from job to job, much more than within one job: in October 2026, comparing a commit with itself gave ratios between 0.95 and 1.07, while the same commit took up to 1.7 times as long in one job as in another. So the pull request is compared with its base measured in the same job, not with earlier runs. There are two lines, `WARNING_RATIO` and `FAILING_RATIO` at the top of the script:
   - Warning: the pull request's median is at least 1.3 times the base's.
   - Failure: at least 2 times. The job fails.
 
