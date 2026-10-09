@@ -137,6 +137,13 @@
 .outliner .note-display { position: relative; color: var(--text-muted); line-height: 1.4; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
 .outliner .embedded { margin: 2px 0 8px 22px; padding: 2px 0 2px 12px; background: transparent; border: 0; border-left: 1px solid var(--background-modifier-border); border-radius: 0; }
 .outliner .embed-title { font-weight: 600; color: var(--text-accent); }
+/* A heading row has no handle or status: its text starts right after the fold button, in bold. */
+.outliner .heading-line { margin-top: 6px; }
+.outliner .heading-title { flex: 1; min-width: 100px; padding: 2px 0; line-height: 24px; font-size: 15px; font-weight: 700; color: var(--text-normal); white-space: pre-wrap; overflow-wrap: anywhere; }
+.outliner .heading-line[data-level="1"] .heading-title { font-size: 19px; }
+.outliner .heading-line[data-level="2"] .heading-title { font-size: 17px; }
+.outliner .heading-title mark { background: var(--text-highlight-bg); color: inherit; border-radius: 2px; }
+.outliner .zoom-heading .heading-title { padding: 0; font-size: 24px; line-height: 32px; }
 .outliner .embed-actions { display: flex; gap: 12px; }
 .outliner .embed-actions > .quiet { font-size: 11px; padding: 0 0 4px; }
 /* The rename field replaces the heading text in place, so it keeps the heading's font and line box. */

@@ -14,13 +14,13 @@ describe('rendering', () => {
     expect(row('plain bullet').queryByRole('button', { name: /クリックで/ })).toBeNull();
     expect(row('plain bullet').getByRole('textbox', { name: '項目のノート' }).value).toBe('note line');
     const depths = ['todo', 'doing', 'done'].map(value => row(value).getByRole('textbox', { name: '項目の内容' }).closest('.outline-item').style.getPropertyValue('--depth'));
-    expect(depths).toEqual(['0', '1', '2']);
-    // Headings and other non-list content are not shown.
-    expect(screen.queryByText('Heading')).toBeNull();
+    // The items are children of the heading, which is shown as a read-only row.
+    expect(depths).toEqual(['1', '2', '3']);
+    expect(screen.getByRole('heading', { level: 1, name: 'Heading' })).toBeTruthy();
   });
 
   it('shows an empty-state message for a file without list items', async () => {
-    const { screen } = await setup({ 'tasks.md': '# Only a heading\n' });
+    const { screen } = await setup({ 'tasks.md': 'Only a paragraph\n' });
     expect(screen.getByText('表示する項目がありません。「＋」で入力できます。')).toBeTruthy();
   });
 });
