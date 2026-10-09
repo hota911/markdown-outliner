@@ -75,9 +75,14 @@ test.describe('a file opened as an outline in its own tab', () => {
       for (const type of ['mousedown', 'mouseup', 'click', 'blur', 'focus']) window.addEventListener(type, e => log(`${type} ${(e.target as Element)?.className ?? ''}`), true);
       log('hasFocus ' + document.hasFocus() + ' active ' + document.activeElement?.className);
     });
+    const probe = () => page.evaluate(() => { const w = window as any; return JSON.stringify({ aw: typeof w.activeWindow, same: w.activeWindow === window, ad: w.activeDocument === document, awHref: String(w.activeWindow?.location?.href), awBody: w.activeDocument?.body?.children?.length, focused: w.require('@electron/remote').getCurrentWindow().isFocused(), wins: w.require('@electron/remote').BrowserWindow.getAllWindows().map((b: any) => [b.id, b.isVisible(), b.webContents.getURL()]) }); });
+    console.log('DEBUG0', await probe());
+    await page.evaluate(() => (window as any).require('@electron/remote').getCurrentWindow().focus());
+    await page.waitForTimeout(500);
+    console.log('DEBUG0b', await probe());
     await page.locator('.workspace-leaf.mod-active .view-action[aria-label="More options"]').click();
     await page.waitForTimeout(1000);
-    console.log('DEBUG1', await page.evaluate(() => JSON.stringify((window as any).__log)));
+    console.log('DEBUG1', await page.evaluate(() => JSON.stringify((window as any).__log)), await page.locator('.menu').count());
     await page.locator('.workspace-leaf.mod-active .view-action[aria-label="More options"]').click();
     await page.waitForTimeout(1000);
     console.log('DEBUG2', await page.evaluate(() => JSON.stringify({ log: (window as any).__log, menuish: [...document.querySelectorAll('[class*="menu"]')].map(e => e.tagName + '.' + e.className).slice(0, 40), body: [...document.body.children].map(e => e.tagName + '.' + e.className), docs: (window as any).activeWindow === window, popouts: (window as any).app.workspace.floatingSplit?.children?.length })));
