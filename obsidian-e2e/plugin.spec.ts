@@ -65,16 +65,23 @@ test.describe('a file opened as an outline in its own tab', () => {
     await expect.poll(() => obsidian.readFile('notes/plan.md')).toBe('- [ ] x edited\n- [ ] y\n');
 
     // The tab's "More options" menu offers "Open as Markdown".
-    await page.locator('.workspace-leaf.mod-active .view-action[aria-label="More options"]').click();
     // DEBUG (temporary)
+    await page.evaluate(() => {
+      const w = window as any;
+      w.__log = [];
+      const t0 = performance.now();
+      const log = (m: string) => w.__log.push(`${Math.round(performance.now() - t0)} ${m}`);
+      new MutationObserver(records => { for (const r of records) { for (const n of r.addedNodes) if ((n as Element).classList?.contains('menu')) log('menu added: ' + n.textContent); for (const n of r.removedNodes) if ((n as Element).classList?.contains('menu')) log('menu removed'); } }).observe(document.body, { childList: true });
+      for (const type of ['mousedown', 'mouseup', 'click', 'blur', 'focus']) window.addEventListener(type, e => log(`${type} ${(e.target as Element)?.className ?? ''}`), true);
+      log('hasFocus ' + document.hasFocus() + ' active ' + document.activeElement?.className);
+    });
+    await page.locator('.workspace-leaf.mod-active .view-action[aria-label="More options"]').click();
     await page.waitForTimeout(1000);
+    console.log('DEBUG1', await page.evaluate(() => JSON.stringify((window as any).__log)));
+    await page.locator('.workspace-leaf.mod-active .view-action[aria-label="More options"]').click();
+    await page.waitForTimeout(1000);
+    console.log('DEBUG2', await page.evaluate(() => JSON.stringify((window as any).__log)));
     await page.screenshot({ path: 'test-results/debug-menu.png' });
-    console.log('DEBUG', await page.evaluate(() => JSON.stringify({
-      native: (window as any).app.vault.getConfig('nativeMenus'),
-      menus: [...document.querySelectorAll('.menu')].map(m => m.textContent),
-      actions: [...document.querySelectorAll('.workspace-leaf.mod-active .view-action')].map(a => a.getAttribute('aria-label')),
-      count: document.querySelectorAll('.workspace-leaf.mod-active .view-action[aria-label="More options"]').length,
-    })));
     await page.locator('.menu-item').filter({ hasText: 'Open as Markdown' }).click();
     expect(await obsidian.activeView()).toMatchObject({ type: 'markdown', file: 'notes/plan.md' });
     expect(obsidian.errors).toEqual([]);
