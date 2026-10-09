@@ -1,0 +1,118 @@
+name: Performance
+
+# Times the operations of test/perf-operations.mjs on large files. See "Performance" in README.md.
+# - Pull requests: the base and the head are timed alternately in the same job and compared
+#   (scripts/perf-compare.mjs, which holds the warning and failing lines).
+# - main: the times are added to the history in the gh-pages branch (dev/bench), one entry per
+#   commit, with a chart at dev/bench/index.html.
+# Both also run `npm run test:perf`, whose assertions on how time grows with the file size fail
+# the job on their own.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: perf-compare-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      # The pull request merged into its base, so the difference from the base is the pull
+      # request's own change.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+      # The timed code imports nothing from node_modules and Node runs the TypeScript sources
+      # directly, so neither side needs npm ci or a build.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+      - name: Compare with the base
+        id: compare
+        run: node scripts/perf-compare.mjs base "$RUNNER_TEMP/perf-compare.md"
+      # One comment per pull request, updated on each push: written when an operation got slower,
+      # and updated (not deleted) once it is fast again. The token of a pull request from a fork
+      # cannot comment; the job summary has the same report.
+      - name: Comment on the pull request
+        if: steps.compare.outputs.status != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          STATUS: ${{ steps.compare.outputs.status }}
+        run: |
+          ids=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- perf-compare -->"))) | .id')
+          id=${ids%%$'\n'*}
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$id" -F "body=@$RUNNER_TEMP/perf-compare.md" > /dev/null || echo "::warning::Could not update the performance comment; see the job summary."
+          elif [ "$STATUS" != ok ]; then
+            gh api --method POST "repos/$REPO/issues/$PR/comments" -F "body=@$RUNNER_TEMP/perf-compare.md" > /dev/null || echo "::warning::Could not comment on the pull request; see the job summary."
+          fi
+      - name: Fail above the failing line
+        if: steps.compare.outputs.status == 'fail'
+        run: |
+          echo "::error::An operation is at least twice as slow as on the base commit; see the job summary."
+          exit 1
+      - name: Check how time grows with the file size
+        if: ${{ !cancelled() }}
+        run: npm run test:perf
+
+  history:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Two pushes to main in a row would otherwise both add to gh-pages at once.
+    concurrency:
+      group: perf-history
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+      - name: Time the operations
+        run: npm run test:perf
+        env:
+          PERF_RESULTS: ${{ runner.temp }}/perf-results.json
+      # github-action-benchmark fetches gh-pages and fails when it does not exist yet, so the
+      # first run starts an empty one here and the action pushes it.
+      - name: Get or start the gh-pages branch
+        if: ${{ !cancelled() }}
+        run: |
+          git fetch origin gh-pages:gh-pages || git branch gh-pages "$(git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit-tree "$(git hash-object -t tree /dev/null)" -m 'Start the performance history')"
+      # Also records a commit that failed the assertions above, so the chart shows it.
+      - name: Add to the history
+        if: ${{ !cancelled() }}
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc # v1.22.2
+        with:
+          name: Performance
+          tool: customSmallerIsBetter
+          output-file-path: ${{ runner.temp }}/perf-results.json
+          github-token: ${{ github.token }}
+          skip-fetch-gh-pages: true
+          auto-push: true
+          # Compared with the previous commit's run on another runner, which varies more than the
+          # same-job comparison on pull requests: comment on the commit at twice the time, never
+          # fail.
+          comment-on-alert: true
+          alert-threshold: '200%'
+          fail-on-alert: false
