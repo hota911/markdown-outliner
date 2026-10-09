@@ -80,7 +80,7 @@ test.describe('a file opened as an outline in its own tab', () => {
     console.log('DEBUG1', await page.evaluate(() => JSON.stringify((window as any).__log)));
     await page.locator('.workspace-leaf.mod-active .view-action[aria-label="More options"]').click();
     await page.waitForTimeout(1000);
-    console.log('DEBUG2', await page.evaluate(() => JSON.stringify((window as any).__log)));
+    console.log('DEBUG2', await page.evaluate(() => JSON.stringify({ log: (window as any).__log, menuish: [...document.querySelectorAll('[class*="menu"]')].map(e => e.tagName + '.' + e.className).slice(0, 40), body: [...document.body.children].map(e => e.tagName + '.' + e.className), docs: (window as any).activeWindow === window, popouts: (window as any).app.workspace.floatingSplit?.children?.length })));
     await page.screenshot({ path: 'test-results/debug-menu.png' });
     await page.locator('.menu-item').filter({ hasText: 'Open as Markdown' }).click();
     expect(await obsidian.activeView()).toMatchObject({ type: 'markdown', file: 'notes/plan.md' });
