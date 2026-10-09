@@ -66,6 +66,15 @@ test.describe('a file opened as an outline in its own tab', () => {
 
     // The tab's "More options" menu offers "Open as Markdown".
     await page.locator('.workspace-leaf.mod-active .view-action[aria-label="More options"]').click();
+    // DEBUG (temporary)
+    await page.waitForTimeout(1000);
+    await page.screenshot({ path: 'test-results/debug-menu.png' });
+    console.log('DEBUG', await page.evaluate(() => JSON.stringify({
+      native: (window as any).app.vault.getConfig('nativeMenus'),
+      menus: [...document.querySelectorAll('.menu')].map(m => m.textContent),
+      actions: [...document.querySelectorAll('.workspace-leaf.mod-active .view-action')].map(a => a.getAttribute('aria-label')),
+      count: document.querySelectorAll('.workspace-leaf.mod-active .view-action[aria-label="More options"]').length,
+    })));
     await page.locator('.menu-item').filter({ hasText: 'Open as Markdown' }).click();
     expect(await obsidian.activeView()).toMatchObject({ type: 'markdown', file: 'notes/plan.md' });
     expect(obsidian.errors).toEqual([]);
