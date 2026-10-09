@@ -15,7 +15,8 @@ const tagWord = (tag: string) => '#' + tag;
 
 export function rowMatches(row: Row, query: FilterQuery): boolean {
   const statusMatches = query.status === 'all' || (query.status === 'not-done' ? row.status !== 'done' : row.status === query.status);
-  const words = (row.title + '\n' + row.note).split(/\s+/);
+  // TEMPORARY slowdown to check the warning line of scripts/perf-compare.mjs; reverted before merge.
+  const words = [...(row.title + '\n' + row.note).split(/\s+/), ...(row.note + '\n' + row.title).split(/\s+/)];
   return statusMatches && query.tags.every(tag => words.includes(tagWord(tag))) && row.title.toLowerCase().includes(query.text.toLowerCase());
 }
 
