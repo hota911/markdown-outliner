@@ -5,6 +5,11 @@
 .outliner .outliner-editor { flex: 1; min-width: 0; }
 .outliner .bookmarks { flex: 0 0 180px; padding-right: 16px; border-right: 1px solid var(--background-modifier-border); }
 .outliner .bookmarks.is-collapsed { flex-basis: 24px; padding-right: 0; }
+/* The sidebar scrolls apart from the outline: it stays at the top of the view while the outline scrolls,
+   and a list taller than the view scrolls inside it. The view is the page in the web version; Obsidian's
+   view container is sized below. Sideways it clips instead of scrolling, so the content fading in while
+   the panel widens shows no scrollbar. The 4px padding, offset by the margin, keeps focus rings unclipped. */
+.outliner .bookmarks { position: sticky; top: 0; max-height: 100dvh; overflow: hidden auto; overscroll-behavior: contain; padding-top: 4px; padding-bottom: 4px; padding-left: 4px; margin: -4px 0 -4px -4px; }
 /* 150ms, the same as the item transitions in src/ui/motion.ts. */
 .outliner .bookmarks { transition: flex-basis 150ms ease-out, padding-right 150ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .outliner .bookmarks { transition: none; } }
@@ -15,18 +20,22 @@
 .outliner .search-star { position: absolute; right: 3px; top: 2px; bottom: 2px; width: 24px; padding: 0; border: 0; background: var(--background-modifier-form-field); font-size: 17px; }
 .outliner .search-star[aria-pressed=true] { color: var(--color-yellow); }
 .outliner .bookmark-actions { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
-.outliner .bookmark-actions button { font-size: 11px; }
 .outliner .bookmark-list { list-style: none; padding: 0; margin: 0; }
 .outliner .bookmark-item { display: flex; align-items: center; gap: 2px; margin-bottom: 4px; }
-.outliner .bookmark-open { flex: 1; min-width: 0; border-color: transparent; text-align: left; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
+/* Long names wrap. Obsidian gives every button a fixed height and a centered flex layout, which would let
+   the wrapped lines spill over the next bookmark, so the buttons here set their own display and height. */
+.outliner .bookmark-actions button { font-size: 11px; height: auto; white-space: normal; overflow-wrap: anywhere; }
+.outliner .bookmark-open { display: block; height: auto; flex: 1; min-width: 0; border-color: transparent; text-align: left; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
 .outliner .bookmark-item .icon { flex: 0 0 22px; }
 .outliner .bookmark-name { flex: 1; min-width: 0; font-size: 12px; }
-.outliner .bookmark-empty { font-size: 11px; color: var(--text-faint); line-height: 1.6; }
+.outliner .bookmark-empty { font-size: 11px; color: var(--text-faint); line-height: 1.6; overflow-wrap: anywhere; }
 /* In Obsidian the view's container is the scroll container. A sticky element sticks at the edge of its
    content box, so the space above the content is padding of the workspace instead of the container:
    otherwise the pinned header would stop 16px below the top and rows would show through the gap. */
-.workspace-leaf-content .markdown-outliner-container.outliner { margin: 0; max-width: none; height: 100%; overflow: auto; padding: 0 24px 16px; }
+.workspace-leaf-content .markdown-outliner-container.outliner { margin: 0; max-width: none; height: 100%; overflow: auto; padding: 0 24px 16px; container-type: size; }
 .workspace-leaf-content .markdown-outliner-container.outliner .outliner-workspace { padding-top: 16px; }
+/* In Obsidian the view container scrolls, not the window; 100cqh is the height inside its padding. */
+.workspace-leaf-content .markdown-outliner-container .bookmarks { max-height: 100cqh; }
 .outliner button, .outliner input, .outliner select, .outliner textarea { font: inherit; }
 .outliner button { cursor: pointer; border: 1px solid var(--background-modifier-border); border-radius: 4px; background: var(--interactive-normal); color: var(--text-normal); padding: 4px 8px; white-space: nowrap; }
 .outliner button:hover { background: var(--interactive-hover); border-color: var(--background-modifier-border-hover); }
@@ -156,7 +165,10 @@
   .outliner { padding: 0 12px; }
   .workspace-leaf-content .markdown-outliner-container.outliner { padding: 12px; }
   .outliner .outliner-workspace { flex-direction: column; align-items: stretch; gap: 12px; }
-  .outliner .bookmarks, .outliner .bookmarks.is-collapsed { flex: none; padding: 0 0 8px; border-right: 0; border-bottom: 1px solid var(--background-modifier-border); }
+  /* Above the outline the sidebar scrolls away with it, and a long list scrolls inside the sidebar rather
+     than pushing the outline off the screen. */
+  .outliner .bookmarks, .outliner .bookmarks.is-collapsed { position: static; max-height: 40dvh; flex: none; padding: 4px 4px 8px; margin: -4px -4px 0; border-right: 0; border-bottom: 1px solid var(--background-modifier-border); }
+  .workspace-leaf-content .markdown-outliner-container .bookmarks { max-height: 40cqh; }
   .outliner .bookmarks-header { margin-bottom: 4px; }
   .outliner .file-select { flex: 1 1 100%; max-width: none; }
   .outliner .search-box { flex: 1 1 100%; }
