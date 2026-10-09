@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791525818848,
+  "lastUpdate": 1791525840757,
   "repoUrl": "https://github.com/hota911/markdown-outliner",
   "entries": {
     "Performance": [
@@ -207,6 +207,110 @@ window.BENCHMARK_DATA = {
           {
             "name": "filter by a status (34000 items)",
             "value": 18.69829299999998,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "38419042+hota911@users.noreply.github.com",
+            "name": "Hiroyuki Ota",
+            "username": "hota911"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "87611dc88f0127a4c452c817e25ac60712082c49",
+          "message": "Pin the header to the top edge of the Obsidian tab without a gap (#58)\n\nThe Obsidian view's container is the scroll container and had 16px of top\npadding. A sticky element sticks at the edge of the scroll container's content\nbox, so the pinned header stopped 16px below the top and rows showed through\nthe gap. Move that padding to the workspace inside the container.\n\nCo-authored-by: Claude Opus 5.5 <noreply@anthropic.com>",
+          "timestamp": "2026-10-09T15:03:24+09:00",
+          "tree_id": "2ea020b87250ced815789ddb5dc80dcc7cda9f8e",
+          "url": "https://github.com/hota911/markdown-outliner/commit/87611dc88f0127a4c452c817e25ac60712082c49"
+        },
+        "date": 1791525840737,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "open: parse the file and key its rows (17000 items)",
+            "value": 31.706975999999997,
+            "unit": "ms"
+          },
+          {
+            "name": "open: parse the file and key its rows (34000 items)",
+            "value": 56.640566000000035,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (17000 items)",
+            "value": 57.203216,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (34000 items)",
+            "value": 110.54436799999996,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (17000 items)",
+            "value": 48.727940000000046,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (34000 items)",
+            "value": 78.65565300000003,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (17000 items)",
+            "value": 69.72608000000002,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (34000 items)",
+            "value": 143.0787969999999,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (17000 items)",
+            "value": 4.722616000000016,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (34000 items)",
+            "value": 10.362802000000045,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (17000 items)",
+            "value": 14.444507000000044,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (34000 items)",
+            "value": 27.624458000000004,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (17000 items)",
+            "value": 13.956387000000007,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (34000 items)",
+            "value": 26.739599,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (17000 items)",
+            "value": 10.99593299999998,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (34000 items)",
+            "value": 21.421954000000028,
             "unit": "ms"
           }
         ]
