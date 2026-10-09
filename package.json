@@ -21,6 +21,7 @@
     "test": "npm run test:node && npm run test:ui",
     "test:node": "node --test test/core.test.mjs test/inline.test.mjs test/keys.test.mjs test/bookmarks.test.mjs test/slash.test.mjs test/three-way-merge.test.mjs test/server.test.mjs test/package-plugin.test.mjs test/version-bump.test.mjs test/changelog-section.test.mjs test/skill.test.mjs",
     "test:ui": "vitest run",
+    "test:perf": "node --test test/perf.test.mjs",
     "test:e2e": "npm run build:web && playwright test",
     "test:obsidian": "npm run build:plugin && playwright test --config obsidian-e2e/playwright.config.ts",
     "test:tauri": "cargo test --manifest-path src-tauri/Cargo.toml",
