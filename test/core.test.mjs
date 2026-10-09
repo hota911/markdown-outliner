@@ -29,8 +29,8 @@ test('箇条書きの子をノートの後に追加し既存の子とCRLFを保�
   assert.deepEqual(inserted, {
     text: '---\r\ntitle: example\r\n---\r\n# Tasks\r\n- [ ] parent\r\n  parent note\r\n  - #work #urgent\r\n  - [x] old child\r\n    child note\r\n', line: 6
   });
-  assert.deepEqual(core.parse(inserted.text)[1], {
-    line: 6, end: 7, depth: 1, parentLine: 4, kind: 'bullet', title: '#work #urgent', status: null, note: '', embed: null
+  assert.deepEqual(core.parse(inserted.text)[2], {
+    line: 6, end: 7, depth: 1, parentLine: 4, kind: 'bullet', title: '#work #urgent', status: null, note: '', embed: null, level: null
   });
 });
 
@@ -73,12 +73,12 @@ test('複数行ノートの変更で子項目を保持する', () => {
 });
 
 test('ファイル全体の埋め込みだけを判別する', () => {
-  assert.deepEqual(core.parse('- ![[tasks.md]]\n')[0], { line: 0, end: 1, depth: 0, parentLine: null, kind: 'embed', title: '![[tasks.md]]', status: null, note: '', embed: 'tasks.md' });
+  assert.deepEqual(core.parse('- ![[tasks.md]]\n')[0], { line: 0, end: 1, depth: 0, parentLine: null, kind: 'embed', title: '![[tasks.md]]', status: null, note: '', embed: 'tasks.md', level: null });
   assert.equal(core.parse('- ![[tasks.md#section]]\n')[0].kind, 'bullet');
 });
 
 test('存在しない行や項目名の改行は失敗し、無効な構造操作は変更しない', () => {
-  assert.throws(() => core.updateTitle('# heading\n', 0, 'x'));
+  assert.throws(() => core.updateTitle('# heading\n', 0, 'x'), { code: 'headingReadOnly' });
   assert.throws(() => core.updateTitle('- [ ] item\n', 0, 'x\ny'));
   assert.deepEqual(core.outdent('- [ ] root\n', 0), { text: '- [ ] root\n', line: 0 });
   assert.deepEqual(core.indent('- [ ] root\n', 0), { text: '- [ ] root\n', line: 0 });
@@ -183,8 +183,10 @@ test('親の異なる選択と対象、存在しない行、不正な条件を�
   assert.throws(() => core.reorder(text, [0], 2, 'middle'), { code: 'invalidReorder' });
 });
 
-test('本文をまたぐ並び替えを拒否する', () => {
-  assert.throws(() => core.reorder('- A\n# Heading\n- B\n', [0], 2, 'after'), { code: 'reorderAcrossText' });
+test('本文をまたぐ並び替えと、見出しをまたぐ並び替えを拒否する', () => {
+  assert.throws(() => core.reorder('- A\nText\n- B\n', [0], 2, 'after'), { code: 'reorderAcrossText' });
+  assert.throws(() => core.reorder('- A\n# Heading\n- B\n', [0], 2, 'after'), { code: 'reorderSiblingsOnly' });
+  assert.throws(() => core.reorder('- A\n# Heading\n- B\n', [1], 0), { code: 'headingReadOnly' });
 });
 
 test('埋め込みの行も項目と同じく並び替える', () => {
@@ -250,7 +252,7 @@ test('自分自身や子孫を対象にした循環と異なる親の選択を�
 });
 
 test('本文の境界をまたぐ子への移動を拒否する', () => {
-  assert.throws(() => core.reparent('- A\n# Heading\n- target\n', [0], 2), { code: 'reparentAcrossText' });
+  assert.throws(() => core.reparent('- A\nText\n- target\n', [0], 2), { code: 'reparentAcrossText' });
   assert.throws(() => core.reparent('- target\n```md\n- code\n```\n- A\n', [4], 0), { code: 'reparentAcrossText' });
 });
 
@@ -313,7 +315,7 @@ test('挿入位置が直接の子でない場合や選択した子の場合を�
 });
 
 test('子の間への移動も本文の境界をまたげない', () => {
-  assert.throws(() => core.reparent('- target\n  - child\n# Heading\n- moving\n', [3], 0, 1), { code: 'reparentAcrossText' });
+  assert.throws(() => core.reparent('- target\n  - child\nText\n- moving\n', [3], 0, 1), { code: 'reparentAcrossText' });
 });
 
 test('Bの子CをルートのBの前へ移してA、C、Bの順にする', () => {
@@ -324,9 +326,9 @@ test('Bの子CをルートのBの前へ移してA、C、Bの順にする', () =>
   });
 });
 
-test('複数の子を原順でルート末尾へ移しCRLFを保つ', () => {
+test('複数の子を原順で見出しの末尾へ移しCRLFを保つ', () => {
   const text = '# Tasks\r\n- parent\r\n  parent note\r\n  - A\r\n    A note\r\n  - B\r\n  - C\r\n    - C child\r\n- last\r\n';
-  assert.deepEqual(core.reparent(text, [6, 3], null), {
+  assert.deepEqual(core.reparent(text, [6, 3], 0), {
     text: '# Tasks\r\n- parent\r\n  parent note\r\n  - B\r\n- last\r\n- A\r\n  A note\r\n- C\r\n  - C child\r\n',
     line: 5, lines: [5, 7]
   });
@@ -345,8 +347,8 @@ test('ルート末尾へ移しても途中と末尾にあった空行を削除�
 });
 
 test('ルートへの移動も本文の境界を拒否する', () => {
-  assert.throws(() => core.reparent('- parent\n  - child\n# Footer\n', [1], null), { code: 'reparentAcrossText' });
-  assert.throws(() => core.reparent('- before\n# Heading\n- parent\n  - child\n', [3], null, 0), { code: 'reparentAcrossText' });
+  assert.throws(() => core.reparent('- parent\n  - child\nFooter\n', [1], null), { code: 'reparentAcrossText' });
+  assert.throws(() => core.reparent('- before\nText\n- parent\n  - child\n', [3], null, 0), { code: 'reparentAcrossText' });
 });
 
 test('ルートへの移動で埋め込みの行をまたぐ', () => {
@@ -419,7 +421,8 @@ test('埋め込めないファイル名と存在しない行を拒否する', ()
   assert.throws(() => core.embedFile('- [ ] \n', 0, 'work'), { code: 'invalidFileName' });
   assert.throws(() => core.embedFile('- [ ] \n', 0, 'a]]b.md'), { code: 'invalidFileName' });
   assert.throws(() => core.embedFile('- [ ] \n', 0, 'a#b.md'), { code: 'invalidFileName' });
-  assert.throws(() => core.embedFile('# H\n', 0, 'work.md'), { code: 'noEditableItem' });
+  assert.throws(() => core.embedFile('# H\n', 0, 'work.md'), { code: 'headingReadOnly' });
+  assert.throws(() => core.embedFile('Text\n', 0, 'work.md'), { code: 'noEditableItem' });
 });
 
 test('タイトルからタグと使えない文字を除いてファイル名を作り、重複には番号を付ける', () => {
@@ -434,4 +437,60 @@ test('タイトルからタグと使えない文字を除いてファイル名�
 test('Obsidian の規則でタグを # なしで出現順に重複なく取り出す', () => {
   const text = '# Heading\n- [ ] #work Plan #仕事/進行中, #my_tag-2\n  note #work #1984 #y1984\n- a#b https://example.com/#x ![[f.md#h]] ＃全角\n#start';
   assert.deepEqual(core.tagsIn(text), ['work', '仕事/進行中', 'my_tag-2', 'y1984', 'start']);
+});
+
+const sections = '- pre\n# A ##\n- a\n  note\n## A1\n- a1\n# B\n```\n# code\n```\n- b\nSetext\n===\n';
+
+test('見出しを行にし、深い見出しと見出しの下の最上位の項目を子にする', () => {
+  assert.deepEqual(core.parse(sections).map(row => [row.line, row.kind, row.level, row.title, row.parentLine, row.end]), [
+    [0, 'bullet', null, 'pre', null, 1],
+    [1, 'heading', 1, 'A', null, 6],
+    [2, 'bullet', null, 'a', 1, 4],
+    [4, 'heading', 2, 'A1', 1, 6],
+    [5, 'bullet', null, 'a1', 4, 6],
+    [6, 'heading', 1, 'B', null, 14],
+    [10, 'bullet', null, 'b', 6, 11],
+  ]);
+  assert.deepEqual(core.parse('#tag\n#\n####### x\n').map(row => [row.kind, row.title]), [['heading', '']]);
+});
+
+test('見出しは読み取り専用で、項目との結合や外への字下げ戻しもしない', () => {
+  assert.throws(() => core.updateStatus(sections, 1, 'done'), { code: 'headingReadOnly' });
+  assert.throws(() => core.move(sections, 4, 'up'), { code: 'headingReadOnly' });
+  assert.throws(() => core.merge(sections, 5, 'previous'), { code: 'mergeAcrossText' });
+  assert.deepEqual(core.outdent(sections, 2), { text: sections, line: 2 });
+});
+
+test('節の最初と最後の項目を、画面上で隣の節へ上下に移す', () => {
+  assert.deepEqual(core.move(sections, 2, 'up'), { text: sections.replace('- pre\n# A ##\n- a\n  note\n', '- pre\n- a\n  note\n# A ##\n'), line: 1 });
+  assert.deepEqual(core.move(sections, 5, 'up'), { text: sections.replace('## A1\n- a1\n', '- a1\n## A1\n'), line: 4 });
+  assert.deepEqual(core.move(sections, 2, 'down'), { text: sections.replace('- a\n  note\n## A1\n', '## A1\n- a\n  note\n'), line: 3 });
+  assert.deepEqual(core.move(sections, 5, 'down'), { text: sections.replace('- a1\n# B\n```\n# code\n```\n', '# B\n```\n# code\n```\n- a1\n'), line: 9 });
+  assert.deepEqual(core.move(sections, 10, 'down'), { text: sections, line: 10 });
+});
+
+test('見出しをまたぐ上下移動は、本文を項目に取り込む位置と空の冒頭を拒否する', () => {
+  for (const [text, line, direction] of [
+    ['# A\n- a\n', 1, 'up'],
+    ['# A\nIntro\n# B\n- b\n', 3, 'up'],
+    ['# A\n- x\nOutro\n# B\n- b\n', 4, 'up'],
+    ['# A\n- a\nText\n# B\n- b\n', 1, 'down'],
+  ]) assert.deepEqual(core.move(text, line, direction), { text, line });
+});
+
+test('見出しへの移動は節の項目の末尾へ移し、子は最上位の字下げにする', () => {
+  assert.deepEqual(core.reparent('# A\n- a\n\n# B\n- b\n', [1], 3), { text: '# A\n\n# B\n- b\n- a\n', line: 4, lines: [4] });
+  assert.deepEqual(core.reparent('# A\n- a\n  - c\n# B\n', [2], 3), { text: '# A\n- a\n# B\n- c\n', line: 3, lines: [3] });
+  assert.deepEqual(core.reparent('- A\n# Heading\n- target\n', [0], 2), { text: '# Heading\n- target\n  - A\n', line: 2, lines: [2] });
+  assert.deepEqual(core.reparent('- target\n  - child\n# Heading\n- moving\n', [3], 0, 1), { text: '- target\n  - moving\n  - child\n# Heading\n', line: 1, lines: [1] });
+  assert.throws(() => core.reparent('# A\n- a\n# B\nText\n', [1], 2), { code: 'reparentAcrossText' });
+  assert.throws(() => core.reparent('- A\nText\n# H\n- target\n', [0], 3), { code: 'reparentAcrossText' });
+  assert.throws(() => core.reparent(sections, [1], 6), { code: 'headingReadOnly' });
+});
+
+test('見出しの子の追加は節の項目の先頭に入れ、本文だけの節では拒否する', () => {
+  assert.deepEqual(core.insert('# A\n- a\n', 0, { kind: 'bullet', child: true, tags: [] }), { text: '# A\n- \n- a\n', line: 1 });
+  assert.deepEqual(core.insert('# A\n## B\n', 0, { kind: 'bullet', child: true, tags: [] }), { text: '# A\n- \n## B\n', line: 1 });
+  assert.throws(() => core.insert('# A\nIntro\n', 0, { kind: 'bullet', child: true, tags: [] }), { code: 'insertNextToText' });
+  assert.throws(() => core.insert('# A\n- a\n', 0, { kind: 'bullet', tags: [] }), { code: 'headingReadOnly' });
 });

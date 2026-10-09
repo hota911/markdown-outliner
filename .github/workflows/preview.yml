@@ -1,0 +1,68 @@
+name: Preview
+
+# Builds the web app on the files of samples/ as one HTML file (`npm run build:preview`; see
+# "Pull request preview" in README.md) and uploads it unzipped as an artifact of the run, so a
+# pull request can be tried in the browser without checking it out.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - run: npm run build:preview
+      # Unzipped, a single file is its own artifact and is named after the file.
+      - name: Upload the preview
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          path: dist/preview/markdown-outliner-preview.html
+          archive: false
+          if-no-files-found: error
+          overwrite: true
+      - name: Write the report
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            echo '<!-- pr-preview -->'
+            echo "Preview of $HEAD_SHA: [markdown-outliner-preview.html]($ARTIFACT_URL)"
+            echo
+            echo 'The web app on the files of `samples/`, in one HTML file. Edits are kept in memory only: a reload starts again from the samples. The link needs a GitHub login.'
+          } > "$RUNNER_TEMP/preview.md"
+          cat "$RUNNER_TEMP/preview.md" >> "$GITHUB_STEP_SUMMARY"
+      # One comment per pull request, updated on each push. The token of a pull request from a fork
+      # cannot comment; the job summary has the same link.
+      - name: Comment on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          ids=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- pr-preview -->"))) | .id')
+          id=${ids%%$'\n'*}
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$id" -F "body=@$RUNNER_TEMP/preview.md" > /dev/null || echo "::warning::Could not update the preview comment; see the job summary."
+          else
+            gh api --method POST "repos/$REPO/issues/$PR/comments" -F "body=@$RUNNER_TEMP/preview.md" > /dev/null || echo "::warning::Could not comment on the pull request; see the job summary."
+          fi

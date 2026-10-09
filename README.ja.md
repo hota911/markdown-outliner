@@ -12,15 +12,16 @@ Markdown のタスクリストをアウトラインとして編集するツー�
 - 編集していない項目の本文とノートでは、基本的なインライン Markdown を表示する。対象は `[text](url)` のリンク（http、https、mailto）、裸の http(s) URL、`**bold**`、`*italic*` / `_italic_`、`` `code` ``、`~~strikethrough~~` である。リンクは新しいタブで開き、本文のそれ以外の場所をクリックすると、クリックした文字の位置にカーソルを置いて元の Markdown を編集できる。
 - 状態・タグ・本文の語句で絞り込める。絞り込み中もタスク、子項目、ノートを追加でき、新しいタスクには絞り込み中の状態とタグが付く。項目の本文とノートにある `#タグ` は、太字や斜体の中も含めてリンクのように表示される。クリックするとそのタグを絞り込みに追加する（編集中は ⌘ クリック、Windows と Linux では Ctrl クリック）。
 - Tab / Shift+Tab で階層を変え、Alt+Up/Down かドラッグ＆ドロップで項目を移動する。兄弟の項目を複数選択して、まとめて移動・更新することもできる。
-- 項目へのズーム、項目と埋め込みの折りたたみができ、今の表示（ファイル、絞り込み、ズーム）を好きな名前でブックマークできる。
+- 項目へのズーム、項目と埋め込みの折りたたみができ、今の表示（ファイル、絞り込み、ズーム）を好きな名前でブックマークできる。ブックマークのサイドバーはアウトラインをスクロールしても動かず、一覧が長いとサイドバーだけでスクロールする。
 - 項目の本文の先頭か空白の後で `/` を入力すると、コマンドのメニューが開く。状態の変更、タスクと箇条書きの切り替え、ノートを開く、ズーム、子項目の折りたたみと展開、項目をファイルにする、既存のファイルの埋め込みができる。「折りたたむ」は子項目が開いている項目にだけ、「展開する」は折りたたまれた項目にだけ出る。実行後もフォーカスは項目の本文に残る。`/` の後の文字で、コマンドを英語名か日本語名で絞り込む。Up/Down で選び、Enter、Tab かクリックで実行すると `/` 以降の文字は消える。Escape はメニューを閉じて文字を残す。単語の途中の `/`（`A/B` や URL）、全角の `／`、IME で入力した `/`、ノートではメニューは開かない。「既存のファイルを埋め込む」では、ほかの Markdown ファイルが一覧に出るので選ぶ。項目が空ならその項目が埋め込みになり、そうでなければ項目の下に埋め込みを追加する。Undo 1 回で `/` の文字を含む元の項目に戻る。
 - 同じように `#` を入力すると、使用中のタグを選べる。Obsidian では Vault 全体のタグ（Obsidian のメタデータキャッシュから取得し、frontmatter のタグも含む）と、アウトライナーが読み込んだファイルのタグが一覧に出る。Web 版では、開いてからアウトライナーが読み込んだファイル（表示したファイルとその埋め込み）の `#タグ` が一覧に出る。フォルダー内のすべてのファイルではない。`#` の後の文字でタグを絞り込み、大文字と小文字、カタカナとひらがな、全角と半角の違いは区別しない。その文字で始まるタグが先に並ぶ。Enter、Tab かクリックで `#文字` をタグと空白に置き換える。一致するタグがなければメニューは閉じるので、新しいタグはそのまま入力すればよい。
+- 見出し（行頭の `#` から `######`）は読み取り専用の行として表示し、その節の字下げのない項目と下位の見出しを子として並べる。見出しは折りたたみとズームができ、「＋」ボタンで節の先頭に項目を追加できる。節の最初か最後の項目で Alt+Up/Down を押すか、項目を見出しの上や別の節の項目の隣にドラッグすると、その節へ移動する。変わるのは移動した行だけで、段落などの本文は元の位置に残る。本文が項目の一部になってしまう移動は拒否する。見出しそのものの名前の変更・追加・削除・移動はアウトライナーではできない。
 - `- ![[work.md]]` のような項目単位の埋め込みはその場で編集でき、埋め込み先のファイルに保存される。埋め込みは、埋め込み元のファイルがあるフォルダーからの相対パスで解決する。
 - 埋め込みのヘッダーから埋め込み先のファイル名を変更できる。Web 版が更新するのはその埋め込みの行だけで、ファイルへのほかのリンクは更新しない。Obsidian では Obsidian の設定に従ってリンクを更新する。
 - Undo / Redo、最後の編集から約 0.8 秒後の自動保存、競合の処理に対応する。編集中にディスク上のファイルが変わった場合、別々の行への変更は自動で取り込む（このとき Undo の履歴は消える）。両方が同じ行を変更した場合は入力内容を残し、違いのある行を表示して、そこにどちらを使うか選べるようにする。
 - 外部の変更は数秒ごとに取り込む。入力欄にフォーカスがある間は、変更が待っていることを状態表示で知らせ、入力欄を離れるか、タブやウィンドウに戻ったときに反映する。カーソルは同じ項目に残る。
 
-見出し、コードブロック、その他のリスト以外の内容は保持するが、表示はしない。
+段落やコードブロックなど、見出しとリスト以外の内容は保持するが、表示はしない。
 
 ## Obsidian へのインストール
 
@@ -49,7 +50,7 @@ Markdown のタスクリストをアウトラインとして編集するツー�
 - 項目のボタン（子項目の追加、ズーム、ファイルにする）は、指の下の項目ではなく、編集中の項目の下に表示される。ノートと移動のボタンは代わりにバーにある。
 - ⠿ のハンドルをタップすると項目を選択する。タッチでのドラッグには対応していない。バーの移動ボタンを使うか、項目を選択して選択用のバーを使う。
 - `/` のコマンドメニューはコマンドのタップで使える。行の高さは 36px である。
-- ボタンの高さは 36px 以上になり、キーボードショートカットのヘルプは表示しない。幅 600px 以下の画面では、ブックマークをアウトラインの上に表示する。
+- ボタンの高さは 36px 以上になり、キーボードショートカットのヘルプは表示しない。幅 600px 以下の画面では、ブックマークをアウトラインの上に画面の高さの 40% までで表示し、それより長い一覧はその中でスクロールする。
 
 タッチ用のレイアウトは、Pixel 7 をエミュレートした Chromium でテストしている（`e2e/mobile.spec.ts`）。実機の Android や iOS、Obsidian モバイルアプリでは確認していない。
 
@@ -112,9 +113,11 @@ npm run typecheck   # svelte-check over src/, e2e/, obsidian-e2e/ and the Vite a
 npm test            # run test:node and test:ui
 npm run test:node   # core, row key, server and packaging tests with node --test
 npm run test:ui     # screen tests (test/ui/) and Obsidian adapter tests with Vitest and jsdom
-npm run test:e2e    # build the web app, then run the browser tests (e2e/) in Chromium with Playwright, on desktop and as a Pixel 7
+npm run test:e2e    # build the web app and the preview, then run the browser tests (e2e/) in Chromium with Playwright, on desktop and as a Pixel 7
 npm run test:obsidian # macOS only: build the plugin, then test it inside the Obsidian desktop app (obsidian-e2e/)
+npm run test:perf   # time editing operations on large files and check that time grows linearly with the file size
 npm run build       # write dist/web/ and the plugin files dist/main.js, manifest.json, styles.css
+npm run build:preview # write dist/preview/markdown-outliner-preview.html, the web app on the files of samples/ in one file
 ```
 
 `npm run dev` は既定で `samples/` を編集する。別のものを編集するには、`OUTLINER_WORKSPACE` にフォルダーか Markdown ファイル 1 つを設定する。
@@ -125,9 +128,15 @@ npm run build       # write dist/web/ and the plugin files dist/main.js, manifes
 
 画面テストは、メモリ上のファイルアダプターを相手に、描画した DOM をキーボードとポインターのイベントで操作し、保存された Markdown を確認する。jsdom にはレイアウトもドラッグ＆ドロップもないため、ドラッグは Playwright でテストする。`e2e/` の各テストは一時フォルダーに Markdown ファイルを書き出し、そのフォルダーで `server.mjs` を起動し、Chromium でマウスでドラッグして、ディスク上のファイルを確認する。ブラウザが必要なため、これらのテストは `npm test` に含まれない。初回の実行前に `npx playwright install chromium` で Chromium をダウンロードしておく。
 
-`npm run test:obsidian` は、ビルドしたプラグインを macOS の Obsidian デスクトップアプリの中でテストする。`/Applications/Obsidian.app`、または `OBSIDIAN_APP` に設定したアプリバンドルを使い、どちらもなければテストをスキップする。各テストは新しい一時プロファイル（`--user-data-dir`）と `samples/` からコピーした一時 Vault で別の Obsidian プロセスを起動し、終了後に両方を削除する。そのため、手元の Obsidian の設定や Vault、起動中の Obsidian を読むことも変えることもない。Playwright は DevTools プロトコルでウィンドウに接続する。テストでは次のことを確認する：プラグインがコンソールエラーなしで読み込まれること、リボンのアイコンとコマンドでアウトライナーとファイル単位のアウトライン表示が開くこと、編集・状態の変更・ドラッグ＆ドロップがファイルに保存されること、「Markdown で開く」で元に戻り、再起動後にアウトラインのタブが復元されること、文字の色がライトテーマとダークテーマに従うこと、Obsidian の言語が日本語のときに表示が日本語になること。Playwright で Obsidian のメニューをクリックできるよう、テスト用の Vault ではネイティブメニューをオフにしている。これらのテストは画面に Obsidian のウィンドウを開くため、CI、`npm test`、`npm run test:e2e` では実行しない。
+`npm run test:obsidian` は、ビルドしたプラグインを macOS の Obsidian デスクトップアプリの中でテストする。`/Applications/Obsidian.app`、または `OBSIDIAN_APP` に設定したアプリバンドルを使い、どちらもなければテストをスキップする。各テストは新しい一時プロファイル（`--user-data-dir`）と `samples/` からコピーした一時 Vault で別の Obsidian プロセスを起動し、終了後に両方を削除する。そのため、手元の Obsidian の設定や Vault、起動中の Obsidian を読むことも変えることもない。Playwright は DevTools プロトコルでウィンドウに接続する。テストでは次のことを確認する：プラグインがコンソールエラーなしで読み込まれること、リボンのアイコンとコマンドでアウトライナーとファイル単位のアウトライン表示が開くこと、編集・状態の変更・ドラッグ＆ドロップがファイルに保存されること、「Markdown で開く」で元に戻り、再起動後にアウトラインのタブが復元されること、文字の色がライトテーマとダークテーマに従うこと、長いブックマーク名がボタンの中で折り返し、ブックマークのサイドバーがアウトラインとは別にスクロールすること、Obsidian の言語が日本語のときに表示が日本語になること。Playwright で Obsidian のメニューをクリックできるよう、テスト用の Vault ではネイティブメニューをオフにしている。これらのテストは画面に Obsidian のウィンドウを開くため、CI、`npm test`、`npm run test:e2e` では実行しない。
 
 CI は、プルリクエストと `main` への push で lint、typecheck、`npm test`、`npm run test:e2e`、`npm run build` を実行する。別のワークフロー（`.github/workflows/tauri.yml`）が、`src-tauri/` か `package.json` が変わったときだけ、デスクトップアプリの Rust テストを macOS で実行する。macOS のランナーと Tauri の初回ビルドには数分かかるため、これは必須のチェックではない。
+
+### プルリクエストのプレビュー
+
+`npm run build:preview` は、Web アプリをサーバーなしの 1 つの HTML ファイル `dist/preview/markdown-outliner-preview.html` としてビルドする。スクリプトとスタイルはページに埋め込む。`samples/` のファイルはビルド時に埋め込み、メモリ上に保持する（`src/preview/adapter.ts`）。そのため編集はできるが、再読み込みすると samples の内容に戻り、ブックマークは保存されない。サーバーは要らず、ディスク上のファイルをそのままブラウザで開けばよい。`e2e/preview.spec.ts` は `file://` で開き、ほかに何も読み込まないこと、編集を保存できること、再読み込みで元に戻ることを確認する。
+
+プルリクエストごとに `.github/workflows/preview.yml` がこのファイルをビルドし、zip にせず実行の成果物（artifact）としてアップロードし、そのリンクを載せたコメントをプルリクエストに 1 つ投稿または更新する。リンクを開くには GitHub へのログインが要る。フォークからのプルリクエストにはコメントできるトークンがないため、リンクは実行のジョブサマリーにだけ載る。
 
 ソースの構成：
 
@@ -136,6 +145,7 @@ CI は、プルリクエストと `main` への push で lint、typecheck、`npm
 - `src/obsidian/`：Obsidian プラグインのエントリーポイント（`main.ts`）。
 - `src/web/`：単体の Web ページ。
 - `src/tauri/`：デスクトップアプリのページ。`adapter.ts` が Rust のコマンドを呼ぶ。
+- `src/preview/`：プルリクエストのプレビューのページ。`adapter.ts` が `samples/` のファイルをメモリ上に保持する。
 - `src-tauri/`：デスクトップアプリ。`src/workspace.rs` は `server.mjs` から移植したファイルアクセスとそのテスト、`src/lib.rs` はコマンド、フォルダー選択ダイアログ、メニュー、ウィンドウを持つ。
 - `src/styles.css`：両方の版のスタイル。色とフォントは Obsidian のテーマ変数を使うので、プラグインは Obsidian のテーマに従う。`src/web/theme.css` は Web ページ用にこれらの変数を定義し、システムの設定に従うライトとダークの 2 組を持つ。
 - `server.mjs`：ローカル Web サーバーとファイル API。開発サーバーにも組み込まれる。
@@ -143,14 +153,31 @@ CI は、プルリクエストと `main` への push で lint、typecheck、`npm
 - `vite.config.ts`：プラグインのビルド（CommonJS の `main.js` 1 ファイル）。
 - `vite.web.config.ts`：Web アプリのビルドと開発サーバー。
 - `vite.tauri.config.ts`：デスクトップアプリのページのビルドと開発サーバー。
+- `vite.preview.config.ts`：プルリクエストのプレビューのビルド。スクリプトとスタイルをページに埋め込む。
 - `scripts/package-plugin.mjs`：プラグインをビルドし、`manifest.json` と `styles.css` を `dist/` にコピーする。
 - `scripts/demo.mjs`：`npm run demo` のために `samples/` の一時コピーを配信する。
+- `scripts/perf-compare.mjs`：CI でプルリクエストとベースの速さを比べる。[性能](#性能)を参照。
 - `scripts/changelog-section.mjs`：`CHANGELOG.md` から 1 つのバージョンの節を出力する。リリースノートに使う。
 - `.changie.yaml`、`.changes/`：Changie の設定、未リリースの変更履歴の断片（fragment）、CHANGELOG.md の生成元になるリリース済みの各バージョン。
 - `e2e/`：Chromium での Playwright テスト（ドラッグ＆ドロップ、レイアウト、`mobile.spec.ts` のタッチスクリーン用レイアウト）。`playwright.config.ts` は `mobile.spec.ts` を Pixel 7 として、それ以外をデスクトップの Chrome として実行する。
 - `obsidian-e2e/`：Obsidian デスクトップアプリでのプラグインの Playwright テスト。専用の `playwright.config.ts` を持つ。`fixtures.ts` は Obsidian を起動し、ファイルを開く、ID でコマンドを実行する、Vault のファイルを読む、といったヘルパーを持つ。
 
 プラグインのビルドは Svelte と共有コードを `main.js` にまとめるので、リリースした `main.js` が必要とするのは `obsidian` だけである。
+
+### 性能
+
+`npm run test:perf` は、生成した 17,000 項目と 34,000 項目のアウトライン（`test/large-outline.ts`、約 1MB と 2MB）で 8 つの操作の時間を測る：ファイルを開く、タイトルに入力する、項目をインデント・移動する、アウトライナーの外での変更をマージする、コンフリクトを解決する、語・タグ・状態で絞り込む（`test/perf-operations.mjs`）。各操作はそれぞれ別の Node プロセスで実行し、各回の前にガベージコレクションを行い、2 回のウォームアップの後の 7 回の中央値をその操作の時間とする。2 倍の大きさのファイルで 3 倍以上の時間がかかった操作（線形の操作なら約 2 倍、2 乗に比例する操作なら 4 倍になる）や、大きい方のファイルで 1 秒を超えた操作があるとテストは失敗する。これらの確認は過去の結果に依存せず、CI でも実行する。実行には約 10 秒かかる。並行して走る他のテストが時間を乱さないよう、`npm test` には含めていない。
+
+Performance ワークフロー（`.github/workflows/perf.yml`）は、プルリクエストと `main` への push で実行する。必須のチェックではない。
+
+- プルリクエストでは、`scripts/perf-compare.mjs` がベースのコミットをプルリクエストの隣にチェックアウトし、大きい方のファイルで各操作を両方 6 回ずつ、同じランナーで交互に測る。共有ランナーの速さはジョブごとに変わり、その差は 1 つのジョブの中での変動よりずっと大きい。2026 年 10 月に同じコミット同士を比べたとき、比は 0.95〜1.07 に収まったが、同じコミットでもジョブによって 1.7 倍の時間がかかった。そのため、過去の実行結果ではなく、同じジョブで測ったベースと比べる。線は 2 本あり、スクリプト冒頭の `WARNING_RATIO` と `FAILING_RATIO` で決める：
+  - 警告：プルリクエストの中央値がベースの 1.3 倍以上。
+  - 失敗：2 倍以上。ジョブが失敗する。
+
+  どちらも、Mann-Whitney の U 検定で差が有意（p が 0.05 を操作の数 8 で割った値より小さい）な場合だけ数える。1 回だけ遅かった実行で反応しないためである。各操作のベースとヘッドの中央値、その比、p をまとめた報告はジョブのサマリーに出る。警告か失敗のときは、プルリクエストにも同じ内容をコメントし、以後の push ではその 1 つのコメントを更新する。フォークからのプルリクエストではジョブのサマリーだけになる。`npm run test:perf` の確認も同じジョブで実行し、それだけでもジョブを失敗させる。
+
+  手元で比べるには、ベースを別のフォルダーにチェックアウトして渡す：`git worktree add --detach ../base main` の後に `node scripts/perf-compare.mjs ../base`。スクリプトはベース側の `test/perf-operations.mjs` と `test/large-outline.ts` をこのチェックアウトのもので上書きするので、両方が同じベンチマークを実行する。
+- `main` への push ごとに、両方の大きさでの時間を [github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark) で `gh-pages` ブランチの履歴に追加する。`dev/bench/data.js` がコミットごとに 1 件の記録を持ち、`dev/bench/index.html` が操作ごとのグラフを描く。GitHub Pages で `gh-pages` ブランチを公開すると、グラフは <https://hota911.github.io/markdown-outliner/dev/bench/> で見られる。操作が遅くなったコミットを探すには、そのグラフで段差を探す。点にマウスを重ねるとコミットが表示され、クリックすると GitHub でそのコミットが開く。直前のコミットの 2 倍以上の時間がかかったときは、ワークフローがそのコミットにコメントする。連続するコミットは別のランナーで実行されるため、失敗にはしない。
 
 ## 変更履歴
 

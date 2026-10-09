@@ -128,6 +128,19 @@
 <div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} class:is-context={item.context} style:--depth={item.depth} in:grow>
   {#if item.embed}
     <EmbedRow {ctrl} {item} embed={item.embed} {handle} {lineEvents} />
+  {:else if item.row.kind === 'heading'}
+    <!-- A heading is read-only: it folds, zooms, takes dropped items, and adds the first item of its list. -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="outline-line heading-line" data-level={item.row.level} {...lineEvents}>
+      <button type="button" class="icon fold" title={ctrl.t.item.fold} disabled={!item.hasChildren} onclick={() => ctrl.toggleFold(item.path, item.row.line)}>{item.collapsed ? '▸' : '▾'}</button>
+      <div class="heading-title" role="heading" aria-level={item.row.level} data-path={item.path} data-line={item.row.line}>
+        <InlineText nodes={display ?? [{ kind: 'text', text: shownTitle, start: 0 }]} {marks} />
+      </div>
+      <div class="row-actions" onpointerdown={keepFocus} onmousedown={keepFocus}>
+        <button type="button" class="icon" title={ctrl.t.item.addUnderHeading} onclick={() => ctrl.add(item.path, item.row.line, true)}>+</button>
+        <button type="button" class="icon" title={ctrl.t.item.zoomIn} onclick={() => ctrl.zoomTo(item.path, item.row.line)}>↗</button>
+      </div>
+    </div>
   {:else}
     <!-- Drop target only; dragging is started from the handle button. -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->

@@ -84,6 +84,7 @@ test('SKILL.md の正しい例は全行が項目かノートで、項目名と�
   for (const { label, text } of blocks.filter(block => !block.label.startsWith('pitfall:'))) {
     assert.deepEqual(orphanedLines(text), [], label);
     for (const row of core.parse(text)) {
+      if (row.kind === 'heading') continue;
       assert.equal(core.updateTitle(text, row.line, row.title).text, text, `${label}: title of line ${row.line}`);
       if (row.kind !== 'embed') assert.equal(core.updateNote(text, row.line, row.note).text, text, `${label}: note of line ${row.line}`);
     }
@@ -93,6 +94,7 @@ test('SKILL.md の正しい例は全行が項目かノートで、項目名と�
 test('SKILL.md の例のファイルを説明どおりに読む', () => {
   const text = blocks.find(block => block.label === 'example').text;
   assert.deepEqual(core.parse(text).map(row => [row.depth, row.kind, row.status, row.title, row.note]), [
+    [-1, 'heading', null, 'Tasks', ''],
     [0, 'task', 'in-progress', 'Write the weekly report #work', 'Outline first, then write.'],
     [1, 'task', 'todo', 'Collect numbers #work', ''],
     [1, 'task', 'done', 'Pick the main message', ''],
@@ -107,6 +109,7 @@ test('SKILL.md の例のファイルを説明どおりに読む', () => {
 test('SKILL.md の新しい TODO リストの例は、見出しの下の一つのアウトラインになる', () => {
   const text = blocks.filter(block => block.label === 'example')[1].text;
   assert.deepEqual(core.parse(text).map(row => [row.depth, row.kind, row.status, row.title, row.note]), [
+    [-1, 'heading', null, 'Move to the new flat', ''],
     [0, 'task', 'todo', 'Paperwork', ''],
     [1, 'task', 'todo', 'Submit the moving-out notice at the city office', ''],
     [1, 'task', 'todo', 'Change the address for the bank', ''],

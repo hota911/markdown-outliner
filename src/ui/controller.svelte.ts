@@ -738,7 +738,17 @@ export class Controller {
   // Alt+Up / Alt+Down. The zoomed item stays in place.
   private moveItem(path: string, row: KeyedRow, direction: 'up' | 'down', field: Field) {
     if (this.zoomRoot(path)?.line === row.line) return;
-    this.mutate(path, text => core.move(text, row.line, direction), field);
+    this.mutate(path, text => this.move(path, text, row.line, direction), field);
+  }
+
+  // core.move, except that an item does not leave the zoomed item or heading: the first or last
+  // item of a section would otherwise move into the section next to it, out of view.
+  private move(path: string, text: string, line: number, direction: 'up' | 'down'): core.EditResult {
+    const root = this.zoomRoot(path);
+    const result = core.move(text, line, direction);
+    if (!root) return result;
+    const after = this.rows(path, result.text).find(row => row.line === root.line);
+    return after && result.line > root.line && result.line < after.end ? result : { text, line };
   }
 
   // Shift+Enter: from the title to the note of the same item and back.
@@ -946,7 +956,7 @@ export class Controller {
   // --- Row actions --------------------------------------------------------------------------
 
   setStatus = (path: string, line: number, status: Status) => this.mutate(path, text => core.updateStatus(text, line, status), 'title');
-  moveRow = (path: string, line: number, direction: 'up' | 'down') => this.mutate(path, text => core.move(text, line, direction), 'title');
+  moveRow = (path: string, line: number, direction: 'up' | 'down') => this.mutate(path, text => this.move(path, text, line, direction), 'title');
   showNote = (path: string, line: number) => this.focusNote(path, line);
 
   toggleFold = (path: string, line: number) => {
@@ -993,8 +1003,9 @@ export class Controller {
     const keptLines = new Set(this.keepFor(path));
     const shown = new Map<number, boolean>();
     for (const row of rows) {
+      // A heading is shown only for the items under it.
       const matches = !active || keptLines.has(row.line)
-        || (row.kind === 'embed' ? this.embedMatches(path, row, chain) : rowMatches(row, query));
+        || (row.kind === 'embed' ? this.embedMatches(path, row, chain) : row.kind !== 'heading' && rowMatches(row, query));
       if (!matches) continue;
       shown.set(row.line, true);
       // Ancestors come before their descendants, so an ancestor already shown has its own ancestors shown too.
@@ -1088,7 +1099,7 @@ export class Controller {
       line = sortedSelection()[index];
     } else {
       this.mutate(path, text => {
-        const result = core.move(text, row.line, down ? 'down' : 'up');
+        const result = this.move(path, text, row.line, down ? 'down' : 'up');
         line = result.line;
         return result;
       }, null);
@@ -1130,6 +1141,8 @@ export class Controller {
     const byLine = new Map(rows.map(value => [value.line, value]));
     const row = byLine.get(line);
     if (!row) return null;
+    // Nothing goes next to a heading: a drop on it puts the items at the end of its own list.
+    if (row.kind === 'heading') return { parentLine: row.line, beforeLine: null, indicator: 'drop-child', offset: 24 };
     const hasChildren = rows.some(child => child.parentLine === row.line);
     const bounds = node.getBoundingClientRect();
     const fraction = (event.clientY - bounds.top) / bounds.height;
@@ -1142,11 +1155,11 @@ export class Controller {
     const position = fraction < .5 ? 'before' : 'after';
     let targetRow = row;
     let offset = 0;
-    while (targetRow.parentLine !== null && targetRow.parentLine !== rootLine && event.clientX < titleLeft + offset - 12) {
+    while (targetRow.parentLine !== null && targetRow.parentLine !== rootLine && byLine.get(targetRow.parentLine)!.kind !== 'heading' && event.clientX < titleLeft + offset - 12) {
       targetRow = byLine.get(targetRow.parentLine)!;
       offset -= 24;
     }
-    const siblings = rows.filter(candidate => candidate.parentLine === targetRow.parentLine);
+    const siblings = rows.filter(candidate => candidate.parentLine === targetRow.parentLine && candidate.kind !== 'heading');
     const beforeLine = position === 'before' ? targetRow.line : siblings[siblings.indexOf(targetRow) + 1]?.line ?? null;
     return { parentLine: targetRow.parentLine, beforeLine, line: targetRow.line, position, indicator: position === 'before' ? 'drop-before' : 'drop-after', offset };
   }
@@ -1170,7 +1183,10 @@ export class Controller {
     const lines = [...this.dragging.lines];
     const byLine = new Map(this.rows(path).map(row => [row.line, row]));
     this.dragEnd();
-    if (drop.parentLine !== null || lines.some(value => byLine.get(value)?.parentLine !== null)) {
+    // Items stay in their list (the top level or a heading's own list) by reordering, which keeps them selected.
+    const sameList = !!drop.position && lines.every(value => byLine.get(value)?.parentLine === drop.parentLine)
+      && (drop.parentLine === null || byLine.get(drop.parentLine)?.kind === 'heading');
+    if (!sameList) {
       this.mutate(path, text => {
         const result = core.reparent(text, lines, drop.parentLine, drop.beforeLine);
         const parent = drop.parentLine === null ? undefined : byLine.get(drop.parentLine);
@@ -1479,7 +1495,16 @@ export class Controller {
     const byLine = new Map(rows.map(row => [row.line, row]));
     const zoom = this.zoom;
     const rootRow = zoom && zoom.path === path ? byLine.get(zoom.line) ?? null : null;
-    const baseDepth = rootRow ? rootRow.depth + 1 : 0;
+    // Items keep their Markdown depth under a heading, so each enclosing heading adds a level on
+    // screen, and a heading sits at the level of its own enclosing headings.
+    const indent = (row: KeyedRow) => {
+      let level = row.kind === 'heading' ? 0 : row.depth;
+      for (let parent = row.parentLine === null ? undefined : byLine.get(row.parentLine); parent; parent = parent.parentLine === null ? undefined : byLine.get(parent.parentLine)) {
+        if (parent.kind === 'heading') level++;
+      }
+      return level;
+    };
+    const baseDepth = rootRow ? indent(rootRow) + 1 : 0;
     const items: ItemView[] = [];
     const itemByLine = new Map<number, ItemView>();
     for (const row of rows) {
@@ -1495,7 +1520,7 @@ export class Controller {
         key: row.key,
         path,
         row,
-        depth: Math.max(0, row.depth - baseDepth),
+        depth: Math.max(0, indent(row) - baseDepth),
         rootLine: rootRow ? rootRow.line : null,
         selected: this.selectedPath === path && this.selectedLines.has(row.line),
         collapsed,
@@ -1521,14 +1546,15 @@ export class Controller {
       items.push(item);
     }
     for (const row of rows) {
-      if (row.kind === 'embed' || !itemByLine.has(row.line) || !rows.some(child => child.parentLine === row.line)) continue;
+      // A heading takes drops on its own line; the end of its section is often the next heading.
+      if (row.kind === 'embed' || row.kind === 'heading' || !itemByLine.has(row.line) || !rows.some(child => child.parentLine === row.line)) continue;
       const descendants = rows.filter(child => child.line >= row.line && child.line < row.end && itemByLine.has(child.line));
       // Later (inner) rows go first, matching insertion right after the same item.
       itemByLine.get(descendants[descendants.length - 1].line)!.ends.unshift({
-        key: 'end-' + row.key, parentLine: row.line, depth: Math.max(0, row.depth + 1 - baseDepth), label: this.t.item.childrenEnd(row.title),
+        key: 'end-' + row.key, parentLine: row.line, depth: Math.max(0, indent(row) + 1 - baseDepth), label: this.t.item.childrenEnd(row.title),
       });
     }
-    const siblings = rows.filter(row => row.parentLine === (rootRow ? rootRow.line : null));
+    const siblings = rows.filter(row => row.parentLine === (rootRow ? rootRow.line : null) && row.kind !== 'heading');
     const last = siblings[siblings.length - 1];
     const editable = siblings.filter(row => row.kind !== 'embed');
     const lastEditable = editable[editable.length - 1];
