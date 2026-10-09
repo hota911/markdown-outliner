@@ -71,10 +71,29 @@ interface AppWindow {
 }
 
 // Obsidian's renderer has Node integration and @electron/remote.
+interface BrowserWindow {
+  id: number;
+  setOpacity: (opacity: number) => void;
+  setIgnoreMouseEvents: (ignore: boolean) => void;
+  setFocusable: (focusable: boolean) => void;
+  close: () => void;
+}
 interface ElectronWindow {
   require: (module: '@electron/remote') => {
-    getCurrentWindow: () => { setOpacity: (opacity: number) => void; setIgnoreMouseEvents: (ignore: boolean) => void; setFocusable: (focusable: boolean) => void };
+    getCurrentWindow: () => BrowserWindow;
+    BrowserWindow: { getAllWindows: () => BrowserWindow[] };
+    app: { on: (event: 'browser-window-created', listener: (event: unknown, window: BrowserWindow) => void) => void };
   };
+}
+
+// The community plugin settings that Obsidian opens after the vault's author is trusted: a modal
+// over the workspace in Obsidian 1.12, a separate window in 1.14.
+function openSettings() {
+  if (document.querySelector('.modal.mod-settings')) return 'modal';
+  const remote = (window as unknown as ElectronWindow).require('@electron/remote');
+  if (remote.BrowserWindow.getAllWindows().length > 1) return 'window';
+  // Obsidian opens menus in the window it last saw focused; that must be the main window again.
+  return (window as unknown as { activeWindow: Window }).activeWindow === window ? 'none' : 'focus elsewhere';
 }
 
 async function waitForFile(file: string) {
@@ -156,15 +175,20 @@ async function launch(profile: string) {
     const context = browser.contexts()[0];
     const page = context.pages()[0] ?? await context.waitForEvent('page');
     if (hideWindow) {
-      // Without setFocusable(false), text the user typed with an input method elsewhere could land in it.
       // Obsidian shows its window only after the page has loaded, so this usually runs before the
       // window first appears. `require('electron').remote` is set later than the window shows, so
-      // the module is required directly.
+      // the module is required directly. Without setFocusable(false), text the user typed with an
+      // input method in another app could land in the window. Windows Obsidian opens later, such
+      // as the settings window of 1.14, are hidden the same way when they are created.
       await page.evaluate(() => {
-        const window = (globalThis as unknown as ElectronWindow).require('@electron/remote').getCurrentWindow();
-        window.setOpacity(0);
-        window.setIgnoreMouseEvents(true);
-        window.setFocusable(false);
+        const remote = (globalThis as unknown as ElectronWindow).require('@electron/remote');
+        const hide = (window: BrowserWindow) => {
+          window.setOpacity(0);
+          window.setIgnoreMouseEvents(true);
+          window.setFocusable(false);
+        };
+        hide(remote.getCurrentWindow());
+        remote.app.on('browser-window-created', (_event, window) => hide(window));
       });
     }
     const errors: string[] = [];
@@ -218,14 +242,22 @@ export const test = base.extend<{ vaultFiles: VaultFiles; obsidian: Obsidian }>(
     let session = await launch(profile);
     try {
       // A vault with community plugins first opens in Restricted mode and asks whether to trust its author.
-      // Trusting it then opens the community plugin settings over the workspace in some versions
-      // (1.12 on macOS) but not in others, so they are closed only if they open.
-      await session.page.getByRole('button', { name: 'Trust author and enable plugins' }).click({ timeout: 30_000 });
-      await waitForPlugin(session.page);
-      const settingsOpened = await session.page.locator('.modal.mod-settings').waitFor({ timeout: 5_000 }).then(() => true, () => false);
-      if (settingsOpened) await session.page.keyboard.press('Escape');
-      await expect(session.page.locator('.modal-container')).toHaveCount(0);
-      console.log('DEBUGF', await session.page.evaluate(() => JSON.stringify((window as any).require('@electron/remote').BrowserWindow.getAllWindows().map((b: any) => [b.id, b.webContents.getURL()]))));
+      // Trusting it then opens the community plugin settings, which are closed.
+      const { page } = session;
+      await page.getByRole('button', { name: 'Trust author and enable plugins' }).click({ timeout: 30_000 });
+      await waitForPlugin(page);
+      await expect.poll(() => page.evaluate(openSettings)).toMatch(/^(modal|window)$/);
+      if (await page.evaluate(openSettings) === 'modal') {
+        await page.keyboard.press('Escape');
+      } else {
+        await page.evaluate(() => {
+          const remote = (window as unknown as ElectronWindow).require('@electron/remote');
+          const main = remote.getCurrentWindow();
+          for (const other of remote.BrowserWindow.getAllWindows()) if (other.id !== main.id) other.close();
+        });
+      }
+      await expect.poll(() => page.evaluate(openSettings)).toBe('none');
+      await expect(page.locator('.modal-container')).toHaveCount(0);
 
       await use({
         get page() { return session.page; },

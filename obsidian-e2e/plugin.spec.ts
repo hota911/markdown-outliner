@@ -51,10 +51,7 @@ test.describe('a file opened as an outline in its own tab', () => {
 
   test('replaces the Markdown editor, saves edits, and switches back with "Open as Markdown"', async ({ obsidian }) => {
     const { page } = obsidian;
-    const probe = () => page.evaluate(() => { const w = window as any; return JSON.stringify({ aw: typeof w.activeWindow, same: w.activeWindow === window, ad: w.activeDocument === document, awHref: String(w.activeWindow?.location?.href), awBody: w.activeDocument?.body?.innerHTML?.slice(0, 400), awOpener: w.activeWindow?.opener === window, focused: w.require('@electron/remote').getCurrentWindow().isFocused(), wins: w.require('@electron/remote').BrowserWindow.getAllWindows().map((b: any) => [b.id, b.isVisible(), b.webContents.getURL(), b.getTitle(), JSON.stringify(b.getBounds()), b.getParentWindow()?.id]) }); });
-    console.log('DEBUGA', await probe());
     await obsidian.openFile('notes/plan.md');
-    console.log('DEBUGB', await probe());
     expect(await obsidian.activeView()).toMatchObject({ type: 'markdown', file: 'notes/plan.md' });
 
     await obsidian.runCommand(openFileAsOutline);
@@ -62,36 +59,13 @@ test.describe('a file opened as an outline in its own tab', () => {
     await expect(page.locator('.workspace-tab-header.mod-active')).toHaveText('plan');
     const items = outlineItems(page);
     await expect.poll(items.titles).toEqual(['x', 'y']);
-    console.log('DEBUGC', await probe());
     await screenshot(obsidian, 'file-view');
-    console.log('DEBUGD', await probe());
 
     await page.getByRole('textbox', { name: 'Item text' }).first().fill('x edited');
     await expect.poll(() => obsidian.readFile('notes/plan.md')).toBe('- [ ] x edited\n- [ ] y\n');
-    console.log('DEBUGE', await probe());
 
     // The tab's "More options" menu offers "Open as Markdown".
-    // DEBUG (temporary)
-    await page.evaluate(() => {
-      const w = window as any;
-      w.__log = [];
-      const t0 = performance.now();
-      const log = (m: string) => w.__log.push(`${Math.round(performance.now() - t0)} ${m}`);
-      new MutationObserver(records => { for (const r of records) { for (const n of r.addedNodes) if ((n as Element).classList?.contains('menu')) log('menu added: ' + n.textContent); for (const n of r.removedNodes) if ((n as Element).classList?.contains('menu')) log('menu removed'); } }).observe(document.body, { childList: true });
-      for (const type of ['mousedown', 'mouseup', 'click', 'blur', 'focus']) window.addEventListener(type, e => log(`${type} ${(e.target as Element)?.className ?? ''}`), true);
-      log('hasFocus ' + document.hasFocus() + ' active ' + document.activeElement?.className);
-    });
-    console.log('DEBUG0', await probe());
-    await page.evaluate(() => (window as any).require('@electron/remote').getCurrentWindow().focus());
-    await page.waitForTimeout(500);
-    console.log('DEBUG0b', await probe());
     await page.locator('.workspace-leaf.mod-active .view-action[aria-label="More options"]').click();
-    await page.waitForTimeout(1000);
-    console.log('DEBUG1', await page.evaluate(() => JSON.stringify((window as any).__log)), await page.locator('.menu').count());
-    await page.locator('.workspace-leaf.mod-active .view-action[aria-label="More options"]').click();
-    await page.waitForTimeout(1000);
-    console.log('DEBUG2', await page.evaluate(() => JSON.stringify({ log: (window as any).__log, menuish: [...document.querySelectorAll('[class*="menu"]')].map(e => e.tagName + '.' + e.className).slice(0, 40), body: [...document.body.children].map(e => e.tagName + '.' + e.className), docs: (window as any).activeWindow === window, popouts: (window as any).app.workspace.floatingSplit?.children?.length })));
-    await page.screenshot({ path: 'test-results/debug-menu.png' });
     await page.locator('.menu-item').filter({ hasText: 'Open as Markdown' }).click();
     expect(await obsidian.activeView()).toMatchObject({ type: 'markdown', file: 'notes/plan.md' });
     expect(obsidian.errors).toEqual([]);
