@@ -73,7 +73,7 @@ interface AppWindow {
 // Obsidian's renderer has Node integration and @electron/remote.
 interface ElectronWindow {
   require: (module: '@electron/remote') => {
-    getCurrentWindow: () => { setOpacity: (opacity: number) => void; setIgnoreMouseEvents: (ignore: boolean) => void };
+    getCurrentWindow: () => { setOpacity: (opacity: number) => void; setIgnoreMouseEvents: (ignore: boolean) => void; setFocusable: (focusable: boolean) => void };
   };
 }
 
@@ -156,6 +156,7 @@ async function launch(profile: string) {
     const context = browser.contexts()[0];
     const page = context.pages()[0] ?? await context.waitForEvent('page');
     if (hideWindow) {
+      // Without setFocusable(false), text the user typed with an input method elsewhere could land in it.
       // Obsidian shows its window only after the page has loaded, so this usually runs before the
       // window first appears. `require('electron').remote` is set later than the window shows, so
       // the module is required directly.
@@ -163,6 +164,7 @@ async function launch(profile: string) {
         const window = (globalThis as unknown as ElectronWindow).require('@electron/remote').getCurrentWindow();
         window.setOpacity(0);
         window.setIgnoreMouseEvents(true);
+        window.setFocusable(false);
       });
     }
     const errors: string[] = [];
@@ -216,11 +218,12 @@ export const test = base.extend<{ vaultFiles: VaultFiles; obsidian: Obsidian }>(
     let session = await launch(profile);
     try {
       // A vault with community plugins first opens in Restricted mode and asks whether to trust its author.
-      // Trusting it then opens the community plugin settings, which cover the workspace.
+      // Trusting it then opens the community plugin settings over the workspace in some versions
+      // (1.12 on macOS) but not in others, so they are closed only if they open.
       await session.page.getByRole('button', { name: 'Trust author and enable plugins' }).click({ timeout: 30_000 });
       await waitForPlugin(session.page);
-      await session.page.locator('.modal.mod-settings').waitFor();
-      await session.page.keyboard.press('Escape');
+      const settingsOpened = await session.page.locator('.modal.mod-settings').waitFor({ timeout: 5_000 }).then(() => true, () => false);
+      if (settingsOpened) await session.page.keyboard.press('Escape');
       await expect(session.page.locator('.modal-container')).toHaveCount(0);
 
       await use({
