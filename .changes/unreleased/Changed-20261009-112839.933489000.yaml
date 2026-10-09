@@ -1,3 +1,0 @@
-kind: Changed
-body: 'The bookmarks sidebar scrolls apart from the outline: it stays in place while the outline scrolls, and a list longer than the view scrolls inside the sidebar. On screens 600px wide or narrower, where the bookmarks are above the outline, they take at most 40% of the screen height and scroll inside.'
-time: 2026-10-09T11:28:39.933489+09:00

@@ -1,3 +1,0 @@
-kind: Added
-body: 'The `/` command menu has Collapse and Expand for an item with children: Collapse while its children are shown, Expand while they are hidden. They match English and Japanese words such as `/fold`, `/col`, `/折` and `/展開`, and the focus stays in the item''s text.'
-time: 2026-10-09T11:22:39.954654+09:00
