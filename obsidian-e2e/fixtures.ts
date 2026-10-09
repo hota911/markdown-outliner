@@ -1,9 +1,10 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { chromium, test as base, expect, type Page } from '@playwright/test';
 
 export { expect };
@@ -11,12 +12,19 @@ export { expect };
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pluginId = 'markdown-outliner';
 
-/** The Obsidian.app bundle to test against: OBSIDIAN_APP, or the default install location. */
-export const obsidianApp = process.env.OBSIDIAN_APP || '/Applications/Obsidian.app';
-const executable = path.join(obsidianApp, 'Contents', 'MacOS', 'Obsidian');
-export const skipReason = process.platform !== 'darwin'
-  ? 'The Obsidian tests run only on macOS.'
-  : existsSync(executable) ? null : `Obsidian not found at ${obsidianApp}; set OBSIDIAN_APP to the Obsidian.app bundle.`;
+/**
+ * The Obsidian executable to test: OBSIDIAN_EXECUTABLE, or on macOS the default install location.
+ * CI sets it to the Linux build (.github/workflows/obsidian.yml). The tests are skipped only when
+ * the variable is unset and Obsidian is not at the default location; a wrong path set in the
+ * variable fails them.
+ */
+const configured = process.env.OBSIDIAN_EXECUTABLE;
+const executable = configured || (process.platform === 'darwin' ? '/Applications/Obsidian.app/Contents/MacOS/Obsidian' : undefined);
+export const skipReason = configured ? null
+  : !executable ? 'Set OBSIDIAN_EXECUTABLE to the Obsidian executable.'
+  : existsSync(executable) ? null : `Obsidian not found at ${executable}; set OBSIDIAN_EXECUTABLE to the Obsidian executable.`;
+/** OBSIDIAN_E2E_HEADED=1 starts Obsidian as a normal foreground app on macOS, to watch or debug a test. */
+const headed = process.env.OBSIDIAN_E2E_HEADED === '1';
 
 export interface Obsidian {
   /** The window of the running Obsidian; a new page after relaunch(). */
@@ -62,6 +70,13 @@ interface AppWindow {
   };
 }
 
+// Obsidian's renderer has Node integration and @electron/remote.
+interface ElectronWindow {
+  require: (module: '@electron/remote') => {
+    getCurrentWindow: () => { setOpacity: (opacity: number) => void; setIgnoreMouseEvents: (ignore: boolean) => void };
+  };
+}
+
 async function waitForFile(file: string) {
   for (let attempt = 0; attempt < 150; attempt++) {
     if (existsSync(file)) return readFile(file, 'utf8');
@@ -78,26 +93,78 @@ async function waitForPlugin(page: Page) {
   }, pluginId, { timeout: 30_000 });
 }
 
+// macOS has no headless mode for a GUI app. Unless OBSIDIAN_E2E_HEADED=1, Obsidian is started
+// through LaunchServices in the background (`open -g`), so it does not take the focus, and its
+// window is made transparent and click-through as soon as Playwright attaches, which is before
+// Obsidian first shows it. On Linux, CI runs the app under Xvfb instead.
+const hideWindow = process.platform === 'darwin' && !headed;
+
+// Chromium stops rendering windows it considers hidden or occluded, which would stall Playwright's
+// actionability checks and screenshots while the window is transparent or behind other windows.
+const renderFlags = ['--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling'];
+
+function isRunning(pid: number) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Stops the Obsidian main process; a hung app ignores SIGTERM, so it is killed after 10 seconds.
+// Never leaves an Obsidian process behind.
+async function stop(pid: number) {
+  if (isRunning(pid)) process.kill(pid, 'SIGTERM');
+  for (let waited = 0; isRunning(pid); waited += 100) {
+    if (waited === 10_000) process.kill(pid, 'SIGKILL');
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+}
+
+// Starts the Obsidian process on `args` and returns its process id.
+async function start(args: string[], profile: string) {
+  if (!hideWindow) {
+    const child = spawn(executable!, args, { stdio: 'ignore' });
+    if (child.pid === undefined) throw new Error(`Could not start ${executable}`);
+    return child.pid;
+  }
+  // `open` exits once LaunchServices has started the app, so the process is found by its command
+  // line. -n starts a new instance next to a running Obsidian; -g keeps it in the background.
+  const bundle = path.resolve(executable!, '../../..');
+  await promisify(execFile)('open', ['-g', '-n', '-a', bundle, '--args', ...args]);
+  const prefix = `${executable} --user-data-dir=${profile} `;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const { stdout } = await promisify(execFile)('ps', ['-axww', '-o', 'pid=,command=']);
+    const line = stdout.split('\n').find(line => line.trim().replace(/^\d+ /, '').startsWith(prefix));
+    if (line) return Number(line.trim().split(' ')[0]);
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error(`Obsidian did not start from ${bundle}`);
+}
+
 // Starts Obsidian on `profile` and attaches Playwright to its window. Playwright's
 // _electron.launch needs the Node inspector, which the packaged app disables, so the app is
 // started with a DevTools port and Playwright connects over CDP.
 async function launch(profile: string) {
   const portFile = path.join(profile, 'DevToolsActivePort');
   await rm(portFile, { force: true });
-  const child = spawn(executable, [`--user-data-dir=${profile}`, '--remote-debugging-port=0', '--lang=en-US'], { stdio: 'ignore' });
-  const exited = new Promise(resolve => child.once('exit', resolve));
-  const quit = async () => {
-    child.kill();
-    // A hung app ignores SIGTERM; never leave an Obsidian process behind.
-    const timer = setTimeout(() => child.kill('SIGKILL'), 10_000);
-    await exited;
-    clearTimeout(timer);
-  };
+  const pid = await start([`--user-data-dir=${profile}`, '--remote-debugging-port=0', '--lang=en-US', ...renderFlags], profile);
   try {
     const port = (await waitForFile(portFile)).split('\n')[0];
     const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
     const context = browser.contexts()[0];
     const page = context.pages()[0] ?? await context.waitForEvent('page');
+    if (hideWindow) {
+      // Obsidian shows its window only after the page has loaded, so this usually runs before the
+      // window first appears. `require('electron').remote` is set later than the window shows, so
+      // the module is required directly.
+      await page.evaluate(() => {
+        const window = (globalThis as unknown as ElectronWindow).require('@electron/remote').getCurrentWindow();
+        window.setOpacity(0);
+        window.setIgnoreMouseEvents(true);
+      });
+    }
     const errors: string[] = [];
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     page.on('pageerror', error => errors.push(error.message));
@@ -107,11 +174,11 @@ async function launch(profile: string) {
       close: async () => {
         // Disconnect first so Playwright does not react to the window closing.
         await browser.close();
-        await quit();
+        await stop(pid);
       },
     };
   } catch (error) {
-    await quit();
+    await stop(pid);
     throw error;
   }
 }

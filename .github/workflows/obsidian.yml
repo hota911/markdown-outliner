@@ -1,0 +1,58 @@
+name: Obsidian
+
+# The plugin tests in the Obsidian desktop app (obsidian-e2e/) on Linux, under a virtual X display
+# (Xvfb), so no window opens on anyone's screen. Not a required check, like tauri.yml: it depends on
+# downloading Obsidian, which is not open source, and Obsidian is slower to test than the browser.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # The Linux build from the official releases (https://github.com/obsidianmd/obsidian-releases).
+  # To update, change the version and the checksum, which the release page lists for each asset.
+  OBSIDIAN_VERSION: 1.14.4
+  OBSIDIAN_SHA256: e70b7cd63787e7f798a84fec453f5c446b91877bd3f612e8fb98e9b76cc81120
+
+jobs:
+  obsidian-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: obsidian-cache
+        with:
+          path: ${{ runner.temp }}/obsidian.tar.gz
+          key: obsidian-${{ env.OBSIDIAN_VERSION }}-${{ env.OBSIDIAN_SHA256 }}
+      - name: Download Obsidian
+        if: steps.obsidian-cache.outputs.cache-hit != 'true'
+        run: curl --fail --location --silent --show-error --output "$RUNNER_TEMP/obsidian.tar.gz" "https://github.com/obsidianmd/obsidian-releases/releases/download/v$OBSIDIAN_VERSION/obsidian-$OBSIDIAN_VERSION.tar.gz"
+      - name: Unpack Obsidian
+        run: |
+          echo "$OBSIDIAN_SHA256  $RUNNER_TEMP/obsidian.tar.gz" | sha256sum --check
+          mkdir "$RUNNER_TEMP/obsidian"
+          tar --extract --gzip --file "$RUNNER_TEMP/obsidian.tar.gz" --directory "$RUNNER_TEMP/obsidian" --strip-components=1
+          # Ubuntu does not let unprivileged processes create the user namespaces Chromium's
+          # sandbox uses, so Electron falls back to its setuid helper, which must be owned by root.
+          # This keeps the sandbox on instead of passing --no-sandbox.
+          sudo chown root:root "$RUNNER_TEMP/obsidian/chrome-sandbox"
+          sudo chmod 4755 "$RUNNER_TEMP/obsidian/chrome-sandbox"
+          echo "OBSIDIAN_EXECUTABLE=$RUNNER_TEMP/obsidian/obsidian" >> "$GITHUB_ENV"
+      # The shared libraries Chromium needs, which Obsidian's Electron needs too.
+      - run: npx playwright install-deps chromium
+      - run: xvfb-run --auto-servernum npm run test:obsidian
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: obsidian-test-results
+          path: test-results/
+          if-no-files-found: ignore
