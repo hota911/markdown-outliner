@@ -37,9 +37,11 @@
   - [ ] Switch a .md file to the outline automatically
     How to switch automatically when a .md file is opened (for example by frontmatter) has not been investigated.
 - [ ] Mac app
-  Two prototypes: a Swift app (PR #26) and a Tauri 2 app (`src-tauri/`, see "Desktop app (experimental)" in the README). Tauri could later build the same app for Windows, Linux and Android. Choose one and drop the other.
+  A Tauri 2 app (`src-tauri/`, see "Desktop app (experimental)" in the README). Tauri could later build the same app for Windows, Linux and Android. The Swift prototype (PR #26) was closed on 2026-10-09 in favour of Tauri.
   - [ ] Add a Mac app version
   - [ ] Distribute the Mac app
+  - [ ] Update glib when Tauri moves to GTK4
+    Dependabot alert #2 (glib 0.18.5) was dismissed on 2026-10-09 as not used: glib comes only from Tauri 2's Linux GTK3 stack (gtk 0.18, webkit2gtk 2.0.2), the desktop app is built for macOS only, and `src-tauri/src` does not call glib. glib 0.20 or later needs Tauri's move to GTK4 (tauri-apps/wry#1474). Before building for Linux, check whether Tauri has moved.
 - [ ] Future features
   Not yet specified.
   - [ ] Add block IDs (`^id`) only to the items that need them
