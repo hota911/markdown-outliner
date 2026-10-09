@@ -15,6 +15,8 @@ npm run test:perf
 npm run build
 ```
 
+When a change touches Obsidian-specific behavior or CSS (the plugin view, `src/obsidian/`, styles shown inside Obsidian, or `obsidian-e2e/`), also run `npm run test:obsidian`. On macOS it uses `/Applications/Obsidian.app` (or `OBSIDIAN_EXECUTABLE`) and runs Obsidian as a background-only app with a transparent, unfocusable window, so it does not take the user's focus; it never touches the user's own Obsidian settings or vaults. Set `OBSIDIAN_E2E_HEADED=1` only to watch a test while debugging, since Obsidian then opens in the foreground. The `Obsidian` workflow (`.github/workflows/obsidian.yml`) runs the same tests on Linux under Xvfb on every pull request, as a further check.
+
 To try a change in the browser, run `npm run demo`. It serves a temporary copy of `samples/` and prints the URL; do not edit `samples/` in place.
 
 ## Tests
