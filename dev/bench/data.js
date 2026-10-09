@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791524026929,
+  "lastUpdate": 1791525818848,
   "repoUrl": "https://github.com/hota911/markdown-outliner",
   "entries": {
     "Performance": [
@@ -103,6 +103,110 @@ window.BENCHMARK_DATA = {
           {
             "name": "filter by a status (34000 items)",
             "value": 21.834325000000035,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "38419042+hota911@users.noreply.github.com",
+            "name": "Hiroyuki Ota",
+            "username": "hota911"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "146b852c336d61863072049f1eac3ffcbb439c39",
+          "message": "PR ごとのプレビューを 1 つの HTML ファイルの artifact として配る (#50)\n\n* Add a static preview build of the web app for PR preview deployments\n\nbuild:preview writes dist/preview/, the web app on an in-memory adapter\nseeded with samples/ at build time, so it can be served by any static\nhost such as Cloudflare Pages. Reload resets to the samples.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n\n* Deliver the PR preview as one HTML file in a workflow artifact\n\nReplace the Cloudflare Pages setup: build:preview now inlines the script\nand the styles into dist/preview/markdown-outliner-preview.html, and the\nPreview workflow uploads it unzipped and links it in a PR comment.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n\n---------\n\nCo-authored-by: Claude Opus 5.5 <noreply@anthropic.com>",
+          "timestamp": "2026-10-09T15:03:18+09:00",
+          "tree_id": "ef6eb2c404f1713d6c2ced4c9ab7a004e24fbf82",
+          "url": "https://github.com/hota911/markdown-outliner/commit/146b852c336d61863072049f1eac3ffcbb439c39"
+        },
+        "date": 1791525818831,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "open: parse the file and key its rows (17000 items)",
+            "value": 24.77074700000003,
+            "unit": "ms"
+          },
+          {
+            "name": "open: parse the file and key its rows (34000 items)",
+            "value": 42.38946400000003,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (17000 items)",
+            "value": 45.180560000000014,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (34000 items)",
+            "value": 88.16891599999997,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (17000 items)",
+            "value": 35.96181200000001,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (34000 items)",
+            "value": 67.64229099999994,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (17000 items)",
+            "value": 54.05586900000003,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (34000 items)",
+            "value": 114.62385500000005,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (17000 items)",
+            "value": 3.9584350000000086,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (34000 items)",
+            "value": 7.976153000000011,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (17000 items)",
+            "value": 10.63157099999998,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (34000 items)",
+            "value": 22.601677999999993,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (17000 items)",
+            "value": 10.865234999999984,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (34000 items)",
+            "value": 21.440866000000028,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (17000 items)",
+            "value": 9.942372999999975,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (34000 items)",
+            "value": 18.69829299999998,
             "unit": "ms"
           }
         ]
