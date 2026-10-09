@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791526377310,
+  "lastUpdate": 1791576092864,
   "repoUrl": "https://github.com/hota911/markdown-outliner",
   "entries": {
     "Performance": [
@@ -415,6 +415,110 @@ window.BENCHMARK_DATA = {
           {
             "name": "filter by a status (34000 items)",
             "value": 21.630708000000027,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "38419042+hota911@users.noreply.github.com",
+            "name": "Hiroyuki Ota",
+            "username": "hota911"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0dceded6c55d3ca81b86dde818c4047eff28c4ae",
+          "message": "見出しを読み取り専用の行として表示し、見出しをまたいで項目を移動できるようにする (#53)\n\n* Show headings as read-only rows and move items across them\n\nHeadings (# to ######) become rows in the outline, with the unindented\nitems of their section and deeper headings as children. Items move into\nanother section with Alt+Up/Down, drag and drop, and the move buttons;\nheadings fold and zoom but cannot be renamed, added, deleted or moved.\nOnly the moved lines change, paragraphs keep their place, and moves that\nwould make other text part of an item are refused.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n\n* Rename the headings sample so tasks.md stays the first sample file\n\nThe outliner opens the first Markdown file by name when no file was shown\nbefore. samples/sections.md sorted before tasks.md, so the Obsidian tests,\nthe preview, and `npm run dev` / `npm run demo` opened the headings sample\ninstead of tasks.md, and 6 Obsidian e2e tests that read tasks.md failed.\nAs weekly.md it sorts after tasks.md. The preview test lists the new file.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n\n---------\n\nCo-authored-by: Claude Opus 5.5 <noreply@anthropic.com>",
+          "timestamp": "2026-10-10T05:01:09+09:00",
+          "tree_id": "83bd36e5f3e8edf142b95c90a8e15ae3ebe0b91d",
+          "url": "https://github.com/hota911/markdown-outliner/commit/0dceded6c55d3ca81b86dde818c4047eff28c4ae"
+        },
+        "date": 1791576092844,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "open: parse the file and key its rows (17000 items)",
+            "value": 37.049567000000025,
+            "unit": "ms"
+          },
+          {
+            "name": "open: parse the file and key its rows (34000 items)",
+            "value": 57.673854000000006,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (17000 items)",
+            "value": 56.88534500000003,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (34000 items)",
+            "value": 120.22609299999999,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (17000 items)",
+            "value": 48.63672399999996,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (34000 items)",
+            "value": 105.06612199999995,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (17000 items)",
+            "value": 74.97888799999998,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (34000 items)",
+            "value": 144.10364499999991,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (17000 items)",
+            "value": 4.710244000000046,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (34000 items)",
+            "value": 10.625118999999984,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (17000 items)",
+            "value": 14.703930000000014,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (34000 items)",
+            "value": 28.032445999999993,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (17000 items)",
+            "value": 14.776616999999987,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (34000 items)",
+            "value": 27.12173899999999,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (17000 items)",
+            "value": 10.698244000000045,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (34000 items)",
+            "value": 21.416417000000024,
             "unit": "ms"
           }
         ]
