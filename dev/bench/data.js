@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791576580234,
+  "lastUpdate": 1791576602557,
   "repoUrl": "https://github.com/hota911/markdown-outliner",
   "entries": {
     "Performance": [
@@ -623,6 +623,110 @@ window.BENCHMARK_DATA = {
           {
             "name": "filter by a status (34000 items)",
             "value": 21.65457399999997,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "38419042+hota911@users.noreply.github.com",
+            "name": "Hiroyuki Ota",
+            "username": "hota911"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "224ff9bdaaf6345aefdc8d3d2b0ccfd91bb5bb90",
+          "message": "Obsidian の E2E テストを画面にウィンドウを出さずに実行する (#57)\n\n* Run the Obsidian e2e tests without showing a window\n\nOn macOS, start Obsidian in the background with open -g and make its window\ntransparent and click-through before it first shows; OBSIDIAN_E2E_HEADED=1\nkeeps the old foreground window. Add a non-required workflow that runs the\ntests on Linux under Xvfb with a pinned, checksum-verified Obsidian build.\nOBSIDIAN_EXECUTABLE replaces OBSIDIAN_APP.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n\n* Close the Obsidian settings only if they open, and keep the hidden window unfocusable\n\nObsidian 1.14 on Linux does not open the community plugin settings after\ntrusting the vault, which hung the CI setup. On macOS, text typed with an\ninput method in another app reached the transparent test window, so it is\nmade unfocusable. Document local runs in AGENTS.md and the READMEs.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n\n* DEBUG: dump the pane menu on Linux (to be reverted)\n\n* DEBUG: trace the pane menu on Linux (to be reverted)\n\n* DEBUG: list menu elements on Linux (to be reverted)\n\n* DEBUG: probe activeWindow on Linux (to be reverted)\n\n* DEBUG: find where the extra window appears (to be reverted)\n\n* Close the settings window that Obsidian 1.14 opens after trusting the vault\n\nObsidian 1.14 opens the community plugin settings in a separate window,\nnot as a modal, and then opens menus in that window. The fixture closes\neither, waits until menus open in the main window again, and hides any\nwindow Obsidian creates in hidden mode. Removes the temporary debug output.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n\n* Keep the test Obsidian from becoming the active app on macOS\n\nEven when started with open -g, Obsidian activated itself about 0.5 s after\nevery launch, so keys the user was typing in another app went to it for a\nmoment. Making it a background-only app with the 'prohibited' activation\npolicy prevents that.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n\n---------\n\nCo-authored-by: Claude Opus 5.5 <noreply@anthropic.com>",
+          "timestamp": "2026-10-10T05:09:23+09:00",
+          "tree_id": "c1e0fcb5619663d295096c648730d8883277b10a",
+          "url": "https://github.com/hota911/markdown-outliner/commit/224ff9bdaaf6345aefdc8d3d2b0ccfd91bb5bb90"
+        },
+        "date": 1791576602531,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "open: parse the file and key its rows (17000 items)",
+            "value": 39.05575699999997,
+            "unit": "ms"
+          },
+          {
+            "name": "open: parse the file and key its rows (34000 items)",
+            "value": 63.29507100000001,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (17000 items)",
+            "value": 56.11465600000008,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (34000 items)",
+            "value": 113.22606899999994,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (17000 items)",
+            "value": 47.22754000000009,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (34000 items)",
+            "value": 87.49130300000002,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (17000 items)",
+            "value": 71.66472799999997,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (34000 items)",
+            "value": 144.22864800000002,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (17000 items)",
+            "value": 4.909165999999971,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (34000 items)",
+            "value": 10.531503999999984,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (17000 items)",
+            "value": 14.888216999999997,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (34000 items)",
+            "value": 27.824385000000007,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (17000 items)",
+            "value": 13.746192999999977,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (34000 items)",
+            "value": 26.86717600000003,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (17000 items)",
+            "value": 10.725864000000001,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (34000 items)",
+            "value": 22.917202999999972,
             "unit": "ms"
           }
         ]
