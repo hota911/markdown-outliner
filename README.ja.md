@@ -114,6 +114,7 @@ npm run test:node   # core, row key, server and packaging tests with node --test
 npm run test:ui     # screen tests (test/ui/) and Obsidian adapter tests with Vitest and jsdom
 npm run test:e2e    # build the web app, then run the browser tests (e2e/) in Chromium with Playwright, on desktop and as a Pixel 7
 npm run test:obsidian # build the plugin, then test it inside the Obsidian desktop app (obsidian-e2e/)
+npm run test:perf   # time editing operations on large files and check that time grows linearly with the file size
 npm run build       # write dist/web/ and the plugin files dist/main.js, manifest.json, styles.css
 ```
 
@@ -145,12 +146,28 @@ CI は、プルリクエストと `main` への push で lint、typecheck、`npm
 - `vite.tauri.config.ts`：デスクトップアプリのページのビルドと開発サーバー。
 - `scripts/package-plugin.mjs`：プラグインをビルドし、`manifest.json` と `styles.css` を `dist/` にコピーする。
 - `scripts/demo.mjs`：`npm run demo` のために `samples/` の一時コピーを配信する。
+- `scripts/perf-compare.mjs`：CI でプルリクエストとベースの速さを比べる。[性能](#性能)を参照。
 - `scripts/changelog-section.mjs`：`CHANGELOG.md` から 1 つのバージョンの節を出力する。リリースノートに使う。
 - `.changie.yaml`、`.changes/`：Changie の設定、未リリースの変更履歴の断片（fragment）、CHANGELOG.md の生成元になるリリース済みの各バージョン。
 - `e2e/`：Chromium での Playwright テスト（ドラッグ＆ドロップ、レイアウト、`mobile.spec.ts` のタッチスクリーン用レイアウト）。`playwright.config.ts` は `mobile.spec.ts` を Pixel 7 として、それ以外をデスクトップの Chrome として実行する。
 - `obsidian-e2e/`：Obsidian デスクトップアプリでのプラグインの Playwright テスト。専用の `playwright.config.ts` を持つ。`fixtures.ts` は Obsidian を起動し、ファイルを開く、ID でコマンドを実行する、Vault のファイルを読む、といったヘルパーを持つ。
 
 プラグインのビルドは Svelte と共有コードを `main.js` にまとめるので、リリースした `main.js` が必要とするのは `obsidian` だけである。
+
+### 性能
+
+`npm run test:perf` は、生成した 17,000 項目と 34,000 項目のアウトライン（`test/large-outline.ts`、約 1MB と 2MB）で 8 つの操作の時間を測る：ファイルを開く、タイトルに入力する、項目をインデント・移動する、アウトライナーの外での変更をマージする、コンフリクトを解決する、語・タグ・状態で絞り込む（`test/perf-operations.mjs`）。各操作はそれぞれ別の Node プロセスで実行し、各回の前にガベージコレクションを行い、2 回のウォームアップの後の 7 回の中央値をその操作の時間とする。2 倍の大きさのファイルで 3 倍以上の時間がかかった操作（線形の操作なら約 2 倍、2 乗に比例する操作なら 4 倍になる）や、大きい方のファイルで 1 秒を超えた操作があるとテストは失敗する。これらの確認は過去の結果に依存せず、CI でも実行する。実行には約 10 秒かかる。並行して走る他のテストが時間を乱さないよう、`npm test` には含めていない。
+
+Performance ワークフロー（`.github/workflows/perf.yml`）は、プルリクエストと `main` への push で実行する。必須のチェックではない。
+
+- プルリクエストでは、`scripts/perf-compare.mjs` がベースのコミットをプルリクエストの隣にチェックアウトし、大きい方のファイルで各操作を両方 6 回ずつ、同じランナーで交互に測る。共有ランナーの速さはジョブごとに変わり、その差は 1 つのジョブの中での変動よりずっと大きい。2026 年 10 月に同じコミット同士を比べたとき、比は 0.95〜1.07 に収まったが、同じコミットでもジョブによって 1.7 倍の時間がかかった。そのため、過去の実行結果ではなく、同じジョブで測ったベースと比べる。線は 2 本あり、スクリプト冒頭の `WARNING_RATIO` と `FAILING_RATIO` で決める：
+  - 警告：プルリクエストの中央値がベースの 1.3 倍以上。
+  - 失敗：2 倍以上。ジョブが失敗する。
+
+  どちらも、Mann-Whitney の U 検定で差が有意（p が 0.05 を操作の数 8 で割った値より小さい）な場合だけ数える。1 回だけ遅かった実行で反応しないためである。各操作のベースとヘッドの中央値、その比、p をまとめた報告はジョブのサマリーに出る。警告か失敗のときは、プルリクエストにも同じ内容をコメントし、以後の push ではその 1 つのコメントを更新する。フォークからのプルリクエストではジョブのサマリーだけになる。`npm run test:perf` の確認も同じジョブで実行し、それだけでもジョブを失敗させる。
+
+  手元で比べるには、ベースを別のフォルダーにチェックアウトして渡す：`git worktree add --detach ../base main` の後に `node scripts/perf-compare.mjs ../base`。スクリプトはベース側の `test/perf-operations.mjs` と `test/large-outline.ts` をこのチェックアウトのもので上書きするので、両方が同じベンチマークを実行する。
+- `main` への push ごとに、両方の大きさでの時間を [github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark) で `gh-pages` ブランチの履歴に追加する。`dev/bench/data.js` がコミットごとに 1 件の記録を持ち、`dev/bench/index.html` が操作ごとのグラフを描く。GitHub Pages で `gh-pages` ブランチを公開すると、グラフは <https://hota911.github.io/markdown-outliner/dev/bench/> で見られる。操作が遅くなったコミットを探すには、そのグラフで段差を探す。点にマウスを重ねるとコミットが表示され、クリックすると GitHub でそのコミットが開く。直前のコミットの 2 倍以上の時間がかかったときは、ワークフローがそのコミットにコメントする。連続するコミットは別のランナーで実行されるため、失敗にはしない。
 
 ## 変更履歴
 

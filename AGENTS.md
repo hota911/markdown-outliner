@@ -4,13 +4,14 @@
 
 ## Before a pull request
 
-Run what CI runs (`.github/workflows/ci.yml`):
+Run what CI runs (`.github/workflows/ci.yml` and `.github/workflows/perf.yml`):
 
 ```sh
 npm run lint
 npm run typecheck
 npm test
 npm run test:e2e   # needs Chromium: npx playwright install chromium
+npm run test:perf
 npm run build
 ```
 
