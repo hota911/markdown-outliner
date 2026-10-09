@@ -145,6 +145,7 @@ const en = {
     title: 'Item text',
     addChildTask: 'Add a child task',
     addChildBullet: 'Add a child bullet',
+    addUnderHeading: 'Add an item at the start of this heading',
     editNoteTitle: 'Edit the note',
     note: 'Note',
     notePlaceholder: 'Enter a note',
@@ -213,6 +214,8 @@ const en = {
 
   core: {
     noEditableItem: 'There is no editable item on that line.',
+    headingReadOnly: 'Headings cannot be changed in the outliner.',
+    insertNextToText: 'Cannot add an item here because the heading is followed by other text.',
     titleNewline: 'Item text cannot contain line breaks.',
     unknownStatus: 'Unknown status.',
     embedHasNoStatus: 'Embeds have no status.',
@@ -410,6 +413,7 @@ const ja: Messages = {
     title: '項目の内容',
     addChildTask: '子タスクを追加',
     addChildBullet: '子の箇条書きを追加',
+    addUnderHeading: 'この見出しの先頭に項目を追加',
     editNoteTitle: 'ノートを編集',
     note: 'ノート',
     notePlaceholder: 'ノートを入力',
@@ -475,6 +479,8 @@ const ja: Messages = {
 
   core: {
     noEditableItem: '指定行に編集可能な項目がありません',
+    headingReadOnly: '見出しはアウトライナーでは変更できません',
+    insertNextToText: '見出しの直後に本文があるため、ここには項目を追加できません',
     titleNewline: '項目名には改行を使用できません',
     unknownStatus: '未知の状態です',
     embedHasNoStatus: '埋め込みは状態を持ちません',

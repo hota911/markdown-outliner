@@ -112,3 +112,70 @@ test('item titles use the width of the tab, without a horizontal scrollbar', asy
   expect(await items.titleLines('週報をまとめる #work #priority/high')).toBe(1);
   expect(await horizontalOverflow(page.locator('.markdown-outliner-container'))).toBeLessThanOrEqual(0);
 });
+
+test.describe('bookmarks', () => {
+  const longName = 'projects/very-long-directory-name/another-very-long-directory-name/tasks-with-a-very-long-file-name.md';
+  const bookmarks = Array.from({ length: 40 }, (_, index) => ({
+    id: `bookmark-${index}`, kind: 'view', file: 'tasks.md', status: 'all', tags: [], name: index === 0 ? longName : `Bookmark ${index}`,
+  }));
+  test.use({
+    vaultFiles: {
+      'tasks.md': Array.from({ length: 80 }, (_, index) => `- [ ] item ${index}\n`).join(''),
+      '.obsidian/plugins/markdown-outliner/data.json': JSON.stringify({ bookmarks }),
+    },
+  });
+
+  test('a long name wraps, and the sidebar and the outline scroll separately', async ({ obsidian }) => {
+    const { page } = obsidian;
+    await obsidian.runCommand(openOutliner);
+    const view = page.locator('.markdown-outliner-container');
+    const sidebar = page.getByRole('complementary', { name: 'Bookmarks' });
+    await expect(sidebar.getByRole('button', { name: longName, exact: true })).toBeVisible();
+    expect(await horizontalOverflow(view)).toBeLessThanOrEqual(0);
+    expect(await horizontalOverflow(sidebar)).toBeLessThanOrEqual(0);
+    // Obsidian gives buttons a fixed height; the wrapped name must not spill out of its button.
+    expect(await sidebar.getByRole('button', { name: longName, exact: true }).evaluate(node => node.scrollHeight - node.clientHeight)).toBeLessThanOrEqual(0);
+
+    // The sidebar fits in the view and scrolls its own list.
+    const viewBox = (await view.boundingBox())!;
+    const sidebarBox = (await sidebar.boundingBox())!;
+    expect(await sidebar.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
+    expect(sidebarBox.y + sidebarBox.height).toBeLessThanOrEqual(viewBox.y + viewBox.height + 0.5);
+    await screenshot(obsidian, 'bookmarks');
+
+    const viewScroll = () => view.evaluate(node => node.scrollTop);
+    const sidebarScroll = () => sidebar.evaluate(node => node.scrollTop);
+    await page.mouse.move(sidebarBox.x + sidebarBox.width / 2, sidebarBox.y + sidebarBox.height / 2);
+    await page.mouse.wheel(0, 5000);
+    await expect.poll(sidebarScroll).toBeGreaterThan(0);
+    await page.waitForTimeout(300);
+    expect(await viewScroll()).toBe(0);
+
+    const scrolledSidebar = await sidebarScroll();
+    await page.mouse.move(viewBox.x + viewBox.width / 2, viewBox.y + viewBox.height / 2);
+    await page.mouse.wheel(0, 1500);
+    await expect.poll(viewScroll).toBeGreaterThan(0);
+    expect(await sidebarScroll()).toBe(scrolledSidebar);
+    expect((await sidebar.boundingBox())!.y).toBeGreaterThanOrEqual(viewBox.y - 0.5);
+    await screenshot(obsidian, 'bookmarks-scrolled');
+  });
+});
+
+test.describe('a long file', () => {
+  test.use({ vaultFiles: { 'tasks.md': Array.from({ length: 300 }, (_, index) => `- [ ] item ${index + 1}\n`).join('') } });
+
+  test('scrolled down, the header is pinned to the top edge of the tab with no gap above it', async ({ obsidian }) => {
+    const { page } = obsidian;
+    await obsidian.runCommand(openOutliner);
+    await expect.poll(outlineItems(page).titles).toContain('item 300');
+    const container = page.locator('.markdown-outliner-container');
+    await container.evaluate(node => node.scrollTo(0, node.scrollHeight));
+    await expect.poll(() => container.evaluate(node => node.scrollTop)).toBeGreaterThan(1000);
+    await screenshot(obsidian, 'pinned-header');
+
+    // The top of the container's scrollport, inside its border; rows scroll out of view above it.
+    const visibleTop = await container.evaluate(node => node.getBoundingClientRect().top + node.clientTop);
+    const headerTop = await page.locator('.pinned-header').evaluate(node => node.getBoundingClientRect().top);
+    expect(headerTop).toBeCloseTo(visibleTop, 0);
+  });
+});

@@ -29,7 +29,8 @@ Markdown Outliner shows the list items of a plain Markdown file as an outline. I
 - Note: the lines directly under an item, before its first child, indented 2 columns deeper than the item. A note can span several lines and contain blank lines between its lines.
 - Tags: `#tag` at the start of a title or note or after whitespace. A tag runs over letters, digits, `_`, `-`, and `/` (nested tags such as `#priority/high`), and is not only digits. `a#b`, `**#tag**`, and full-width `＃` are not tags.
 - Embed: an item whose whole title is `![[path.md]]`, written as `- ![[path.md]]` with no status box. The path is relative to the folder of the file that contains the line; absolute paths, URLs, and paths that leave the outliner's folder or vault are errors. The outliner shows and edits the embedded file's items in place.
-- Everything else (headings, paragraphs, tables, frontmatter at the top, fenced code blocks, numbered lists) is kept but not shown. List lines inside frontmatter or code fences are not items. A line of non-list text that starts at column 0 ends the outline above it: the items after it are not children of any item above it.
+- Heading: a line starting at column 0 with `#` to `######` and a space (or only the `#`s). The outliner shows it as a read-only row. Its section runs until the next heading of the same or a higher level: deeper headings and the unindented items in the section are its children. Items before the first heading are at the top level. Underlined (setext) headings are ordinary text.
+- Everything else (paragraphs, tables, frontmatter at the top, fenced code blocks, numbered lists) is kept but not shown. List lines and headings inside frontmatter or code fences are not items or headings. A line of non-list text that starts at column 0 ends the list above it: the items after it are not children of any item above it, though they stay in the same heading's section.
 
 The outliner shows `[text](url)` links (http, https, mailto), bare http(s) URLs, `**bold**`, `*italic*` / `_italic_`, `` `code` ``, and `~~strike~~` in titles and notes. `[[wiki links]]` are kept but shown as plain text.
 
@@ -51,7 +52,7 @@ Write the tasks as one nested list, so the whole list is one outline the user ca
 ```
 
 - Give every actionable line a `[ ]` box, so the user can mark it in progress or done and filter by status. Leave the box off only for lines that are not tasks, such as reference bullets.
-- Group related tasks under a parent item rather than under headings. Items under different headings are separate outlines, and the outliner cannot move tasks between them; one heading at the top as a title is fine.
+- Group related tasks under a parent item, or under a heading when the file already uses headings for sections. The outliner shows headings as rows and moves items between sections, but cannot rename, add, or move the headings themselves.
 - Put details, deadlines, and context in a note under the task instead of making the title long, since a title is one line.
 - Add `#tags` when the user sorts tasks by context or priority, using tags that already appear in the user's files when there are any.
 
@@ -63,7 +64,8 @@ When updating an existing list, mark progress with the status box (`[/]` when st
 - New lines use `-` and 2 spaces per level. A child is exactly one level (2 spaces) deeper than its parent, and a note is 2 spaces deeper than its item.
 - Put a note directly under its item, before any child. Text placed after the children belongs to no item and disappears from the outline.
 - Move an item together with its note and all its descendants, and shift every line of the moved block by the same amount.
-- Keep the outline contiguous. The outliner refuses to move items across headings or other non-list text, so do not split one list with text unless it is meant to be separate.
+- Keep each section's list contiguous. The outliner moves items across headings, but refuses to move them across paragraphs or other non-list text, so do not split one list with text unless it is meant to be separate.
+- To move an item to another section, put it at the end (or start) of that section's list, before any deeper heading, with the item at column 0.
 - Statuses are `[ ]`, `[/]`, `[x]`. Write `x` in lower case. Add or remove the box to turn a bullet into a task or back.
 - Do not add a status box, a note, or children to an embed line. The outliner does not let anything be put under an embed line, and it does not show a note under one.
 - The file may be open in the outliner while you edit it. It picks up external changes every few seconds and merges them line by line with unsaved input; if both changed the same line, the user has to pick a version. Small, line-level edits keep that merge clean.

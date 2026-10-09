@@ -12,15 +12,16 @@ The user interface is available in English and Japanese. The Obsidian plugin fol
 - Item texts and notes show basic inline Markdown while you are not editing them: `[text](url)` links (http, https, and mailto), bare http(s) URLs, `**bold**`, `*italic*` / `_italic_`, `` `code` ``, and `~~strikethrough~~`. Links open in a new tab, and clicking elsewhere on the text edits the raw Markdown with the cursor at the clicked character.
 - Filter by status, tags, and title text, and keep adding tasks, children, and notes while a filter is active. New tasks get the current status and tags. `#tags` in item texts and notes are shown like links, also inside bold or italic text; click one to add it to the filter (while editing, ⌘-click, or Ctrl-click on Windows and Linux).
 - Change hierarchy with Tab / Shift+Tab, move items with Alt+Up/Down or drag and drop, and select several siblings to move or update them together.
-- Zoom into an item, collapse items and embeds, and bookmark the current view (file, filters and zoom) under a name of your choice.
+- Zoom into an item, collapse items and embeds, and bookmark the current view (file, filters and zoom) under a name of your choice. The bookmarks sidebar stays in place while the outline scrolls, and scrolls by itself when the list is long.
 - Type `/` at the start of an item's text or after a space to open a command menu: set the status, turn a task into a bullet or back, open the note, zoom in, move the item to a file, or embed an existing file. The text after `/` filters the commands by their English or Japanese name; Up/Down pick one, Enter, Tab or a click runs it and removes the `/` text, and Escape closes the menu and keeps the text. A `/` inside a word (`A/B`, URLs), a full-width `／`, a `/` typed with an IME, and notes do not open the menu. For "Embed existing file", the menu lists the other Markdown files to pick from; an empty item becomes the embed, otherwise the embed is added below the item. One Undo restores the item with the `/` text.
 - Type `#` the same way to pick a tag already in use. In Obsidian the menu lists the tags of the whole vault (from Obsidian's metadata cache, including frontmatter tags) plus those in the files the outliner has read; in the web version it lists the `#tags` in the files the outliner has read since it was opened (the files shown and their embeds), not every file in the folder. The text after `#` filters the tags, ignoring case and katakana/hiragana and full-/half-width differences; tags starting with it come first. Enter, Tab or a click replaces `#text` with the tag and a space. Without a match the menu closes, so a new tag is typed as usual.
+- Headings (`#` to `######` at the start of a line) are shown as read-only rows, with the unindented items of their section and deeper headings under them. Fold or zoom into a heading, and use its + button to add the first item of its section. Alt+Up/Down on the first or last item of a section, and dragging an item onto a heading or next to an item of another section, move it into that section. Only the moved lines change; paragraphs and other text keep their place, and a move that would make them part of an item is refused. Headings themselves cannot be renamed, added, deleted, or moved in the outliner.
 - Item-level embeds such as `- ![[work.md]]` are edited in place and saved back to the embedded file. Embeds are resolved relative to the embedding file's folder.
 - Rename an embedded file from its embed header. The web version updates only that embed line, not other links to the file; Obsidian updates links as its settings say.
 - Undo / Redo, auto-save about 0.8 seconds after the last edit, and conflict handling: if a file changed on disk while you were editing it, changes to different lines are merged automatically (this clears the undo history). If both sides changed the same line, your input is kept and the differing lines are shown so you can choose which version to use there.
 - External changes are picked up every few seconds. While a field has focus, the status says that a change is waiting, and the change is shown when you leave the field or come back to the tab or window, with the cursor kept on the same item.
 
-Headings, code blocks, and other non-list content are preserved but not shown.
+Paragraphs, code blocks, and other content that is neither a heading nor a list item are preserved but not shown.
 
 ## Install in Obsidian
 
@@ -49,7 +50,7 @@ Other differences on touch screens:
 - The buttons of an item (add a child, zoom, move to a file) appear under the item that is being edited, not on the item under the finger. The note and move buttons are in the bar instead.
 - Tapping the ⠿ handle selects the item. Dragging by touch is not supported; use the bar's move buttons, or select items and use the selection bar.
 - The `/` command menu works with a tap on a command; its rows are 36px high.
-- Buttons are at least 36px high, the keyboard shortcut help is hidden, and on screens 600px wide or narrower the bookmarks are shown above the outline.
+- Buttons are at least 36px high, the keyboard shortcut help is hidden, and on screens 600px wide or narrower the bookmarks are shown above the outline, at most 40% of the screen high, and a longer list scrolls inside them.
 
 The touch layout is tested in Chromium emulating a Pixel 7 (`e2e/mobile.spec.ts`). It has not been checked on a real Android or iOS device or in the Obsidian mobile app.
 
@@ -112,10 +113,11 @@ npm run typecheck   # svelte-check over src/, e2e/, obsidian-e2e/ and the Vite a
 npm test            # run test:node and test:ui
 npm run test:node   # core, row key, server and packaging tests with node --test
 npm run test:ui     # screen tests (test/ui/) and Obsidian adapter tests with Vitest and jsdom
-npm run test:e2e    # build the web app, then run the browser tests (e2e/) in Chromium with Playwright, on desktop and as a Pixel 7
+npm run test:e2e    # build the web app and the preview, then run the browser tests (e2e/) in Chromium with Playwright, on desktop and as a Pixel 7
 npm run test:obsidian # build the plugin, then test it inside the Obsidian desktop app (obsidian-e2e/)
 npm run test:perf   # time editing operations on large files and check that time grows linearly with the file size
 npm run build       # write dist/web/ and the plugin files dist/main.js, manifest.json, styles.css
+npm run build:preview # write dist/preview/markdown-outliner-preview.html, the web app on the files of samples/ in one file
 ```
 
 `npm run dev` edits `samples/` by default; set `OUTLINER_WORKSPACE` to a folder or a single Markdown file to edit something else.
@@ -126,9 +128,15 @@ npm run build       # write dist/web/ and the plugin files dist/main.js, manifes
 
 The screen tests drive the rendered DOM with keyboard and pointer events against an in-memory file adapter, and check the saved Markdown. jsdom has no layout or drag and drop, so dragging is tested with Playwright instead: each test in `e2e/` writes a Markdown file to a temporary folder, starts `server.mjs` on it, drags with the mouse in Chromium, and checks the file on disk. `npm test` does not include these tests because they need a browser. Before the first run, download Chromium with `npx playwright install chromium`.
 
-`npm run test:obsidian` tests the built plugin inside the Obsidian desktop app. It uses the executable set in `OBSIDIAN_EXECUTABLE`, or on macOS `/Applications/Obsidian.app/Contents/MacOS/Obsidian`; when the variable is unset and that file does not exist, the tests are skipped. Each test starts a separate Obsidian process with a new temporary profile (`--user-data-dir`) and a temporary vault copied from `samples/`, then deletes both, so it never reads or changes your Obsidian settings, vaults, or a running Obsidian. Playwright attaches to the window over the DevTools protocol. The tests check that the plugin loads without console errors; that the ribbon icon and the commands open the outliner and the per-file outline view; that edits, status changes and drag and drop are saved to the file; that "Open as Markdown" switches back and the outline tab is restored after a restart; that the text follows the light and dark themes; and that the labels are Japanese when Obsidian's language is Japanese. The test vault turns off native menus so Playwright can click Obsidian's menus. On macOS the tests start Obsidian in the background (`open -g`) and, before its window first appears, make the window transparent, click-through and unable to take keyboard focus, and make Obsidian a background-only app (Electron's `app.setActivationPolicy('prohibited')`). Without that last step Obsidian makes itself the active app about half a second after each launch, and what you are typing goes to it for a moment. So the tests neither take the focus nor show a window; Obsidian appears in the Dock only for a moment at each launch. Set `OBSIDIAN_E2E_HEADED=1` to see the window, for example to debug a failing test; Obsidian then opens in the foreground. These tests are not part of `npm test` or `npm run test:e2e`.
+`npm run test:obsidian` tests the built plugin inside the Obsidian desktop app. It uses the executable set in `OBSIDIAN_EXECUTABLE`, or on macOS `/Applications/Obsidian.app/Contents/MacOS/Obsidian`; when the variable is unset and that file does not exist, the tests are skipped. Each test starts a separate Obsidian process with a new temporary profile (`--user-data-dir`) and a temporary vault copied from `samples/`, then deletes both, so it never reads or changes your Obsidian settings, vaults, or a running Obsidian. Playwright attaches to the window over the DevTools protocol. The tests check that the plugin loads without console errors; that the ribbon icon and the commands open the outliner and the per-file outline view; that edits, status changes and drag and drop are saved to the file; that "Open as Markdown" switches back and the outline tab is restored after a restart; that the text follows the light and dark themes; that a long bookmark name wraps inside its button and the bookmarks sidebar scrolls apart from the outline; and that the labels are Japanese when Obsidian's language is Japanese. The test vault turns off native menus so Playwright can click Obsidian's menus. On macOS the tests start Obsidian in the background (`open -g`) and, before its window first appears, make the window transparent, click-through and unable to take keyboard focus, and make Obsidian a background-only app (Electron's `app.setActivationPolicy('prohibited')`). Without that last step Obsidian makes itself the active app about half a second after each launch, and what you are typing goes to it for a moment. So the tests neither take the focus nor show a window; Obsidian appears in the Dock only for a moment at each launch. Set `OBSIDIAN_E2E_HEADED=1` to see the window, for example to debug a failing test; Obsidian then opens in the foreground. These tests are not part of `npm test` or `npm run test:e2e`.
 
 CI runs lint, typecheck, `npm test`, `npm run test:e2e` and `npm run build` on pull requests and on pushes to `main`. A separate workflow (`.github/workflows/tauri.yml`) runs the Rust tests of the desktop app on macOS only when `src-tauri/` or `package.json` changes; it is not a required check, because a macOS runner and a cold Tauri build take several minutes. Another workflow (`.github/workflows/obsidian.yml`) runs `npm run test:obsidian` on Linux under a virtual X display (Xvfb) with the Linux build of Obsidian, downloaded from [the official releases](https://github.com/obsidianmd/obsidian-releases/releases) at a pinned version and checked against its SHA-256. It is not a required check either: it depends on downloading Obsidian, which is not open source. To update Obsidian, change `OBSIDIAN_VERSION` and `OBSIDIAN_SHA256` in that workflow.
+
+### Pull request preview
+
+`npm run build:preview` builds the web app without the server as one HTML file, `dist/preview/markdown-outliner-preview.html`, with the script and the styles inlined. The files of `samples/` are embedded at build time and kept in memory (`src/preview/adapter.ts`), so edits work but a reload starts again from the samples, and bookmarks are not kept. The file needs no server: open it in a browser from disk. `e2e/preview.spec.ts` opens it from `file://` and checks that it loads nothing else, saves an edit, and resets on reload.
+
+On each pull request, `.github/workflows/preview.yml` builds the file and uploads it unzipped as an artifact of the run, then posts or updates one comment on the pull request with the link to it. The link needs a GitHub login. A pull request from a fork has no token that can comment, so the link is only in the job summary of the run.
 
 Source layout:
 
@@ -137,6 +145,7 @@ Source layout:
 - `src/obsidian/`: the Obsidian plugin entry point (`main.ts`).
 - `src/web/`: the standalone web page.
 - `src/tauri/`: the page of the desktop app; `adapter.ts` calls the Rust commands.
+- `src/preview/`: the pull request preview page; `adapter.ts` keeps the files of `samples/` in memory.
 - `src-tauri/`: the desktop app. `src/workspace.rs` is the file access ported from `server.mjs`, with its tests; `src/lib.rs` has the commands, the folder dialog, the menu and the window.
 - `src/styles.css`: styles for both versions. Colors and fonts use Obsidian's theme variables, so the plugin follows the Obsidian theme; `src/web/theme.css` defines them for the web page in light and dark sets that follow the system setting.
 - `server.mjs`: the local web server and file API, also mounted by the dev server.
@@ -144,6 +153,7 @@ Source layout:
 - `vite.config.ts`: the plugin build (a single CommonJS `main.js`).
 - `vite.web.config.ts`: the web app build and dev server.
 - `vite.tauri.config.ts`: the desktop app's page build and dev server.
+- `vite.preview.config.ts`: the pull request preview build, with the script and the styles inlined into the page.
 - `scripts/package-plugin.mjs`: builds the plugin and copies `manifest.json` and `styles.css` into `dist/`.
 - `scripts/demo.mjs`: serves a temporary copy of `samples/` for `npm run demo`.
 - `scripts/perf-compare.mjs`: compares a pull request's speed with its base's in CI; see [Performance](#performance).
