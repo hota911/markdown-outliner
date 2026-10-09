@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { createOutlinerServer } from '../server.mjs';
-import { expect, test } from './fixtures.ts';
+import { closeServer, expect, t, test } from './fixtures.ts';
 
 let workspace: string;
 let server: Server;
@@ -19,7 +19,7 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-  await new Promise(resolve => server.close(resolve));
+  await closeServer(server);
   await rm(workspace, { recursive: true });
 });
 
@@ -28,10 +28,10 @@ async function open(page: Page) {
   server = await createOutlinerServer(workspace);
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   await page.goto(`http://127.0.0.1:${(server.address() as AddressInfo).port}/`);
-  await expect(page.getByRole('textbox', { name: 'Item text' }).nth(1)).toHaveValue('job');
+  await expect(page.getByRole('textbox', { name: t.item.title }).nth(1)).toHaveValue('job');
 }
 
-const nameInput = (page: Page) => page.getByRole('textbox', { name: 'New name for sub/work.md, without .md' });
+const nameInput = (page: Page) => page.getByRole('textbox', { name: t.outline.renameLabel('sub/work.md') });
 
 test('renames the embedded file on disk and updates the embed line', async ({ page }) => {
   await open(page);
@@ -40,7 +40,7 @@ test('renames the embedded file on disk and updates the embed line', async ({ pa
   const shownNames = async () => (await embedItem.innerText()).split('work').length - 1;
   const before = await heading.boundingBox();
   expect(await shownNames()).toBe(1);
-  await page.getByRole('button', { name: 'Rename' }).click();
+  await page.getByRole('button', { name: t.outline.rename }).click();
   // The heading turns into the field in place: the name shows only in the field, and the
   // heading stays where it was.
   await expect(heading.getByRole('textbox')).toBeFocused();
@@ -53,20 +53,20 @@ test('renames the embedded file on disk and updates the embed line', async ({ pa
   expect(Math.abs(during!.height - before!.height)).toBeLessThanOrEqual(1);
   await nameInput(page).fill('done jobs');
   await nameInput(page).press('Enter');
-  await expect(page.getByText('Renamed the file to done jobs.md.')).toBeVisible();
+  await expect(page.getByText(t.edit.renamed('done jobs.md'))).toBeVisible();
   await expect.poll(() => readFile(path.join(workspace, 'index.md'), 'utf8')).toBe('- [ ] host\n- ![[sub/done jobs.md]]\n');
   expect((await readdir(path.join(workspace, 'sub'))).sort()).toEqual(['done jobs.md', 'taken.md']);
   expect(await readFile(path.join(workspace, 'sub', 'done jobs.md'), 'utf8')).toBe('- [ ] job\n');
-  await expect(page.getByRole('combobox', { name: 'File to open' }).locator('option')).toHaveText(['index.md', 'sub/done jobs.md', 'sub/taken.md']);
+  await expect(page.getByRole('combobox', { name: t.toolbar.fileSelect }).locator('option')).toHaveText(['index.md', 'sub/done jobs.md', 'sub/taken.md']);
 });
 
 test('an existing name is refused and Escape cancels, leaving the files unchanged', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Rename' }).click();
+  await page.getByRole('button', { name: t.outline.rename }).click();
   await nameInput(page).fill('taken');
   await nameInput(page).press('Enter');
-  await expect(page.getByText('Could not rename the file:', { exact: false })).toBeVisible();
-  await page.getByRole('button', { name: 'Rename' }).click();
+  await expect(page.getByText(t.edit.renameFailed(''))).toBeVisible();
+  await page.getByRole('button', { name: t.outline.rename }).click();
   await nameInput(page).fill('other');
   await nameInput(page).press('Escape');
   await expect(nameInput(page)).toHaveCount(0);

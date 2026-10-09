@@ -5,8 +5,6 @@ All notable changes to Markdown Outliner are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
 ## [0.1.3] - 2026-10-08
 
 ### Added
@@ -45,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The web server kept the page and the list of built files from startup, so after `npm run build:web` while it ran, the page loaded deleted files and failed until the server restarted. The page and its files are now read on each request, so reloading the browser picks up a new build. A request for a missing file returns 404 instead of 500.
 - While a status or search filter was active, an embedded file was always shown, even with nothing matching inside, and without its parent items when they did not match, so it appeared under the wrong item. An embed is now shown only when something in the embedded file matches, with its parents dimmed.
 
+[0.1.3]: https://github.com/hota911/markdown-outliner/compare/0.1.2...0.1.3
+
 ## [0.1.2] - 2026-10-07
 
 ### Changed
@@ -56,11 +56,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - An outliner closed in a popout window kept checking its files for external changes.
 
+[0.1.2]: https://github.com/hota911/markdown-outliner/compare/0.1.1...0.1.2
+
 ## [0.1.1] - 2026-10-07
 
 ### Changed
 
 - The plugin follows the colors of the Obsidian theme, including dark themes, instead of always using light colors. The web version follows the system's light or dark setting.
+
+[0.1.1]: https://github.com/hota911/markdown-outliner/compare/0.1.0...0.1.1
 
 ## [0.1.0] - 2026-10-07
 
@@ -74,8 +78,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Edit item-level embeds such as `- ![[work.md]]` in place and save them back to the embedded file.
 - Undo and redo, auto-save, and save conflict detection that keeps your input when the file changed on disk.
 
-[Unreleased]: https://github.com/hota911/markdown-outliner/compare/0.1.3...HEAD
-[0.1.3]: https://github.com/hota911/markdown-outliner/compare/0.1.2...0.1.3
-[0.1.2]: https://github.com/hota911/markdown-outliner/compare/0.1.1...0.1.2
-[0.1.1]: https://github.com/hota911/markdown-outliner/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/hota911/markdown-outliner/releases/tag/0.1.0

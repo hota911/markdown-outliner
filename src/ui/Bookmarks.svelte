@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { BookmarkView, Controller, View } from './controller.svelte.ts';
+  import type { BookmarkView } from './bookmarks.ts';
+  import type { Controller, View } from './controller.svelte.ts';
   import { fadeIn } from './motion.ts';
 
   let { ctrl, view }: { ctrl: Controller; view: View } = $props();

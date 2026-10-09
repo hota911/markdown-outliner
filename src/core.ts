@@ -9,7 +9,7 @@ export type CoreErrorCode =
   | 'mergeBothHaveContent' | 'unsafeIndent' | 'invalidMoveDirection' | 'invalidReorder' | 'reorderSiblingsOnly'
   | 'reorderAcrossText' | 'invalidReparent' | 'reparentIntoSelf' | 'reparentSiblingsOnly'
   | 'invalidInsertPosition' | 'insertPositionInSelection' | 'reparentIntoEmbed' | 'reparentAcrossText'
-  | 'invalidFileNameInput' | 'invalidFileName' | 'extractEmbed' | 'invalidFilter' | 'notEmbed';
+  | 'invalidFileNameInput' | 'invalidFileName' | 'extractEmbed' | 'notEmbed';
 
 // Edits refuse with a code; the UI turns it into text in the display language (src/ui/messages.ts).
 export class CoreError extends Error {
@@ -111,11 +111,13 @@ function scan(text: string): Scanned {
     rows.push(row);
     stack.push(row);
   }
+  // Looked up for every line below; a linear search here made parsing quadratic in the file size.
+  const byLine = new Map(rows.map(row => [row.line, row]));
   for (const row of rows) {
     let ownEnd = row.line + 1;
     while (ownEnd < doc.lines.length) {
       const source = doc.lines[ownEnd];
-      if (rows.some(other => other.line === ownEnd)) break;
+      if (byLine.has(ownEnd)) break;
       if (!source.trim()) {
         let next = ownEnd + 1;
         while (next < doc.lines.length && !doc.lines[next].trim()) next++;
@@ -130,7 +132,7 @@ function scan(text: string): Scanned {
   for (let index = rows.length - 1; index >= 0; index--) {
     const row = rows[index];
     if (row.parentLine !== null) {
-      const parent = rows.find(other => other.line === row.parentLine)!;
+      const parent = byLine.get(row.parentLine)!;
       parent.end = Math.max(parent.end, row.end);
     }
   }
@@ -450,22 +452,4 @@ export function tagsIn(text: string): string[] {
     if (!/^\d+$/.test(tag)) tags.add(tag);
   }
   return [...tags];
-}
-
-export function visibleLines(text: string, filter: { status: Status | 'all'; tag?: string }, keepLines: number[] = []): Set<number> {
-  const rows = parse(text), visible = new Set<number>();
-  if (!['all', ...Object.keys(marks)].includes(filter.status)) throw new CoreError('invalidFilter');
-  const tag = filter.tag ? '#' + filter.tag.replace(/^#/, '') : '';
-  for (const row of rows) {
-    const words = (row.title + '\n' + row.note).split(/\s+/);
-    if (keepLines.includes(row.line) || ((filter.status === 'all' || row.status === filter.status) && (!tag || words.includes(tag)))) {
-      let ancestor: Row | undefined = row;
-      while (ancestor) {
-        visible.add(ancestor.line);
-        const current: Row = ancestor;
-        ancestor = rows.find(candidate => candidate.line === current.parentLine);
-      }
-    }
-  }
-  return visible;
 }

@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures.ts';
+import { expect, t, test } from './fixtures.ts';
 
-const fields = (page: Page) => page.getByRole('textbox', { name: 'Item text' });
+const fields = (page: Page) => page.getByRole('textbox', { name: t.item.title });
 
 // Records the elements whose Svelte intro starts. `introstart` does not bubble, so the listener captures.
 async function recordIntros(page: Page) {
@@ -20,8 +20,8 @@ test.describe('with motion', () => {
     // Neither loading the page nor zooming in and out animates the items already there.
     // With the title focused the row buttons already hang below it and stay put when one is pressed.
     await fields(page).first().click();
-    await page.getByTitle('Zoom into this item').first().click();
-    await page.getByTitle('Leave the zoomed item').click();
+    await page.getByTitle(t.item.zoomIn).first().click();
+    await page.getByTitle(t.toolbar.zoomOutTitle).click();
     await expect.poll(outliner.titles).toEqual(['first', 'second']);
     // An intro would have started within this time; the transitions take 150ms.
     await page.waitForTimeout(300);
@@ -44,11 +44,11 @@ test.describe('with motion', () => {
     await openOutliner('- [ ] first\n');
     const sidebar = page.getByRole('complementary');
     await sidebar.evaluate(node => node.addEventListener('transitionrun', () => node.setAttribute('data-ran', 'true')));
-    await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+    await page.getByRole('button', { name: t.bookmarks.collapse }).click();
     await expect(sidebar).toHaveAttribute('data-ran', 'true');
     await expect.poll(() => sidebar.evaluate(node => node.getBoundingClientRect().width)).toBe(24);
-    await page.getByRole('button', { name: 'Expand sidebar' }).click();
-    await expect(page.getByRole('button', { name: 'Add current view' })).toBeVisible();
+    await page.getByRole('button', { name: t.bookmarks.expand }).click();
+    await expect(page.getByRole('button', { name: t.bookmarks.addView })).toBeVisible();
   });
 });
 
