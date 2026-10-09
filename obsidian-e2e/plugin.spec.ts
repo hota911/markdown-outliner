@@ -112,3 +112,22 @@ test('item titles use the width of the tab, without a horizontal scrollbar', asy
   expect(await items.titleLines('週報をまとめる #work #priority/high')).toBe(1);
   expect(await horizontalOverflow(page.locator('.markdown-outliner-container'))).toBeLessThanOrEqual(0);
 });
+
+test.describe('a long file', () => {
+  test.use({ vaultFiles: { 'tasks.md': Array.from({ length: 300 }, (_, index) => `- [ ] item ${index + 1}\n`).join('') } });
+
+  test('scrolled down, the header is pinned to the top edge of the tab with no gap above it', async ({ obsidian }) => {
+    const { page } = obsidian;
+    await obsidian.runCommand(openOutliner);
+    await expect.poll(outlineItems(page).titles).toContain('item 300');
+    const container = page.locator('.markdown-outliner-container');
+    await container.evaluate(node => node.scrollTo(0, node.scrollHeight));
+    await expect.poll(() => container.evaluate(node => node.scrollTop)).toBeGreaterThan(1000);
+    await screenshot(obsidian, 'pinned-header');
+
+    // The top of the container's scrollport, inside its border; rows scroll out of view above it.
+    const visibleTop = await container.evaluate(node => node.getBoundingClientRect().top + node.clientTop);
+    const headerTop = await page.locator('.pinned-header').evaluate(node => node.getBoundingClientRect().top);
+    expect(headerTop).toBeCloseTo(visibleTop, 0);
+  });
+});
