@@ -111,11 +111,13 @@ function scan(text: string): Scanned {
     rows.push(row);
     stack.push(row);
   }
+  // Looked up for every line below; a linear search here made parsing quadratic in the file size.
+  const byLine = new Map(rows.map(row => [row.line, row]));
   for (const row of rows) {
     let ownEnd = row.line + 1;
     while (ownEnd < doc.lines.length) {
       const source = doc.lines[ownEnd];
-      if (rows.some(other => other.line === ownEnd)) break;
+      if (byLine.has(ownEnd)) break;
       if (!source.trim()) {
         let next = ownEnd + 1;
         while (next < doc.lines.length && !doc.lines[next].trim()) next++;
@@ -130,7 +132,7 @@ function scan(text: string): Scanned {
   for (let index = rows.length - 1; index >= 0; index--) {
     const row = rows[index];
     if (row.parentLine !== null) {
-      const parent = rows.find(other => other.line === row.parentLine)!;
+      const parent = byLine.get(row.parentLine)!;
       parent.end = Math.max(parent.end, row.end);
     }
   }

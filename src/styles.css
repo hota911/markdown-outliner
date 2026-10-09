@@ -29,7 +29,11 @@
 .outliner .bookmark-item .icon { flex: 0 0 22px; }
 .outliner .bookmark-name { flex: 1; min-width: 0; font-size: 12px; }
 .outliner .bookmark-empty { font-size: 11px; color: var(--text-faint); line-height: 1.6; overflow-wrap: anywhere; }
-.workspace-leaf-content .markdown-outliner-container.outliner { margin: 0; max-width: none; height: 100%; overflow: auto; padding: 16px 24px; container-type: size; }
+/* In Obsidian the view's container is the scroll container. A sticky element sticks at the edge of its
+   content box, so the space above the content is padding of the workspace instead of the container:
+   otherwise the pinned header would stop 16px below the top and rows would show through the gap. */
+.workspace-leaf-content .markdown-outliner-container.outliner { margin: 0; max-width: none; height: 100%; overflow: auto; padding: 0 24px 16px; container-type: size; }
+.workspace-leaf-content .markdown-outliner-container.outliner .outliner-workspace { padding-top: 16px; }
 /* In Obsidian the view container scrolls, not the window; 100cqh is the height inside its padding. */
 .workspace-leaf-content .markdown-outliner-container .bookmarks { max-height: 100cqh; }
 .outliner button, .outliner input, .outliner select, .outliner textarea { font: inherit; }

@@ -112,9 +112,11 @@ npm run typecheck   # svelte-check over src/, e2e/, obsidian-e2e/ and the Vite a
 npm test            # run test:node and test:ui
 npm run test:node   # core, row key, server and packaging tests with node --test
 npm run test:ui     # screen tests (test/ui/) and Obsidian adapter tests with Vitest and jsdom
-npm run test:e2e    # build the web app, then run the browser tests (e2e/) in Chromium with Playwright, on desktop and as a Pixel 7
+npm run test:e2e    # build the web app and the preview, then run the browser tests (e2e/) in Chromium with Playwright, on desktop and as a Pixel 7
 npm run test:obsidian # macOS only: build the plugin, then test it inside the Obsidian desktop app (obsidian-e2e/)
+npm run test:perf   # time editing operations on large files and check that time grows linearly with the file size
 npm run build       # write dist/web/ and the plugin files dist/main.js, manifest.json, styles.css
+npm run build:preview # write dist/preview/markdown-outliner-preview.html, the web app on the files of samples/ in one file
 ```
 
 `npm run dev` edits `samples/` by default; set `OUTLINER_WORKSPACE` to a folder or a single Markdown file to edit something else.
@@ -129,6 +131,12 @@ The screen tests drive the rendered DOM with keyboard and pointer events against
 
 CI runs lint, typecheck, `npm test`, `npm run test:e2e` and `npm run build` on pull requests and on pushes to `main`. A separate workflow (`.github/workflows/tauri.yml`) runs the Rust tests of the desktop app on macOS only when `src-tauri/` or `package.json` changes; it is not a required check, because a macOS runner and a cold Tauri build take several minutes.
 
+### Pull request preview
+
+`npm run build:preview` builds the web app without the server as one HTML file, `dist/preview/markdown-outliner-preview.html`, with the script and the styles inlined. The files of `samples/` are embedded at build time and kept in memory (`src/preview/adapter.ts`), so edits work but a reload starts again from the samples, and bookmarks are not kept. The file needs no server: open it in a browser from disk. `e2e/preview.spec.ts` opens it from `file://` and checks that it loads nothing else, saves an edit, and resets on reload.
+
+On each pull request, `.github/workflows/preview.yml` builds the file and uploads it unzipped as an artifact of the run, then posts or updates one comment on the pull request with the link to it. The link needs a GitHub login. A pull request from a fork has no token that can comment, so the link is only in the job summary of the run.
+
 Source layout:
 
 - `src/core.ts`: Markdown parsing and editing operations, shared by both versions.
@@ -136,6 +144,7 @@ Source layout:
 - `src/obsidian/`: the Obsidian plugin entry point (`main.ts`).
 - `src/web/`: the standalone web page.
 - `src/tauri/`: the page of the desktop app; `adapter.ts` calls the Rust commands.
+- `src/preview/`: the pull request preview page; `adapter.ts` keeps the files of `samples/` in memory.
 - `src-tauri/`: the desktop app. `src/workspace.rs` is the file access ported from `server.mjs`, with its tests; `src/lib.rs` has the commands, the folder dialog, the menu and the window.
 - `src/styles.css`: styles for both versions. Colors and fonts use Obsidian's theme variables, so the plugin follows the Obsidian theme; `src/web/theme.css` defines them for the web page in light and dark sets that follow the system setting.
 - `server.mjs`: the local web server and file API, also mounted by the dev server.
@@ -143,14 +152,31 @@ Source layout:
 - `vite.config.ts`: the plugin build (a single CommonJS `main.js`).
 - `vite.web.config.ts`: the web app build and dev server.
 - `vite.tauri.config.ts`: the desktop app's page build and dev server.
+- `vite.preview.config.ts`: the pull request preview build, with the script and the styles inlined into the page.
 - `scripts/package-plugin.mjs`: builds the plugin and copies `manifest.json` and `styles.css` into `dist/`.
 - `scripts/demo.mjs`: serves a temporary copy of `samples/` for `npm run demo`.
+- `scripts/perf-compare.mjs`: compares a pull request's speed with its base's in CI; see [Performance](#performance).
 - `scripts/changelog-section.mjs`: prints one version's section of `CHANGELOG.md`, used as the release notes.
 - `.changie.yaml`, `.changes/`: the Changie configuration, the unreleased changelog fragments, and the released versions that CHANGELOG.md is generated from.
 - `e2e/`: Playwright tests in Chromium (drag and drop, layout, and the touch screen layout in `mobile.spec.ts`); `playwright.config.ts` runs `mobile.spec.ts` as a Pixel 7 and the rest as desktop Chrome.
 - `obsidian-e2e/`: Playwright tests of the plugin in the Obsidian desktop app, with their own `playwright.config.ts`; `fixtures.ts` starts Obsidian and has helpers to open a file, run a command by id, and read a vault file.
 
 The plugin build bundles Svelte and the shared code into `main.js`, so the released `main.js` only requires `obsidian`.
+
+### Performance
+
+`npm run test:perf` times eight operations on generated outlines of 17,000 and 34,000 items (`test/large-outline.ts`, about 1MB and 2MB): opening a file, typing in a title, indenting and moving an item, merging a change made outside the outliner, resolving a conflict, and filtering by words, by a tag and by a status (`test/perf-operations.mjs`). Each operation runs in a Node process of its own, which collects garbage before each run, and the median of 7 runs after 2 warm-up runs is its time. The test fails when an operation takes 3 times as long or more on the file twice as large (a linear operation takes about twice as long, a quadratic one four times), or more than one second on the larger file. These checks do not depend on earlier results and also run in CI. The run takes about 10 seconds; `npm test` does not include it, so that tests running in parallel do not disturb the timings.
+
+The Performance workflow (`.github/workflows/perf.yml`) runs on pull requests and on pushes to `main`. It is not a required check.
+
+- On a pull request, `scripts/perf-compare.mjs` checks out the base commit next to the pull request and times each operation on the larger file 6 times on each side, alternating between the two on the same runner. Times on shared runners vary from job to job, much more than within one job: in October 2026, comparing a commit with itself gave ratios between 0.95 and 1.07, while the same commit took up to 1.7 times as long in one job as in another. So the pull request is compared with its base measured in the same job, not with earlier runs. There are two lines, `WARNING_RATIO` and `FAILING_RATIO` at the top of the script:
+  - Warning: the pull request's median is at least 1.3 times the base's.
+  - Failure: at least 2 times. The job fails.
+
+  Either counts only when the Mann-Whitney U test finds the difference significant (p below 0.05 divided by the 8 operations), so that a single slow run does not trigger it. The report, with the base and head medians, their ratio and p for each operation, is in the job summary. On a warning or a failure, the workflow also posts it as a comment on the pull request, and updates that one comment on later pushes; pull requests from forks get only the job summary. The `npm run test:perf` checks run in the same job and fail it on their own.
+
+  To compare locally, check out the base in another folder and pass it: `git worktree add --detach ../base main`, then `node scripts/perf-compare.mjs ../base`. The script overwrites the base's `test/perf-operations.mjs` and `test/large-outline.ts` with this checkout's, so both sides run the same benchmark.
+- On each push to `main`, the times on both file sizes are added to a history in the `gh-pages` branch with [github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark): `dev/bench/data.js` holds one entry per commit, and `dev/bench/index.html` draws a chart for each operation. With GitHub Pages serving the `gh-pages` branch, the charts are at <https://hota911.github.io/markdown-outliner/dev/bench/>. To find the commit where an operation got slower, look for the step in its chart: hovering over a point shows its commit, and clicking it opens the commit on GitHub. When a commit takes at least twice as long as the previous one, the workflow also comments on the commit; it does not fail, because consecutive commits run on different runners.
 
 ## Changelog
 
