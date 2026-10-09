@@ -196,6 +196,31 @@ describe('using the / menu', () => {
     expect(screen.getByRole('textbox', { name: 'ズーム対象のタイトル' }).value).toBe('a');
   });
 
+  it('Collapse and Expand fold the item, keep the focus in its title, and are offered only for an item with children', async () => {
+    const { user, screen, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] a\n  - [ ] child\n- [ ] b\n' });
+    await user.type(title('b'), ' /');
+    expect(options(screen)).not.toContain('折りたたむ');
+    expect(options(screen)).not.toContain('展開する');
+    await user.keyboard('{Escape}{Backspace>2/}');
+    await user.type(title('a'), ' /');
+    expect(options(screen)).toContain('折りたたむ');
+    expect(options(screen)).not.toContain('展開する');
+    await user.keyboard('fold{Enter}');
+    expect(menu(screen)).toBeNull();
+    expect(titleValues()).toEqual(['a', 'b']);
+    expect(document.activeElement).toBe(title('a'));
+    expect(title('a').selectionStart).toBe(1);
+    await user.keyboard(' /展開');
+    expect(options(screen)).toEqual(['展開する']);
+    await user.keyboard('{Enter}');
+    expect(titleValues()).toEqual(['a', 'child', 'b']);
+    expect(document.activeElement).toBe(title('a'));
+    expect(await saved()).toBe('- [ ] a\n  - [ ] child\n- [ ] b\n');
+    // Undo brings back the /query text; the fold is not in the undo history, as with the fold button.
+    await user.keyboard('{Control>}z{/Control}');
+    expect(titleValues()).toEqual(['a /展開', 'child', 'b']);
+  });
+
   it('the extract command moves the item without the /query text to a new file', async () => {
     const { user, screen, title, adapter } = await setup({ 'tasks.md': '- [ ] Plan\n' });
     await user.type(title('Plan'), ' /ファイルにする');

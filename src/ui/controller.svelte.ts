@@ -822,7 +822,11 @@ export class Controller {
     if (slash.step === 'files') return fileOptions(slash.query, slash.files, slash.path);
     const row = this.rows(slash.path).find(value => value.line === slash.line);
     if (!row) return [];
-    return commandOptions(slash.query, row.kind, this.zoomRoot(slash.path)?.line === row.line, this.t);
+    const zoomed = this.zoomRoot(slash.path)?.line === row.line;
+    // The zoomed-in row is the root of the view; zooming in expands it, and folding it would hide the whole view.
+    const hasChildren = !zoomed && this.rows(slash.path).some(child => child.parentLine === row.line);
+    const fold = hasChildren ? this.collapsed.has(row.key) ? 'collapsed' : 'expanded' : null;
+    return commandOptions(slash.query, row.kind, zoomed, fold, this.t);
   }
 
   // The open menu of a title, or null. A menu without matches is not shown, and Enter stays Enter.
@@ -867,8 +871,9 @@ export class Controller {
   }
 
   // Runs a command of the menu on its item. The `/query` text is removed in the same undo step as
-  // the command where the command edits the text; zoom and the note do not, and extracting to a
-  // file clears the undo history anyway.
+  // the command where the command edits the text; zoom, the note, collapse and expand do not (folds
+  // are not in the undo history, as with the fold button), and extracting to a file clears the undo
+  // history anyway.
   runSlash = async (id: string, node = this.slash && this.titleNode(this.slash.path, this.slash.line)) => {
     const slash = this.slash;
     if (!slash || !node) return;
@@ -932,6 +937,7 @@ export class Controller {
       mutateTitle(text => core.updateTitle(text, line, title));
       if (command === 'note') this.focusNote(path, line);
       else if (command === 'zoom') this.zoomTo(path, line);
+      else if (command === 'collapse' || command === 'expand') this.setFold(path, line, command === 'collapse');
       else await this.extractToFile(path, line);
     }
     if (node.isConnected && !(this.activeElement instanceof HTMLTextAreaElement)) node.focus();
@@ -950,6 +956,14 @@ export class Controller {
     this.active = null;
     this.render();
   };
+
+  // Folds or unfolds an item from the `/` menu. Unlike the fold button, the title keeps the focus.
+  private setFold(path: string, line: number, collapsed: boolean) {
+    const id = this.rowKey(path, line);
+    if (id === undefined) return;
+    if (collapsed) this.collapsed.add(id); else this.collapsed.delete(id);
+    this.render();
+  }
 
   zoomTo = (path: string, line: number) => {
     this.zoom = { path, line };
