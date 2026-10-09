@@ -112,10 +112,11 @@ npm run typecheck   # svelte-check over src/, e2e/, obsidian-e2e/ and the Vite a
 npm test            # run test:node and test:ui
 npm run test:node   # core, row key, server and packaging tests with node --test
 npm run test:ui     # screen tests (test/ui/) and Obsidian adapter tests with Vitest and jsdom
-npm run test:e2e    # build the web app, then run the browser tests (e2e/) in Chromium with Playwright, on desktop and as a Pixel 7
+npm run test:e2e    # build the web app and the preview, then run the browser tests (e2e/) in Chromium with Playwright, on desktop and as a Pixel 7
 npm run test:obsidian # macOS only: build the plugin, then test it inside the Obsidian desktop app (obsidian-e2e/)
 npm run test:perf   # time editing operations on large files and check that time grows linearly with the file size
 npm run build       # write dist/web/ and the plugin files dist/main.js, manifest.json, styles.css
+npm run build:preview # write dist/preview/markdown-outliner-preview.html, the web app on the files of samples/ in one file
 ```
 
 `npm run dev` は既定で `samples/` を編集する。別のものを編集するには、`OUTLINER_WORKSPACE` にフォルダーか Markdown ファイル 1 つを設定する。
@@ -130,6 +131,12 @@ npm run build       # write dist/web/ and the plugin files dist/main.js, manifes
 
 CI は、プルリクエストと `main` への push で lint、typecheck、`npm test`、`npm run test:e2e`、`npm run build` を実行する。別のワークフロー（`.github/workflows/tauri.yml`）が、`src-tauri/` か `package.json` が変わったときだけ、デスクトップアプリの Rust テストを macOS で実行する。macOS のランナーと Tauri の初回ビルドには数分かかるため、これは必須のチェックではない。
 
+### プルリクエストのプレビュー
+
+`npm run build:preview` は、Web アプリをサーバーなしの 1 つの HTML ファイル `dist/preview/markdown-outliner-preview.html` としてビルドする。スクリプトとスタイルはページに埋め込む。`samples/` のファイルはビルド時に埋め込み、メモリ上に保持する（`src/preview/adapter.ts`）。そのため編集はできるが、再読み込みすると samples の内容に戻り、ブックマークは保存されない。サーバーは要らず、ディスク上のファイルをそのままブラウザで開けばよい。`e2e/preview.spec.ts` は `file://` で開き、ほかに何も読み込まないこと、編集を保存できること、再読み込みで元に戻ることを確認する。
+
+プルリクエストごとに `.github/workflows/preview.yml` がこのファイルをビルドし、zip にせず実行の成果物（artifact）としてアップロードし、そのリンクを載せたコメントをプルリクエストに 1 つ投稿または更新する。リンクを開くには GitHub へのログインが要る。フォークからのプルリクエストにはコメントできるトークンがないため、リンクは実行のジョブサマリーにだけ載る。
+
 ソースの構成：
 
 - `src/core.ts`：Markdown の解析と編集操作。両方の版で共有する。
@@ -137,6 +144,7 @@ CI は、プルリクエストと `main` への push で lint、typecheck、`npm
 - `src/obsidian/`：Obsidian プラグインのエントリーポイント（`main.ts`）。
 - `src/web/`：単体の Web ページ。
 - `src/tauri/`：デスクトップアプリのページ。`adapter.ts` が Rust のコマンドを呼ぶ。
+- `src/preview/`：プルリクエストのプレビューのページ。`adapter.ts` が `samples/` のファイルをメモリ上に保持する。
 - `src-tauri/`：デスクトップアプリ。`src/workspace.rs` は `server.mjs` から移植したファイルアクセスとそのテスト、`src/lib.rs` はコマンド、フォルダー選択ダイアログ、メニュー、ウィンドウを持つ。
 - `src/styles.css`：両方の版のスタイル。色とフォントは Obsidian のテーマ変数を使うので、プラグインは Obsidian のテーマに従う。`src/web/theme.css` は Web ページ用にこれらの変数を定義し、システムの設定に従うライトとダークの 2 組を持つ。
 - `server.mjs`：ローカル Web サーバーとファイル API。開発サーバーにも組み込まれる。
@@ -144,6 +152,7 @@ CI は、プルリクエストと `main` への push で lint、typecheck、`npm
 - `vite.config.ts`：プラグインのビルド（CommonJS の `main.js` 1 ファイル）。
 - `vite.web.config.ts`：Web アプリのビルドと開発サーバー。
 - `vite.tauri.config.ts`：デスクトップアプリのページのビルドと開発サーバー。
+- `vite.preview.config.ts`：プルリクエストのプレビューのビルド。スクリプトとスタイルをページに埋め込む。
 - `scripts/package-plugin.mjs`：プラグインをビルドし、`manifest.json` と `styles.css` を `dist/` にコピーする。
 - `scripts/demo.mjs`：`npm run demo` のために `samples/` の一時コピーを配信する。
 - `scripts/perf-compare.mjs`：CI でプルリクエストとベースの速さを比べる。[性能](#性能)を参照。
