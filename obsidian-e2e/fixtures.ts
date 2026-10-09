@@ -225,6 +225,7 @@ export const test = base.extend<{ vaultFiles: VaultFiles; obsidian: Obsidian }>(
       const settingsOpened = await session.page.locator('.modal.mod-settings').waitFor({ timeout: 5_000 }).then(() => true, () => false);
       if (settingsOpened) await session.page.keyboard.press('Escape');
       await expect(session.page.locator('.modal-container')).toHaveCount(0);
+      console.log('DEBUGF', await session.page.evaluate(() => JSON.stringify((window as any).require('@electron/remote').BrowserWindow.getAllWindows().map((b: any) => [b.id, b.webContents.getURL()]))));
 
       await use({
         get page() { return session.page; },

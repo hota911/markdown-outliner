@@ -51,7 +51,10 @@ test.describe('a file opened as an outline in its own tab', () => {
 
   test('replaces the Markdown editor, saves edits, and switches back with "Open as Markdown"', async ({ obsidian }) => {
     const { page } = obsidian;
+    const probe = () => page.evaluate(() => { const w = window as any; return JSON.stringify({ aw: typeof w.activeWindow, same: w.activeWindow === window, ad: w.activeDocument === document, awHref: String(w.activeWindow?.location?.href), awBody: w.activeDocument?.body?.innerHTML?.slice(0, 400), awOpener: w.activeWindow?.opener === window, focused: w.require('@electron/remote').getCurrentWindow().isFocused(), wins: w.require('@electron/remote').BrowserWindow.getAllWindows().map((b: any) => [b.id, b.isVisible(), b.webContents.getURL(), b.getTitle(), JSON.stringify(b.getBounds()), b.getParentWindow()?.id]) }); });
+    console.log('DEBUGA', await probe());
     await obsidian.openFile('notes/plan.md');
+    console.log('DEBUGB', await probe());
     expect(await obsidian.activeView()).toMatchObject({ type: 'markdown', file: 'notes/plan.md' });
 
     await obsidian.runCommand(openFileAsOutline);
@@ -59,10 +62,13 @@ test.describe('a file opened as an outline in its own tab', () => {
     await expect(page.locator('.workspace-tab-header.mod-active')).toHaveText('plan');
     const items = outlineItems(page);
     await expect.poll(items.titles).toEqual(['x', 'y']);
+    console.log('DEBUGC', await probe());
     await screenshot(obsidian, 'file-view');
+    console.log('DEBUGD', await probe());
 
     await page.getByRole('textbox', { name: 'Item text' }).first().fill('x edited');
     await expect.poll(() => obsidian.readFile('notes/plan.md')).toBe('- [ ] x edited\n- [ ] y\n');
+    console.log('DEBUGE', await probe());
 
     // The tab's "More options" menu offers "Open as Markdown".
     // DEBUG (temporary)
@@ -75,7 +81,6 @@ test.describe('a file opened as an outline in its own tab', () => {
       for (const type of ['mousedown', 'mouseup', 'click', 'blur', 'focus']) window.addEventListener(type, e => log(`${type} ${(e.target as Element)?.className ?? ''}`), true);
       log('hasFocus ' + document.hasFocus() + ' active ' + document.activeElement?.className);
     });
-    const probe = () => page.evaluate(() => { const w = window as any; return JSON.stringify({ aw: typeof w.activeWindow, same: w.activeWindow === window, ad: w.activeDocument === document, awHref: String(w.activeWindow?.location?.href), awBody: w.activeDocument?.body?.children?.length, focused: w.require('@electron/remote').getCurrentWindow().isFocused(), wins: w.require('@electron/remote').BrowserWindow.getAllWindows().map((b: any) => [b.id, b.isVisible(), b.webContents.getURL()]) }); });
     console.log('DEBUG0', await probe());
     await page.evaluate(() => (window as any).require('@electron/remote').getCurrentWindow().focus());
     await page.waitForTimeout(500);
