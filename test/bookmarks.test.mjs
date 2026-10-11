@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { bookmarkView, sameView, savedView, validBookmark } from '../src/ui/bookmarks.ts';
+import { bookmarkView, moveEntry, sameView, savedView, validBookmark } from '../src/ui/bookmarks.ts';
 import { messages } from '../src/ui/messages.ts';
 
 const view = { id: 'a', kind: 'view', file: 'notes/tasks.md', status: 'todo', tags: ['work'], searchText: 'plan' };
@@ -28,4 +28,16 @@ test('labels a bookmark by its name, else by its view', () => {
   assert.equal(bookmarkView({ ...view, kind: 'file' }, t).label, 'tasks.md');
   assert.equal(bookmarkView({ ...view, name: 'Mine' }, t).label, 'Mine');
   assert.deepEqual(bookmarkView({ id: 1 }, t), { bookmark: { id: 1 }, label: t.bookmarks.unreadableLabel, title: t.bookmarks.unreadableLabel, defaultLabel: '' });
+});
+
+test('moves an entry to the given index and keeps the order of the others', () => {
+  const moved = (from, to) => {
+    const list = ['a', 'b', 'c', 'd'];
+    moveEntry(list, from, to);
+    return list.join('');
+  };
+  assert.equal(moved(0, 2), 'bcad');
+  assert.equal(moved(3, 0), 'dabc');
+  assert.equal(moved(1, 3), 'acdb');
+  assert.equal(moved(2, 2), 'abcd');
 });

@@ -1,9 +1,9 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, horizontalOverflow, t, test } from './fixtures.ts';
+import { bookmarkNames, expect, horizontalOverflow, storeBookmarks, t, test } from './fixtures.ts';
 
 // Runs in the "android" project of playwright.config.ts: Chromium emulating a Pixel 7, with touch
 // input and a coarse pointer. A soft keyboard has no Tab, Alt+arrows or Shift+Enter, so these
-// tests only tap.
+// tests only tap and drag.
 
 const touchBar = (page: Page) => page.getByRole('toolbar', { name: t.touchBar.label });
 const focusedField = (page: Page) => page.locator('textarea:focus');
@@ -141,4 +141,24 @@ test.describe('on a touch screen', () => {
       expect(await horizontalOverflow(page.locator('.outline'))).toBeLessThanOrEqual(0);
     });
   }
+
+  test('a bookmark is dragged by touch', async ({ openOutliner, page }) => {
+    await openOutliner('- [ ] a\n');
+    await storeBookmarks(page, ['A', 'B', 'C']);
+    const sidebar = page.getByRole('complementary', { name: t.bookmarks.heading });
+    const handle = await rect(sidebar.getByRole('button', { name: t.bookmarks.reorder('A') }));
+    const last = await rect(sidebar.getByRole('listitem').last());
+    // Playwright's touchscreen only taps, so the touch points go through the DevTools protocol.
+    const cdp = await page.context().newCDPSession(page);
+    const x = handle.left + handle.width / 2;
+    const startY = handle.top + handle.height / 2;
+    const endY = last.bottom - 4;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: startY }] });
+    for (let step = 1; step <= 10; step++) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: startY + (endY - startY) * step / 10 }] });
+    }
+    await expect(sidebar.getByRole('listitem').last()).toHaveClass(/drop-after/);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    expect(await bookmarkNames(page)).toEqual(['B', 'C', 'A']);
+  });
 });
