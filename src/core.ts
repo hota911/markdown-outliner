@@ -9,7 +9,8 @@ export type CoreErrorCode =
   | 'mergeBothHaveContent' | 'unsafeIndent' | 'invalidMoveDirection' | 'invalidReorder' | 'reorderSiblingsOnly'
   | 'reorderAcrossText' | 'invalidReparent' | 'reparentIntoSelf' | 'reparentSiblingsOnly'
   | 'invalidInsertPosition' | 'insertPositionInSelection' | 'reparentIntoEmbed' | 'reparentAcrossText'
-  | 'invalidFileNameInput' | 'invalidFileName' | 'extractEmbed' | 'notEmbed' | 'headingReadOnly' | 'insertNextToText';
+  | 'invalidFileNameInput' | 'invalidFileName' | 'extractEmbed' | 'notEmbed' | 'embedHasContent' | 'headingReadOnly'
+  | 'insertNextToText';
 
 // Edits refuse with a code; the UI turns it into text in the display language (src/ui/messages.ts).
 export class CoreError extends Error {
@@ -585,6 +586,16 @@ export function retargetEmbed(text: string, line: number, embed: string): EditRe
   const source = doc.lines[line];
   doc.lines[line] = source.slice(0, source.length - doc.row.title.length) + '![[' + embed + ']]';
   return result(doc, line);
+}
+
+// Removes the embed item on `line`. An embed with children or a note is refused, as those
+// lines would go with it. The returned line is the parent's, or where the embed was.
+export function removeEmbed(text: string, line: number): EditResult {
+  const doc = target(text, line);
+  if (doc.row.kind !== 'embed') throw new CoreError('notEmbed');
+  if (doc.row.end !== line + 1) throw new CoreError('embedHasContent');
+  doc.lines.splice(line, 1);
+  return result(doc, doc.row.parentLine ?? line);
 }
 
 // The tags written as `#tag` in a text, without the `#`, in order of first appearance. As in

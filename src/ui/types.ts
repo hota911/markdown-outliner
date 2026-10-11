@@ -15,6 +15,10 @@ export interface Adapter {
   // in other files, as the user's settings say; the web server leaves them as they are.
   // Missing when the web app was opened on a single file.
   rename?(path: string, newPath: string): Promise<void>;
+  // Moves a file to the trash and fails if it does not exist. The web server moves it into
+  // `.trash/` and never deletes it; Obsidian follows the user's "Deleted files" setting.
+  // Missing when the web app was opened on a single file.
+  trash?(path: string): Promise<void>;
   openSource?(path: string): Promise<void>;
   // Tags in use across the host's files, without `#`, for the `#` menu. Obsidian has them from its
   // metadata cache; without this method the menu offers the tags of the files the outliner has read.

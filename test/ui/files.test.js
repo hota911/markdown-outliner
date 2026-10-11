@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { waitFor, within } from '@testing-library/dom';
+import { messages } from '../../src/ui/messages.ts';
 import { flush, setup } from './harness.js';
 
 describe('extract to file', () => {
@@ -160,6 +161,101 @@ describe('rename an embedded file', () => {
   it('offers no rename when the host cannot rename files', async () => {
     const { screen } = await setup({ 'tasks.md': '- ![[work.md]]\n', 'work.md': '- [ ] job\n' }, { canCreate: false });
     expect(screen.queryByRole('button', { name: '名前を変更' })).toBeNull();
+  });
+});
+
+describe('delete an embedded file', () => {
+  const t = messages.ja;
+  const askDelete = async ({ user, screen }, index = 0) => {
+    await user.click(screen.getAllByRole('button', { name: t.outline.delete })[index]);
+  };
+  const confirm = ({ user, screen }) => user.click(screen.getByRole('button', { name: t.outline.deleteConfirmButton }));
+
+  it('asks first, then moves the file to the trash and removes the embed line', async () => {
+    const env = await setup({ 'notes/tasks.md': '- [ ] host\n  - ![[sub/work.md]]\n- [ ] after\n', 'notes/sub/work.md': '- [ ] job\n' }, { initialFile: 'notes/tasks.md' });
+    await askDelete(env);
+    expect(env.screen.getByText(t.outline.deleteConfirm('sub/work.md'))).toBeTruthy();
+    // Cancel has the focus, so Enter alone keeps the file.
+    expect(document.activeElement.textContent).toBe(t.outline.deleteCancel);
+    expect(env.adapter.trashed).toEqual([]);
+    await confirm(env);
+    await waitFor(() => expect(env.screen.getByText(t.edit.deleted('work.md'))).toBeTruthy());
+    expect(env.adapter.trashed).toEqual(['notes/sub/work.md']);
+    expect(env.adapter.files.get('notes/tasks.md')).toBe('- [ ] host\n- [ ] after\n');
+    expect(env.titleValues()).toEqual(['host', 'after']);
+    expect(env.screen.getByRole('combobox', { name: '開くファイル' }).textContent).not.toContain('work.md');
+  });
+
+  it('keeps everything when the question is cancelled with the button or Escape', async () => {
+    const env = await setup({ 'tasks.md': '- ![[work.md]]\n', 'work.md': '- [ ] job\n' });
+    await askDelete(env);
+    await env.user.click(env.screen.getByRole('button', { name: t.outline.deleteCancel }));
+    await askDelete(env);
+    await env.user.keyboard('{Escape}');
+    await flush();
+    expect(env.screen.queryByText(t.outline.deleteConfirm('work.md'))).toBeNull();
+    expect(env.screen.getByRole('button', { name: t.outline.delete })).toBeTruthy();
+    expect(Object.fromEntries(env.adapter.files)).toEqual({ 'tasks.md': '- ![[work.md]]\n', 'work.md': '- [ ] job\n' });
+    expect(env.adapter.trashed).toEqual([]);
+  });
+
+  it('Undo brings back the embed line but not the file', async () => {
+    const env = await setup({ 'tasks.md': '- [ ] a\n- ![[work.md]]\n', 'work.md': '- [ ] job\n' });
+    await askDelete(env);
+    await confirm(env);
+    await waitFor(() => expect(env.adapter.files.get('tasks.md')).toBe('- [ ] a\n'));
+    await env.user.click(env.screen.getByRole('button', { name: 'Undo' }));
+    expect(await env.saved('tasks.md')).toBe('- [ ] a\n- ![[work.md]]\n');
+    expect(env.adapter.files.has('work.md')).toBe(false);
+    await waitFor(() => expect(env.screen.getByText(t.outline.missing)).toBeTruthy());
+  });
+
+  it.each([
+    ['another loaded file', { 'tasks.md': '- ![[work.md]]\n- ![[other.md]]\n', 'other.md': '- ![[work.md]]\n', 'work.md': '- [ ] job\n' }],
+    ['the same file', { 'tasks.md': '- ![[work.md]]\n- [ ] x\n  - ![[work.md]]\n', 'work.md': '- [ ] job\n' }],
+    ['a link without .md', { 'tasks.md': '- ![[work.md]]\n- [ ] ![[work]]\n', 'work.md': '- [ ] job\n' }],
+  ])('refuses while the file is also embedded in %s', async (_, files) => {
+    const env = await setup(files);
+    await askDelete(env);
+    await confirm(env);
+    await waitFor(() => expect(env.screen.getByText(t.edit.deleteEmbeddedElsewhere('work.md'))).toBeTruthy());
+    expect(Object.fromEntries(env.adapter.files)).toEqual(files);
+    expect(env.adapter.trashed).toEqual([]);
+  });
+
+  it('reports a file that is already gone and leaves the text unchanged', async () => {
+    const env = await setup({ 'tasks.md': '- ![[work.md]]\n', 'work.md': '- [ ] job\n' });
+    env.adapter.files.delete('work.md');
+    await askDelete(env);
+    await confirm(env);
+    await waitFor(() => expect(env.screen.getByText(t.edit.deleteFailed('ファイルがありません: work.md'))).toBeTruthy());
+    expect(env.adapter.files.get('tasks.md')).toBe('- ![[work.md]]\n');
+  });
+
+  it('refuses an embed with children before touching the file', async () => {
+    const env = await setup({ 'tasks.md': '- ![[work.md]]\n  - [ ] child\n', 'work.md': '- [ ] job\n' });
+    await askDelete(env);
+    await confirm(env);
+    await waitFor(() => expect(env.screen.getByText(t.edit.deleteFailed(t.core.embedHasContent))).toBeTruthy());
+    expect(env.adapter.files.has('work.md')).toBe(true);
+    expect(env.adapter.trashed).toEqual([]);
+  });
+
+  it('saves unsaved input in the embedded file first, and refuses while a save conflict is open', async () => {
+    const env = await setup({ 'tasks.md': '- ![[work.md]]\n', 'work.md': '- [ ] job\n' });
+    await env.user.type(env.title('job'), ' edited');
+    env.adapter.externalWrite('work.md', '- [ ] changed outside\n');
+    await askDelete(env);
+    await confirm(env);
+    await waitFor(() => expect(env.screen.getByText(t.edit.deleteUnsaved)).toBeTruthy());
+    expect(env.adapter.files.get('work.md')).toBe('- [ ] changed outside\n');
+    expect(env.adapter.files.get('tasks.md')).toBe('- ![[work.md]]\n');
+    expect(env.adapter.trashed).toEqual([]);
+  });
+
+  it('offers no delete when the host cannot write other files', async () => {
+    const { screen } = await setup({ 'tasks.md': '- ![[work.md]]\n', 'work.md': '- [ ] job\n' }, { canCreate: false });
+    expect(screen.queryByRole('button', { name: t.outline.delete })).toBeNull();
   });
 });
 

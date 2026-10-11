@@ -50,3 +50,12 @@ test('does not rename onto an existing file, into another folder, or to an inval
   assert.deepEqual(await adapter.list(), ['notes/a.md', 'tasks.md', 'work.md']);
   assert.equal((await adapter.read('work.md')).text, '- [ ] w\n');
 });
+
+test('trashes a file, and rejects one that does not exist', async () => {
+  const adapter = seed();
+  await adapter.trash('notes/a.md');
+  assert.deepEqual(await adapter.list(), ['tasks.md', 'work.md']);
+  await assert.rejects(adapter.read('notes/a.md'), { message: t.server.fileMissing });
+  await assert.rejects(adapter.trash('notes/a.md'), { message: t.server.fileMissing });
+  assert.deepEqual(await adapter.list(), ['tasks.md', 'work.md']);
+});

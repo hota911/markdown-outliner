@@ -18,6 +18,16 @@
   const baseName = (name: string) => name.slice(embedFolder(name).length).replace(/\.md$/, '');
   const focusAll = (node: HTMLInputElement) => { node.focus(); node.select(); };
 
+  // Deleting asks first, in place of the actions; Cancel has the focus, so Enter alone keeps the file.
+  let confirming = $state(false);
+  const focusButton = (node: HTMLButtonElement) => { node.focus(); };
+
+  function confirmKey(event: KeyboardEvent) {
+    // Keeps outline shortcuts from acting on the item while the question is shown.
+    event.stopPropagation();
+    if (event.key === 'Escape') { event.preventDefault(); confirming = false; }
+  }
+
   function renameKey(event: KeyboardEvent) {
     // Keeps outline shortcuts from acting on the item while the name is typed.
     event.stopPropagation();
@@ -57,9 +67,18 @@
     {:else}
       {@const target = embed.target!}
       <div class="embed-actions">
-        <button type="button" class="quiet" title={ctrl.t.outline.openEmbeddedTitle} onclick={() => ctrl.openFile(target)}>{ctrl.t.outline.openEmbedded}</button>
-        {#if ctrl.canRename && embed.outline?.kind === 'outline'}
-          <button type="button" class="quiet" title={ctrl.t.outline.renameTitle} onclick={() => { renaming = true; }}>{ctrl.t.outline.rename}</button>
+        {#if confirming}
+          <span class="embed-confirm">{ctrl.t.outline.deleteConfirm(item.row.embed!)}</span>
+          <button type="button" class="quiet" onkeydown={confirmKey} onclick={() => { confirming = false; void ctrl.trashEmbed(item.path, item.row.line); }}>{ctrl.t.outline.deleteConfirmButton}</button>
+          <button type="button" class="quiet" {@attach focusButton} onkeydown={confirmKey} onclick={() => { confirming = false; }}>{ctrl.t.outline.deleteCancel}</button>
+        {:else}
+          <button type="button" class="quiet" title={ctrl.t.outline.openEmbeddedTitle} onclick={() => ctrl.openFile(target)}>{ctrl.t.outline.openEmbedded}</button>
+          {#if ctrl.canRename && embed.outline?.kind === 'outline'}
+            <button type="button" class="quiet" title={ctrl.t.outline.renameTitle} onclick={() => { renaming = true; }}>{ctrl.t.outline.rename}</button>
+          {/if}
+          {#if ctrl.canTrash && embed.outline?.kind === 'outline'}
+            <button type="button" class="quiet" title={ctrl.t.outline.deleteTitle} onclick={() => { confirming = true; }}>{ctrl.t.outline.delete}</button>
+          {/if}
         {/if}
       </div>
       <Outline {ctrl} outline={embed.outline!} />

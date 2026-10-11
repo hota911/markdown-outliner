@@ -190,6 +190,10 @@ export class Controller {
     return !!this.adapter.rename;
   }
 
+  get canTrash() {
+    return !!this.adapter.trash;
+  }
+
   private describe(error: unknown) {
     return errorText(this.t, error);
   }
@@ -575,16 +579,85 @@ export class Controller {
     if (changed) this.persistPreferences();
   }
 
-  // The line of `path` whose `![[...]]` item resolves to one of `targets`: `line` when it still
-  // does, else the only such line. Null when there is none or more than one, so nothing is guessed.
-  // A link without `.md` counts, as Obsidian writes it that way when it updates links.
-  private embedLineOf(path: string, line: number, targets: string[]) {
-    const lines = this.rows(path).filter(row => {
+  // Moves the file embedded at `line` of `path` to the trash and removes the embed line. Refused
+  // while the file is embedded anywhere else in the loaded files, since those embeds would break.
+  // Undo brings back only the line; the host keeps the file in its trash.
+  trashEmbed = async (path: string, line: number) => {
+    const row = this.rows(path).find(value => value.line === line);
+    if (row?.kind !== 'embed' || !row.embed) return;
+    // The button is shown only when the host can move files to the trash.
+    const trash = this.adapter.trash?.bind(this.adapter);
+    if (!trash) return;
+    if (this.busy || this.polling) { this.showToast(this.t.edit.deleteBusy); return; }
+    let target: string;
+    try { target = this.normalize(path, row.embed); }
+    catch (error) { this.showToast(this.t.edit.deleteFailed(this.describe(error))); return; }
+    const fileName = target.split('/').pop()!;
+    // The embedding file is written after the trash, so unsaved input is saved first.
+    await this.saveAll();
+    if ([path, target].some(file => this.docs.get(file)?.dirty || this.docs.get(file)?.conflict)) {
+      this.showToast(this.t.edit.deleteUnsaved);
+      return;
+    }
+    if (this.busy || this.polling) { this.showToast(this.t.edit.deleteBusy); return; }
+    // Lines may have moved while saving, so the line is found again rather than trusted.
+    const current = this.embedLineOf(path, line, [target]);
+    const embeds = [...this.docs.keys()].reduce((count, file) => count + this.embedLines(file, [target]).length, 0);
+    if (embeds > 1) { this.showToast(this.t.edit.deleteEmbeddedElsewhere(fileName)); return; }
+    // The embed was removed meanwhile, by typing or an external change.
+    if (current === null) { this.render(); return; }
+    try { core.removeEmbed(this.docs.get(path)!.text, current); }
+    catch (error) { this.showToast(this.t.edit.deleteFailed(this.describe(error))); return; }
+    this.busy = true;
+    this.updateStatus();
+    try {
+      await trash(target);
+    } catch (error) {
+      this.busy = false;
+      this.updateStatus();
+      this.showToast(this.t.edit.deleteFailed(this.describe(error)));
+      return;
+    }
+    this.busy = false;
+    this.updateStatus();
+    this.forgetFile(target);
+    const removed = this.embedLineOf(path, current, [target]);
+    if (removed === null) {
+      this.render();
+      this.showToast(this.t.edit.deleteEmbedNotFound(fileName));
+      return;
+    }
+    this.mutate(path, text => core.removeEmbed(text, removed), null);
+    await this.saveAll();
+    this.showToast(this.t.edit.deleted(fileName));
+  };
+
+  // Drops the state of a file the host moved to the trash. Undo snapshots may still hold its
+  // text; they skip files that are no longer loaded.
+  private forgetFile(path: string) {
+    this.docs.delete(path);
+    this.kept.delete(path);
+    this.fileList = this.fileList.filter(file => file !== path);
+    if (this.zoom?.path === path) this.zoom = null;
+    if (this.active?.path === path) this.active = null;
+    if (this.selectedPath === path) this.clearSelection();
+  }
+
+  // The lines of `path` whose `![[...]]` item resolves to one of `targets`. A link without `.md`
+  // counts, as Obsidian writes it that way when it updates links.
+  private embedLines(path: string, targets: string[]) {
+    return this.rows(path).filter(row => {
       const link = /^!\[\[([^\]]+)\]\]$/.exec(row.title)?.[1];
       if (!link) return false;
       try { return targets.includes(this.normalize(path, link.endsWith('.md') ? link : link + '.md')); }
       catch { return false; }
     }).map(row => row.line);
+  }
+
+  // The line of `path` whose `![[...]]` item resolves to one of `targets`: `line` when it still
+  // does, else the only such line. Null when there is none or more than one, so nothing is guessed.
+  private embedLineOf(path: string, line: number, targets: string[]) {
+    const lines = this.embedLines(path, targets);
     if (lines.includes(line)) return line;
     return lines.length === 1 ? lines[0] : null;
   }

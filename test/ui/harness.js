@@ -54,6 +54,13 @@ export function memoryAdapter(initial, { canCreate = true, rewriteLinks = false,
         if (next !== text) { files.set(file, next); bump(file); }
       }
     };
+    adapter.trashed = [];
+    adapter.trash = async path => {
+      if (!files.has(path)) throw new Error('ファイルがありません: ' + path);
+      adapter.trashed.push(path);
+      files.delete(path);
+      revisions.delete(path);
+    };
   }
   return adapter;
 }

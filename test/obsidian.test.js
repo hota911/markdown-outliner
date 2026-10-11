@@ -90,7 +90,7 @@ async function fixture({ language = 'ja' } = {}) {
   const reads = [], writes = [], mounts = [], notices = [];
   state.mounts = mounts;
   state.notices = notices;
-  const renames = [];
+  const renames = [], trashed = [];
   const vault = {
     on: (name, callback) => { if (name === 'rename') renames.push(callback); },
     // Like Vault#rename: moves the content, updates the TFile, then notifies views and listeners.
@@ -154,6 +154,8 @@ async function fixture({ language = 'ja' } = {}) {
         files.set(path, text.split('![[' + oldName + ']]').join('![[' + file.basename + ']]'));
       }
     },
+    // Like FileManager#trashFile: removes the file and leaves links to it as they are.
+    trashFile: async file => { trashed.push(file.path); files.delete(file.path); },
   };
   const app = { vault, metadataCache, contentEl, fileManager, workspace: {
     getLeavesOfType: type => existing.filter(leaf => leaf.type === type),
@@ -172,7 +174,7 @@ async function fixture({ language = 'ja' } = {}) {
   const view = plugin.views.get('markdown-outliner')({ app });
   await view.onOpen();
   const setActiveView = value => { activeView = value; };
-  return { plugin, view, adapter: mounts.at(-1).options.adapter, files, reads, writes, mounts, notices, existing, created, revealed, states, opened,
+  return { plugin, view, adapter: mounts.at(-1).options.adapter, files, trashed, reads, writes, mounts, notices, existing, created, revealed, states, opened,
     fileMenus, newLeaf, setActiveView };
 }
 
@@ -288,6 +290,20 @@ test('埋め込み先の名前を FileManager で変更し、既存ファイル�
   await assert.rejects(f.adapter.rename('missing.md', 'new.md'));
   assert.equal(f.files.get('TODO.md'), '- ![[done work]]\n');
   assert.equal(f.files.get('done work.md'), '- [ ] embedded task\n');
+});
+
+test('埋め込み先を FileManager でゴミ箱に移し、存在しないファイルと Vault 外は拒否する', async () => {
+  const f = await fixture();
+  await f.adapter.trash('work.md');
+  assert.deepEqual(f.trashed, ['work.md']);
+  assert.equal(f.files.has('work.md'), false);
+  assert.equal(f.files.get('TODO.md'), '- ![[work.md]]\n');
+  await assert.rejects(f.adapter.trash('work.md'));
+  await assert.rejects(f.adapter.trash('../outside.md'));
+  await assert.rejects(f.adapter.trash('/TODO.md'));
+  await assert.rejects(f.adapter.trash('notes.txt'));
+  assert.deepEqual(f.trashed, ['work.md']);
+  assert.equal(f.files.get('TODO.md'), '- ![[work.md]]\n');
 });
 
 test('View の再 Open と Close で以前の UI を破棄し再表示できる', async () => {
