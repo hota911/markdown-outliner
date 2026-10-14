@@ -13,6 +13,7 @@ export function mountOutliner(container: HTMLElement, options: MountOptions): Mo
   ctrl.attach(container);
   return {
     completeActive: ctrl.completeActive,
+    openFile: ctrl.openFile,
     destroy() {
       ctrl.destroy();
       container.removeEventListener('keydown', ctrl.keyboard);

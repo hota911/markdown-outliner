@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseInline } from '../src/ui/inline.ts';
+import { linkAt, parseInline } from '../src/ui/inline.ts';
+import { isMarkdownLink, linkCandidates, resolveLink } from '../src/ui/links.ts';
 
 // Compact form of the parsed tree: strings for text, [kind, ...] for the rest.
 const shape = nodes => nodes.map(node => {
@@ -11,8 +12,8 @@ const shape = nodes => nodes.map(node => {
   if (node.kind === 'link') return ['link', node.href, ...shape(node.children)];
   return [node.kind, ...shape(node.children)];
 });
-const parsed = source => {
-  const nodes = parseInline(source);
+const parsed = (source, files = false) => {
+  const nodes = parseInline(source, files);
   return nodes && shape(nodes);
 };
 
@@ -96,4 +97,68 @@ test('meta nodes keep their source and its offset', () => {
 test('meta fields stay text inside code and a block ID only counts at the end', () => {
   assert.deepEqual(parsed('`[🍅:: 1]` a'), [['code', '[🍅:: 1]'], ' a']);
   assert.equal(parseInline('x^2 and ^id in the middle'), null);
+});
+
+test('links to files become links only when the host can open them', () => {
+  const source = '[会議支援アプリ](experiments/2026-10-05-meeting-assistant/README.md)';
+  assert.equal(parseInline(source), null);
+  const [link] = parseInline(source, true);
+  assert.equal(link.kind, 'link');
+  assert.equal(link.href, 'experiments/2026-10-05-meeting-assistant/README.md');
+  assert.deepEqual(link.file, { path: 'experiments/2026-10-05-meeting-assistant/README.md', subpath: '' });
+  assert.deepEqual(shape(link.children), ['会議支援アプリ']);
+  // External links stay links without a file.
+  assert.equal(parseInline('[docs](https://example.com)', true)[0].file, undefined);
+});
+
+test('file link targets are URL-decoded, may be written in angle brackets and keep a #heading', () => {
+  const target = source => parseInline(source, true)[0].file;
+  assert.deepEqual(target('[a](notes/my%20plan.md)'), { path: 'notes/my plan.md', subpath: '' });
+  assert.deepEqual(target('[a](<my notes/plan B.md>)'), { path: 'my notes/plan B.md', subpath: '' });
+  assert.deepEqual(target('[a](../plan.md#Next%20steps)'), { path: '../plan.md', subpath: '#Next steps' });
+  assert.deepEqual(target('[a](</plan b.md#Goals>)'), { path: '/plan b.md', subpath: '#Goals' });
+  assert.deepEqual(target('[a](bad%zz.md)'), { path: 'bad%zz.md', subpath: '' });
+  assert.deepEqual(target('[a](<https://example.com/a b>)'), undefined);
+});
+
+test('other link targets stay text, also when files can be opened', () => {
+  for (const source of ['[a](javascript:alert(1))', '[a](ftp://example.net)', '[a](//example.com/x)', '[a](#heading)', '[a](a b.md)', '[a](C:/x.md)']) {
+    assert.equal(parseInline(source, true), null, source);
+  }
+});
+
+test('file links keep emphasis, tags and text around them', () => {
+  assert.deepEqual(parsed('see [**plan**](plan.md) #work', true), ['see ', ['link', 'plan.md', ['strong', 'plan']], ' ', ['tag', 'work']]);
+  assert.deepEqual(parsed('`[a](b.md)` and [c](d.md)', true), [['code', '[a](b.md)'], ' and ', ['link', 'd.md', 'c']]);
+});
+
+test('linkAt finds the link around an offset of the source', () => {
+  const nodes = parseInline('x [a **b**](plan.md) y', true);
+  assert.equal(linkAt(nodes, 1), null);
+  assert.equal(linkAt(nodes, 2).file.path, 'plan.md');
+  assert.equal(linkAt(nodes, 8).file.path, 'plan.md');
+  assert.equal(linkAt(nodes, 19).file.path, 'plan.md');
+  assert.equal(linkAt(nodes, 21), null);
+});
+
+test('links resolve from the folder of the file containing them, then from the root', () => {
+  const files = ['README.md', 'notes/plan.md', 'notes/README.md', 'archive/old.md', 'my notes/a b.md'];
+  const link = (path, source = 'notes/today.md') => ({ path, subpath: '', source });
+  assert.deepEqual(linkCandidates(link('plan.md')), ['notes/plan.md', 'plan.md']);
+  assert.deepEqual(linkCandidates(link('../archive/old')), ['archive/old.md']);
+  assert.deepEqual(linkCandidates(link('/README.md')), ['README.md']);
+  assert.equal(resolveLink(link('plan.md'), files), 'notes/plan.md');
+  assert.equal(resolveLink(link('README.md'), files), 'notes/README.md');
+  assert.equal(resolveLink(link('README.md', 'today.md'), files), 'README.md');
+  assert.equal(resolveLink(link('archive/old.md'), files), 'archive/old.md');
+  assert.equal(resolveLink(link('../archive/old'), files), 'archive/old.md');
+  assert.equal(resolveLink(link('/README.md'), files), 'README.md');
+  assert.equal(resolveLink(link('my notes/a b.md', 'x.md'), files), 'my notes/a b.md');
+  // A bare file name also finds the file in another folder, as with "Shortest path when possible".
+  assert.equal(resolveLink(link('old.md'), files), 'archive/old.md');
+  assert.equal(resolveLink(link('../../README.md'), files), null);
+  assert.equal(resolveLink(link('missing.md'), files), null);
+  assert.equal(isMarkdownLink(link('plan')), true);
+  assert.equal(isMarkdownLink(link('a/README.MD')), true);
+  assert.equal(isMarkdownLink(link('slides.pdf')), false);
 });

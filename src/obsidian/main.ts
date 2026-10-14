@@ -1,4 +1,4 @@
-import { FileView, ItemView, MarkdownView, Notice, Plugin, Scope, TFile, getAllTags, getLanguage, normalizePath, requireApiVersion, type Menu, type WorkspaceLeaf } from 'obsidian';
+import { FileView, ItemView, Keymap, MarkdownView, Notice, Plugin, Scope, TFile, getAllTags, getLanguage, normalizePath, requireApiVersion, type Menu, type WorkspaceLeaf } from 'obsidian';
 import { languageOf, messages, type Language, type Messages } from '../ui/messages.ts';
 import { mountOutliner } from '../ui/mount.ts';
 import type { Doc, Mounted, Preferences } from '../ui/types.ts';
@@ -97,6 +97,13 @@ function mountInView(view: ItemView, plugin: MarkdownOutlinerPlugin, drafts: Map
     language: plugin.language,
     preferences: plugin.preferences,
     savePreferences: value => plugin.saveData(value),
+    // As in a note: the link resolves from the file containing it, then from the vault root, and
+    // ⌘/Ctrl-click or a middle click opens a new tab. Files of any type open in Obsidian's own views.
+    openLink: async (link, event) => {
+      const file = view.app.metadataCache.getFirstLinkpathDest(link.path.replace(/^\//, ''), link.source);
+      if (!file) throw new Error(plugin.t.link.missing);
+      await view.app.workspace.openLinkText(file.path + link.subpath, link.source, Keymap.isModEvent(event));
+    },
     adapter: {
       ...pomodoroStarter(view, resolve, t),
       list: async () => vault.getMarkdownFiles().map(file => file.path).sort(),

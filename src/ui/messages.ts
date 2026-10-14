@@ -93,7 +93,7 @@ const en = {
 
   opening: 'Opening file…',
   noFiles: 'There are no Markdown files in this folder.',
-  help: '↑↓: move the cursor · Enter: add (at the start of the text: above) · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several · / or # at the start or after a space: commands or tags · click a #tag: add it to the filter (while editing: ⌘/Ctrl-click)',
+  help: '↑↓: move the cursor · Enter: add (at the start of the text: above) · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several · / or # at the start or after a space: commands or tags · click a #tag: add it to the filter, a link: open it (while editing: ⌘/Ctrl-click)',
   closeToast: 'Close notification',
 
   bookmarks: {
@@ -296,6 +296,11 @@ const en = {
     internal: 'The file operation failed. Keep your input and try again.',
   } satisfies Record<ServerErrorCode, string>,
 
+  link: {
+    missing: 'The linked file does not exist.',
+    otherFile: 'Only links to Markdown files can be opened here.',
+  },
+
   web: {
     title: 'Markdown Outliner',
     requestFailed: 'The operation failed.',
@@ -387,7 +392,7 @@ const ja: Messages = {
 
   opening: 'ファイルを開いています…',
   noFiles: 'このフォルダには Markdown ファイルがありません。',
-  help: '↑↓: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択 · 先頭か空白の後の / と #: コマンドとタグ · #タグをクリック: 絞り込みに追加（編集中は⌘/Ctrlクリック）',
+  help: '↑↓: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択 · 先頭か空白の後の / と #: コマンドとタグ · #タグをクリック: 絞り込みに追加、リンクをクリック: 開く（編集中は⌘/Ctrlクリック）',
   closeToast: '通知を閉じる',
 
   bookmarks: {
@@ -584,6 +589,11 @@ const ja: Messages = {
     trashSymlink: 'シンボリックリンクは削除できません。',
     trashNotFolder: 'ゴミ箱に移せません。選択したフォルダーの .trash がフォルダーではありません。',
     internal: 'ファイル操作に失敗しました。入力を保持してやり直してください。',
+  },
+
+  link: {
+    missing: 'リンク先のファイルがありません。',
+    otherFile: 'ここでは Markdown 以外のファイルへのリンクは開けません。',
   },
 
   web: {

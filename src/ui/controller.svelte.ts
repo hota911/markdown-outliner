@@ -6,6 +6,7 @@ import { merge3, type Side } from '../three-way-merge.ts';
 import { RowKeys, type KeyedRow } from './keys.ts';
 import { bookmarkView, moveEntry, sameView, savedView, validBookmark, type BookmarkView, type SavedView } from './bookmarks.ts';
 import { addEstimates, estimateOf, type Estimate } from './estimate.ts';
+import type { LinkTarget } from './inline.ts';
 import { filterActive, rowMatches, statuses, type FilterQuery, type TextQuery } from './filter.ts';
 import { errorText, messages, type Messages } from './messages.ts';
 import { commandOptions, fileOptions, relativePath, sortTags, tagOptions, trigger, type Slash, type SlashCommand } from './slash.ts';
@@ -140,6 +141,7 @@ export class Controller {
   private readonly adapter: Adapter;
   private readonly preferences: Preferences;
   private readonly savePreferences?: (value: Preferences) => Promise<void>;
+  private readonly followLink?: MountOptions['openLink'];
   private preferenceSave: Promise<void> = Promise.resolve();
   private readonly initialFile?: string;
   private current: string | null = null;
@@ -187,7 +189,7 @@ export class Controller {
   private readonly recorded = new WeakMap<HTMLElement, number>();
   private readonly now: () => Date;
 
-  constructor({ adapter, drafts, initialFile, language, preferences = { bookmarks: [] }, savePreferences, now = () => new Date() }: MountOptions) {
+  constructor({ adapter, drafts, initialFile, language, preferences = { bookmarks: [] }, savePreferences, now = () => new Date(), openLink }: MountOptions) {
     this.now = now;
     this.t = messages[language];
     this.adapter = adapter;
@@ -195,12 +197,23 @@ export class Controller {
     this.initialFile = initialFile;
     this.preferences = preferences;
     this.savePreferences = savePreferences;
+    this.followLink = openLink;
   }
 
   // The date a task is completed on, which also places a `when done` recurring task.
   private today() {
     return localDate(this.now());
   }
+
+  // Links to files are links only when the host can open them.
+  get canOpenLinks() {
+    return !!this.followLink;
+  }
+
+  // Asks the host to open a link of `source` to a file; a failure is shown as a toast.
+  openLink = (source: string, target: LinkTarget, event: MouseEvent) => {
+    this.followLink?.({ ...target, source }, event).catch((error: unknown) => this.showToast(this.describe(error)));
+  };
 
   get canRename() {
     return !!this.adapter.rename;

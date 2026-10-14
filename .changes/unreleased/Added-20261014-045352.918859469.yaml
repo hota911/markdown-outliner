@@ -1,0 +1,3 @@
+kind: Added
+body: 'Links to files of the vault or folder, such as `[plan](notes/plan.md)`, in item texts and notes: Obsidian opens the file (⌘/Ctrl-click: in a new tab), and the web version opens a Markdown file in the outliner and other files from the server.'
+time: 2026-10-14T04:53:52.918859469Z

@@ -384,3 +384,22 @@ test('single-file mode lists, reads and saves only the selected Markdown file', 
   assert.equal(deniedReplacementSave.status, 403);
   assert.equal(await readFile(sibling, 'utf8'), 'Private sibling content\n');
 });
+
+test('/api/raw serves the first existing file a link may point to, but not hidden or outside files', async () => {
+  await mkdir(path.join(workspace, 'docs'), { recursive: true });
+  await writeFile(path.join(workspace, 'docs', 'a b.txt'), 'linked text\n');
+  await mkdir(path.join(workspace, '.hidden'), { recursive: true });
+  await writeFile(path.join(workspace, '.hidden', 'secret.txt'), 'secret\n');
+  const raw = (...paths) => fetch(`${origin}/api/raw?` + paths.map(file => 'path=' + encodeURIComponent(file)).join('&'));
+  const served = await raw('notes/a b.txt', 'docs/a b.txt');
+  assert.equal(served.status, 200);
+  assert.equal(served.headers.get('content-type'), 'text/plain; charset=utf-8');
+  assert.equal(served.headers.get('content-security-policy'), 'sandbox');
+  assert.equal(await served.text(), 'linked text\n');
+  assert.equal((await raw('missing.pdf')).status, 404);
+  assert.equal((await raw('docs')).status, 404);
+  for (const file of ['.hidden/secret.txt', '../outside.txt', '/etc/passwd', 'docs\\a b.txt', '']) {
+    assert.equal((await raw(file)).status, 403, file);
+  }
+  assert.equal((await fetch(`${origin}/api/raw`)).status, 404);
+});
