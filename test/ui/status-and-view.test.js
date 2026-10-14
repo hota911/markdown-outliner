@@ -478,6 +478,43 @@ describe('outline view', () => {
   // Drag and drop needs layout and DataTransfer, which jsdom lacks; it is tested in e2e/drag.spec.ts.
 });
 
+describe('starting a pomodoro', () => {
+  const label = 'Pomodoro Timer プラグインでこのタスクのポモドーロを開始（試験機能）';
+
+  it('has no button when the host has no timer', async () => {
+    const { row } = await setup({ 'tasks.md': '- [ ] a\n' });
+    expect(row('a').queryByTitle(label)).toBeNull();
+  });
+
+  it('gives the task a block id, saves it, then hands the task to the host', async () => {
+    const calls = [];
+    const { user, row, adapter } = await setup({ 'tasks.md': '- [ ] write [🍅:: 1/3]\n- bullet\n' }, {
+      startPomodoro: async task => { calls.push({ ...task, text: adapter.files.get('tasks.md') }); },
+    });
+    expect(row('bullet').queryByTitle(label)).toBeNull();
+    await user.click(row('write [🍅:: 1/3]').getByTitle(label));
+    await waitFor(() => expect(calls).toHaveLength(1));
+    const [{ blockId, ...call }] = calls;
+    expect(blockId).toMatch(/^[a-z0-9]+$/);
+    expect(call).toEqual({ path: 'tasks.md', line: 0, title: `write [🍅:: 1/3] ^${blockId}`, text: `- [ ] write [🍅:: 1/3] ^${blockId}\n- bullet\n` });
+  });
+
+  it('keeps a block id the task already has', async () => {
+    const calls = [];
+    const { user, row, adapter } = await setup({ 'tasks.md': '- [ ] a ^ab12\n' }, { startPomodoro: async task => { calls.push(task); } });
+    await user.click(row('a ^ab12').getByTitle(label));
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0].blockId).toBe('ab12');
+    expect(adapter.saves).toEqual([]);
+  });
+
+  it('shows why the host could not start it', async () => {
+    const { user, row, screen } = await setup({ 'tasks.md': '- [ ] a ^ab12\n' }, { startPomodoro: async () => { throw new Error('止まっています'); } });
+    await user.click(row('a ^ab12').getByTitle(label));
+    expect(await screen.findByText('ポモドーロを開始できません：止まっています')).toBeTruthy();
+  });
+});
+
 describe('Tasks and pomodoro fields', () => {
   const text = '- [ ] parent\n  - [ ] a [🍅:: 1/3] 🔁 every day ^ab12\n  - [x] b [🍅:: 2]\n- [ ] c [🍅:: 0/2]\n';
 

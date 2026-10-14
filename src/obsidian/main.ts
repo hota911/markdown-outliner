@@ -17,6 +17,60 @@ function bindCompleteShortcut(view: ItemView, mounted: () => Mounted | null) {
   });
 }
 
+// The Pomodoro Timer plugin (eatgrass/obsidian-pomodoro-timer) has no public API, so this uses
+// the parts its own task list uses: `tracker.active(task)` selects the task and `timer.start()`
+// starts the timer. The plugin then counts the pomodoro in the task's `[🍅:: done/estimated]`.
+interface PomodoroTimer {
+  tracker?: { active?(task: object): Promise<void>; pinned?: boolean; togglePinned?(): void };
+  timer?: {
+    start?(): void;
+    toggleMode?(): void;
+    subscribe?(run: (state: { running?: boolean; inSession?: boolean; mode?: string }) => void): () => void;
+  };
+}
+interface Plugins {
+  enabledPlugins?: Set<string>;
+  getPlugin?(id: string): unknown;
+}
+const POMODORO_PLUGIN = 'pomodoro-timer';
+const pomodoroCount = /\[🍅::[ \t]*(\d*)[ \t]*(?:\/[ \t]*(\d*)[ \t]*)?\]/u;
+// The task name the timer shows and logs: the title without the Tasks and pomodoro fields.
+const pomodoroTaskName = (title: string) => title
+  .replace(new RegExp(pomodoroCount.source, 'gu'), '')
+  .replace(/[ \t]\^[A-Za-z0-9-]+[ \t]*$/, '')
+  .replace(/[🔁📅⏳🛫➕✅❌⏫🔼🔽🔺⏬].*$/u, '')
+  .replace(/[ \t]+/g, ' ')
+  .trim();
+
+function pomodoroStarter(view: ItemView, resolve: (relative: string) => TFile, t: Messages['obsidian']) {
+  const plugins = (view.app as unknown as { plugins?: Plugins }).plugins;
+  if (!plugins?.enabledPlugins?.has(POMODORO_PLUGIN)) return {};
+  return {
+    startPomodoro: async ({ path, line, title, blockId }: { path: string; line: number; title: string; blockId: string }) => {
+      const { tracker, timer } = (plugins.getPlugin?.(POMODORO_PLUGIN) ?? {}) as PomodoroTimer;
+      if (!tracker?.active || !timer?.start || !timer.subscribe) throw new Error(t.pomodoroUnavailable);
+      const file = resolve(path);
+      const text = (await view.app.vault.read(file)).split('\n')[line] ?? '';
+      if (!text.trimEnd().endsWith('^' + blockId)) throw new Error(t.pomodoroLineChanged);
+      const [, actual = '', expected = ''] = pomodoroCount.exec(title) ?? [];
+      const name = pomodoroTaskName(title);
+      // Without pinning, the plugin drops the task when another file becomes active.
+      if (tracker.togglePinned && !tracker.pinned) tracker.togglePinned();
+      await tracker.active({
+        text, path: file.path, fileName: file.name, name, description: name,
+        status: /\[(.)\]/.exec(text)?.[1] ?? ' ', blockLink: ' ^' + blockId, checked: false,
+        done: '', due: '', created: '', cancelled: '', scheduled: '', start: '', priority: '', recurrence: '',
+        expected: Number(expected || 0), actual: Number(actual || 0), tags: [], line,
+      });
+      let state: { running?: boolean; inSession?: boolean; mode?: string } = {};
+      timer.subscribe(value => { state = value; })();
+      if (state.running) return;
+      if (!state.inSession && state.mode === 'BREAK') timer.toggleMode?.();
+      timer.start();
+    },
+  };
+}
+
 // Mounts the outliner into the view with an adapter over the whole vault, so embeds in any
 // folder can be read and saved. `initialFile` is the file shown first; without it the outliner
 // reopens the last file shown, or else the first file of the vault.
@@ -44,6 +98,7 @@ function mountInView(view: ItemView, plugin: MarkdownOutlinerPlugin, drafts: Map
     preferences: plugin.preferences,
     savePreferences: value => plugin.saveData(value),
     adapter: {
+      ...pomodoroStarter(view, resolve, t),
       list: async () => vault.getMarkdownFiles().map(file => file.path).sort(),
       // getAllTags covers tags in the text and in the frontmatter, and writes them with `#`.
       tags: async () => vault.getMarkdownFiles().flatMap(file => {

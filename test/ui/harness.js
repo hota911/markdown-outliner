@@ -76,9 +76,10 @@ afterEach(() => {
 // Mounts the UI on an in-memory vault and waits until the initial file is shown.
 // Existing tests are written against the Japanese UI, so Japanese is the default here.
 // `initialFile: null` mounts without an initial file, as the Obsidian view and a folder server do.
-export async function setup(initial, { initialFile = 'tasks.md', canCreate, rewriteLinks, tags, language = 'ja', preferences = { bookmarks: [] }, savePreferences } = {}) {
+export async function setup(initial, { initialFile = 'tasks.md', canCreate, rewriteLinks, tags, startPomodoro, language = 'ja', preferences = { bookmarks: [] }, savePreferences } = {}) {
   const t = messages[language];
   const adapter = memoryAdapter(initial, { canCreate, rewriteLinks, tags });
+  if (startPomodoro) adapter.startPomodoro = startPomodoro;
   const container = document.createElement('div');
   document.body.append(container);
   const app = mountOutliner(container, { adapter, initialFile: initialFile ?? undefined, language, preferences, savePreferences });
