@@ -1108,11 +1108,17 @@ export class Controller {
     const rows = this.rows(path, text);
     const byLine = new Map(rows.map(row => [row.line, row]));
     const keptLines = new Set(this.keepFor(path));
+    // A bullet has no status of its own, so the status filter sees the status of its nearest task.
+    const statusOf = (row: KeyedRow) => {
+      let item: KeyedRow | undefined = row;
+      while (item && item.kind === 'bullet') item = item.parentLine === null ? undefined : byLine.get(item.parentLine);
+      return item?.kind === 'task' ? item.status : row.status;
+    };
     const shown = new Map<number, boolean>();
     for (const row of rows) {
       // A heading is shown only for the items under it.
       const matches = !active || keptLines.has(row.line)
-        || (row.kind === 'embed' ? this.embedMatches(path, row, chain) : row.kind !== 'heading' && rowMatches(row, query));
+        || (row.kind === 'embed' ? this.embedMatches(path, row, chain) : row.kind !== 'heading' && rowMatches({ ...row, status: statusOf(row) }, query));
       if (!matches) continue;
       shown.set(row.line, true);
       // Ancestors come before their descendants, so an ancestor already shown has its own ancestors shown too.
