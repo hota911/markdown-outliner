@@ -41,3 +41,8 @@ export function bookmarkView(bookmark: unknown, t: Messages): BookmarkView {
   const defaultLabel = view.zoom ? t.bookmarks.zoomLabel(base, view.zoom.title) : base;
   return { bookmark, label: bookmark.name ?? defaultLabel, title: view.file, defaultLabel };
 }
+
+// Moves the entry at `from` so that it ends up at index `to`; the other entries keep their order.
+export function moveEntry(list: unknown[], from: number, to: number) {
+  list.splice(to, 0, ...list.splice(from, 1));
+}

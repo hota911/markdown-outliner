@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, horizontalOverflow, t, test } from './fixtures.ts';
+import { bookmarkNames, expect, horizontalOverflow, storeBookmarks, t, test } from './fixtures.ts';
 
 const longWord = 'projects/very-long-directory-name/another-very-long-directory-name/tasks-with-a-very-long-file-name.md';
 const longJapanese = '来週の定例に向けて打ち合わせの資料と議題を準備して関係者に共有するためのブックマーク';
@@ -74,18 +74,7 @@ for (const width of [1280, 375]) {
     await page.setViewportSize({ width, height: 800 });
     const items = Array.from({ length: 80 }, (_, index) => `- [ ] item ${index}\n`).join('');
     await openOutliner(items);
-    await addBookmarkNamed(page, 'Bookmark 0');
-    // Copy the stored bookmark into many, then load them.
-    await page.evaluate(() => {
-      for (const key of Object.keys(localStorage)) {
-        const preferences = JSON.parse(localStorage.getItem(key)!) as { bookmarks?: { id: string; name: string }[] };
-        if (!preferences.bookmarks?.length) continue;
-        const [first] = preferences.bookmarks;
-        preferences.bookmarks = Array.from({ length: 40 }, (_, index) => ({ ...first, id: `${first.id}-${index}`, name: `Bookmark ${index}` }));
-        localStorage.setItem(key, JSON.stringify(preferences));
-      }
-    });
-    await page.reload();
+    await storeBookmarks(page, Array.from({ length: 40 }, (_, index) => `Bookmark ${index}`));
     await expect(sidebar(page).getByRole('button', { name: 'Bookmark 39', exact: true })).toBeAttached();
 
     const pageScroll = () => page.evaluate(() => window.scrollY);
@@ -115,3 +104,56 @@ for (const width of [1280, 375]) {
     await expectNoOverflow(page);
   });
 }
+
+test('a bookmark is dragged by its handle to another place in the list, with an insertion line, and the order is kept after a reload', async ({ openOutliner, page }) => {
+  await openOutliner('- [ ] a\n');
+  await storeBookmarks(page, ['A', 'B', 'C']);
+  const item = (name: string) => sidebar(page).getByRole('listitem').filter({ has: page.getByRole('button', { name, exact: true }) });
+  const center = async (locator: Locator) => {
+    const box = await rect(locator);
+    return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+  };
+
+  // C goes above A: the line shows at the top of A while the pointer is over A's upper half.
+  const handle = await center(sidebar(page).getByRole('button', { name: t.bookmarks.reorder('C') }));
+  const a = await rect(item('A'));
+  await page.mouse.move(handle.x, handle.y);
+  await page.mouse.down();
+  await page.mouse.move(handle.x, a.top + a.height / 4, { steps: 10 });
+  await expect(item('A')).toHaveClass(/drop-before/);
+  await page.mouse.up();
+  await expect(item('A')).not.toHaveClass(/drop-before/);
+  expect(await bookmarkNames(page)).toEqual(['C', 'A', 'B']);
+
+  // A goes to the end: the line shows at the bottom of the last bookmark.
+  const from = await center(sidebar(page).getByRole('button', { name: t.bookmarks.reorder('A') }));
+  const b = await rect(item('B'));
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x, b.bottom - 2, { steps: 10 });
+  await expect(item('B')).toHaveClass(/drop-after/);
+  await page.mouse.up();
+  expect(await bookmarkNames(page)).toEqual(['C', 'B', 'A']);
+
+  // Dropping a bookmark where it already is changes nothing.
+  const still = await center(sidebar(page).getByRole('button', { name: t.bookmarks.reorder('B') }));
+  await page.mouse.move(still.x, still.y);
+  await page.mouse.down();
+  await page.mouse.move(still.x, still.y + 3, { steps: 3 });
+  await expect(sidebar(page).locator('.drop-before, .drop-after')).toHaveCount(0);
+  await page.mouse.up();
+  expect(await bookmarkNames(page)).toEqual(['C', 'B', 'A']);
+
+  await page.reload();
+  await expect(sidebar(page).getByRole('listitem')).toHaveCount(3);
+  expect(await bookmarkNames(page)).toEqual(['C', 'B', 'A']);
+});
+
+test('Alt+↓ on a bookmark moves it down and keeps the focus on it', async ({ openOutliner, page }) => {
+  await openOutliner('- [ ] a\n');
+  await storeBookmarks(page, ['A', 'B']);
+  await sidebar(page).getByRole('button', { name: 'A', exact: true }).focus();
+  await page.keyboard.press('Alt+ArrowDown');
+  expect(await bookmarkNames(page)).toEqual(['B', 'A']);
+  await expect(sidebar(page).getByRole('button', { name: 'A', exact: true })).toBeFocused();
+});

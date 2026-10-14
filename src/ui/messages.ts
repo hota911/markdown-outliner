@@ -104,6 +104,7 @@ const en = {
     empty: 'Bookmark the current file together with its filters and zoom. Rename a bookmark with ✎.',
     remove: (label: string) => `Remove ${label}`,
     rename: (label: string) => `Rename ${label}`,
+    reorder: (label: string) => `Move ${label} (drag, or Alt+↑/↓)`,
     nameInput: 'Bookmark name (Enter: save, Esc: cancel, empty: default name)',
     unreadableLabel: 'Unreadable bookmark',
     searchLabel: (status: string, tags: string, text: string, file: string) =>
@@ -375,6 +376,7 @@ const ja: Messages = {
     empty: '表示中のファイルを絞り込みやズームごと登録できます。名前は ✎ で変更できます。',
     remove: label => label + ' を削除',
     rename: label => label + ' の名前を変更',
+    reorder: label => label + ' を移動（ドラッグ / Alt+↑↓）',
     nameInput: 'ブックマーク名（Enter: 確定 · Esc: 取り消し · 空欄: 既定の名前）',
     unreadableLabel: '読み込めないブックマーク',
     searchLabel: (status, tags, text, file) => status + (tags ? ' ' + tags : '') + (text ? '「' + text + '」' : '') + ' · ' + file,
