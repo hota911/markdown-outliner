@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791948570753,
+  "lastUpdate": 1791949070418,
   "repoUrl": "https://github.com/hota911/markdown-outliner",
   "entries": {
     "Performance": [
@@ -935,6 +935,110 @@ window.BENCHMARK_DATA = {
           {
             "name": "filter by a status (34000 items)",
             "value": 21.434597000000053,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "38419042+hota911@users.noreply.github.com",
+            "name": "Hiroyuki Ota",
+            "username": "hota911"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c99a538a6bbcf5de3f4c0d697ec3cf607e525de8",
+          "message": "Delete an embedded file from its embed header (#61)\n\nThe embed header gets a Delete action next to Rename. It asks in place,\nnaming the file, with Cancel focused; on confirmation the file moves to\nthe trash and the embed line is removed.\n\n- Web: POST /api/trash moves the file into .trash/ at the served root,\n  creating it when missing and adding a number on name collisions. It\n  never unlinks a file without a hard link in the trash, refuses symlinks,\n  a .trash that is not a folder, and single-file mode.\n- Obsidian: FileManager#trashFile, which follows the \"Deleted files\"\n  setting (Vault#trash is banned by the obsidianmd lint rules).\n- Refused with a toast, changing nothing, when the file is embedded\n  elsewhere in the loaded docs, the embed has children or a note, the\n  file is missing, or a save or conflict is pending.\n- Undo restores only the embed line; README.md and README.ja.md say so.\n\nCo-authored-by: Claude Opus 5.5 <noreply@anthropic.com>",
+          "timestamp": "2026-10-14T12:37:26+09:00",
+          "tree_id": "afbf8c28b850b16b64f950d823c76ba84a649f7a",
+          "url": "https://github.com/hota911/markdown-outliner/commit/c99a538a6bbcf5de3f4c0d697ec3cf607e525de8"
+        },
+        "date": 1791949070401,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "open: parse the file and key its rows (17000 items)",
+            "value": 38.60930900000005,
+            "unit": "ms"
+          },
+          {
+            "name": "open: parse the file and key its rows (34000 items)",
+            "value": 54.83244500000001,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (17000 items)",
+            "value": 58.46622000000002,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (34000 items)",
+            "value": 117.541199,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (17000 items)",
+            "value": 45.66547400000002,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (34000 items)",
+            "value": 85.61531300000001,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (17000 items)",
+            "value": 68.50230600000009,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (34000 items)",
+            "value": 146.61465700000008,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (17000 items)",
+            "value": 4.83272199999999,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (34000 items)",
+            "value": 11.020999999999958,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (17000 items)",
+            "value": 15.500382000000002,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (34000 items)",
+            "value": 29.462274999999977,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (17000 items)",
+            "value": 15.246757000000002,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (34000 items)",
+            "value": 31.22674200000006,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (17000 items)",
+            "value": 11.417106999999987,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (34000 items)",
+            "value": 21.882588999999996,
             "unit": "ms"
           }
         ]
