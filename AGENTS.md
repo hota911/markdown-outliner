@@ -19,8 +19,17 @@ When a change touches Obsidian-specific behavior or CSS (the plugin view, `src/o
 
 To try a change in the browser, run `npm run demo`. It serves a temporary copy of `samples/` and prints the URL; do not edit `samples/` in place.
 
+## Changes
+
+- One request, one pull request: start each feature or fix from `main`, not from the branch of another open pull request.
+- Every pull request with a user-facing change should be possible to try in the pull request preview (`npm run build:preview`, linked from the pull request by the `preview` workflow). The preview only opens `samples/*.md` and runs `src/preview/main.ts`, so add or extend a sample (or the preview wiring) in the same pull request. Features that only work in Obsidian cannot be shown there; say so in the pull request.
+- Behavior that differs by host goes through the `MountOptions` callbacks and the adapter (`src/ui/types.ts`); `src/ui/` has no Obsidian code. Date-dependent behavior takes today from `MountOptions.now`.
+- Keyboard edits that act on a neighboring item (merging with Backspace or Delete, moving, and so on) use the nearest item on screen, after the filter, folding and zoom, and leave hidden items untouched.
+- Recurring tasks (`🔁`) are handled by `src/recurrence.ts`, so they work without the Tasks plugin and outside Obsidian. Do not hand them to the Tasks plugin's API.
+
 ## Tests
 
+- When a Playwright test drags with the mouse, measure the target again after items get selected: the selection bar appears above the outline and moves the items down.
 - In `e2e/`, take UI labels from `t` in `e2e/fixtures.ts` (the English message catalog, `messages.en` in `src/ui/messages.ts`) instead of writing the English text. Keep role-based selectors such as `getByRole('button', { name: t.toolbar.save })`.
 
 ## Documentation
