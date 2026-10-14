@@ -1344,8 +1344,10 @@ export class Controller {
     this.render();
   };
 
-  searchInput = (value: string) => {
-    this.parseSearch(value);
+  // The filter follows the search box as it is typed, except while an IME is composing the text.
+  searchInput = (value: string, composing = false) => {
+    if (composing) this.parseSearch(value);
+    else this.applySearch(value);
     this.updateStar();
   };
 
