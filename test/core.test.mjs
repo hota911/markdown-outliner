@@ -134,6 +134,13 @@ test('両方にノートまたは子がある結合は拒否する', () => {
   assert.deepEqual(core.merge('- [ ] first\n- [ ] second\n', 0, 'next'), { text: '- [ ] firstsecond\n', line: 0, column: 5 });
 });
 
+test('空でノートも子もない項目だけを削除する', () => {
+  assert.deepEqual(core.remove('- [ ] a\n- [ ] \n- [ ] b\n', 1), { text: '- [ ] a\n- [ ] b\n', line: 1 });
+  for (const text of ['- [ ] a\n', '- [ ] \n  note\n', '- [ ] \n  - [ ] child\n', '- ![[work.md]]\n']) {
+    assert.deepEqual(core.remove(text, 0), { text, line: 0 });
+  }
+});
+
 test('先頭・末尾は変更せず、埋め込みと本文の境界をまたぐ結合は拒否する', () => {
   assert.deepEqual(core.merge('- [ ] only\n', 0, 'previous'), { text: '- [ ] only\n', line: 0, column: 0 });
   assert.deepEqual(core.merge('- [ ] only\n', 0, 'next'), { text: '- [ ] only\n', line: 0, column: 4 });

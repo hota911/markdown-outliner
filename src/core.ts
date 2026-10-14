@@ -351,6 +351,14 @@ export function merge(text: string, line: number, direction: 'previous' | 'next'
   return { ...result(doc, first.line), column: first.title.length };
 }
 
+// Deletes an item with no title, note or children. Any other item is left as it is.
+export function remove(text: string, line: number): EditResult {
+  const doc = target(text, line);
+  if (doc.row.kind === 'embed' || doc.row.title || doc.row.end !== doc.row.line + 1) return { text, line };
+  doc.lines.splice(line, 1);
+  return result(doc, line);
+}
+
 function shift(lines: string[], amount: number) {
   return lines.map(source => {
     if (!source.trim()) return source;
