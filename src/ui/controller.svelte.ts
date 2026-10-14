@@ -43,6 +43,9 @@ const nextStatus = (status: Status | null) => statuses[(statuses.indexOf(status!
 // Attachment that writes the model value into an input on every render. A `value` attribute
 // is not enough: Svelte compares with the previously rendered value, not with what the user
 // typed since, so undo back to that value would leave the typed text in place.
+export const isSearchShortcut = (event: KeyboardEvent) =>
+  (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'f';
+
 export const syncValue = (value: () => string) => (node: HTMLInputElement | HTMLTextAreaElement) => {
   const next = value();
   if (node.value !== next) node.value = next;
@@ -1933,5 +1936,15 @@ export class Controller {
       event.preventDefault();
       void this.saveAll();
     }
+    if (isSearchShortcut(event) && this.focusSearch()) event.preventDefault();
+  };
+
+  // Moves the focus to the search box with its text selected, as Cmd/Ctrl+F does.
+  focusSearch = () => {
+    const box = this.container?.querySelector<HTMLInputElement>('.title-search');
+    if (!box) return false;
+    box.focus();
+    box.select();
+    return true;
   };
 }

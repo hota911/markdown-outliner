@@ -191,6 +191,19 @@ describe('filtering', () => {
     expect(titleValues()).toEqual(['done top']);
   });
 
+  it('Cmd/Ctrl+F moves the focus to the search box with its text selected', async () => {
+    const { user, screen, row, titleValues } = await setup({ 'tasks.md': text });
+    const search = screen.getByRole('searchbox', { name: '語句・タグで絞り込み' });
+    await user.type(search, '#work{Enter}');
+    await user.click(row('open child #work').getByRole('textbox', { name: '項目の内容' }));
+    await user.keyboard('{Control>}f{/Control}');
+    expect(document.activeElement).toBe(search);
+    expect([search.selectionStart, search.selectionEnd]).toEqual([0, '#work'.length]);
+    await user.keyboard('{Meta>}f{/Meta}');
+    expect(document.activeElement).toBe(search);
+    expect(titleValues()).toEqual(['parent', 'open child #work']);
+  });
+
   const contextNote = '配下の項目が絞り込みに一致するため表示';
   const contextTitles = screen => screen.queryAllByRole('textbox', { name: '項目の内容', description: contextNote }).map(node => node.value);
   const depth = node => node.closest('.outline-item').style.getPropertyValue('--depth');

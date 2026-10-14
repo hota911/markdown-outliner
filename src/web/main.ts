@@ -4,6 +4,7 @@ import './web.css';
 import { languageOf, messages, serverErrorText } from '../ui/messages.ts';
 import { isMarkdownLink, linkCandidates, openMarkdownLink } from '../ui/links.ts';
 import { mountOutliner } from '../ui/mount.ts';
+import { isSearchShortcut } from '../ui/controller.svelte.ts';
 import type { Adapter, FileLink, Mounted, Preferences } from '../ui/types.ts';
 
 // Written into the page by server.mjs (see injectConfig).
@@ -79,4 +80,9 @@ const mounted: Mounted = mountOutliner(app, {
     localStorage.setItem(config.preferencesKey, JSON.stringify(value));
     return Promise.resolve();
   },
+});
+
+// Cmd/Ctrl+F also reaches the search box when the focus is outside the outliner (the page itself).
+window.addEventListener('keydown', event => {
+  if (!event.defaultPrevented && !event.isComposing && isSearchShortcut(event) && mounted.focusSearch()) event.preventDefault();
 });

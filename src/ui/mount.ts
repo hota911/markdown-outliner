@@ -7,12 +7,13 @@ import type { MountOptions, Mounted } from './types.ts';
 export function mountOutliner(container: HTMLElement, options: MountOptions): Mounted {
   const ctrl = new Controller(options);
   container.classList.add('outliner');
-  // Undo and save shortcuts only apply while focus is inside the outliner.
+  // Undo, save and search shortcuts only apply while focus is inside the outliner.
   container.addEventListener('keydown', ctrl.keyboard);
   const component = mount(Outliner, { target: container, props: { ctrl } });
   ctrl.attach(container);
   return {
     completeActive: ctrl.completeActive,
+    focusSearch: ctrl.focusSearch,
     openFile: ctrl.openFile,
     destroy() {
       ctrl.destroy();
