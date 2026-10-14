@@ -6,7 +6,7 @@ export type Status = 'todo' | 'in-progress' | 'done';
 export type CoreErrorCode =
   | 'noEditableItem' | 'titleNewline' | 'unknownStatus' | 'embedHasNoStatus' | 'noteFormat' | 'noteUnsafe'
   | 'invalidInsert' | 'invalidTag' | 'invalidMergeDirection' | 'mergeAcrossEmbed' | 'mergeAcrossText'
-  | 'mergeBothHaveContent' | 'unsafeIndent' | 'invalidMoveDirection' | 'invalidReorder' | 'reorderSiblingsOnly'
+  | 'mergeBothHaveContent' | 'mergeChildrenPastHidden' | 'unsafeIndent' | 'invalidMoveDirection' | 'invalidReorder' | 'reorderSiblingsOnly'
   | 'reorderAcrossText' | 'invalidReparent' | 'reparentIntoSelf' | 'reparentSiblingsOnly'
   | 'invalidInsertPosition' | 'insertPositionInSelection' | 'reparentIntoEmbed' | 'reparentAcrossText'
   | 'invalidFileNameInput' | 'invalidFileName' | 'extractEmbed' | 'notEmbed' | 'headingReadOnly' | 'insertNextToText';
@@ -327,16 +327,23 @@ export function insert(text: string, line: number | null, options: InsertOptions
   return result(doc, at);
 }
 
-export function merge(text: string, line: number, direction: 'previous' | 'next'): EditResult & { column: number } {
+// Merges the item at `line` with the item next to it, or with the item at `neighborLine` in
+// that direction, such as the nearest one a filter shows. The items in between are left as
+// they are; the later item then must not have children, which would have no place to go.
+export function merge(text: string, line: number, direction: 'previous' | 'next', neighborLine?: number): EditResult & { column: number } {
   if (!['previous', 'next'].includes(direction)) throw new CoreError('invalidMergeDirection');
   const doc = target(text, line);
   const index = doc.rows.indexOf(doc.row);
-  const neighbor = doc.rows[index + (direction === 'previous' ? -1 : 1)];
+  const neighbor = neighborLine === undefined ? doc.rows[index + (direction === 'previous' ? -1 : 1)] : doc.rows.find(row => row.line === neighborLine);
+  if (!neighbor && neighborLine !== undefined) throw new CoreError('noEditableItem');
   if (!neighbor) return { text, line, column: direction === 'previous' ? 0 : doc.row.title.length };
+  if (direction === 'previous' ? neighbor.line >= line : neighbor.line <= line) throw new CoreError('invalidMergeDirection');
   const first = direction === 'previous' ? neighbor : doc.row;
   const second = direction === 'previous' ? doc.row : neighbor;
   if (first.kind === 'heading' || second.kind === 'heading') throw new CoreError('mergeAcrossText');
   if (first.kind === 'embed' || second.kind === 'embed') throw new CoreError('mergeAcrossEmbed');
+  const between = doc.rows.slice(doc.rows.indexOf(first) + 1, doc.rows.indexOf(second));
+  if (between.length) return mergePast(doc, first, second, between);
   if (doc.lines.slice(first.end, second.line).some(value => value.trim())) throw new CoreError('mergeAcrossText');
   const firstHasContent = first.note.trim() || doc.rows.some(row => row.parentLine === first.line);
   const secondHasContent = second.note.trim() || doc.rows.some(row => row.parentLine === second.line);
@@ -351,12 +358,19 @@ export function merge(text: string, line: number, direction: 'previous' | 'next'
   return { ...result(doc, first.line), column: first.title.length };
 }
 
-// Deletes an item with no title, note or children. Any other item is left as it is.
-export function remove(text: string, line: number): EditResult {
-  const doc = target(text, line);
-  if (doc.row.kind === 'embed' || doc.row.title || doc.row.end !== doc.row.line + 1) return { text, line };
-  doc.lines.splice(line, 1);
-  return result(doc, line);
+// merge() of two items with other items between them, which stay where they are.
+function mergePast(doc: Scanned, first: ScannedRow, second: ScannedRow, between: ScannedRow[]) {
+  if (between.some(row => row.kind === 'heading')) throw new CoreError('mergeAcrossText');
+  const owned = (line: number) => doc.rows.some(row => row.line <= line && line < row.ownEnd);
+  if (doc.lines.slice(first.ownEnd, second.line).some((value, offset) => value.trim() && !owned(first.ownEnd + offset))) throw new CoreError('mergeAcrossText');
+  if (doc.rows.some(row => row.parentLine === second.line)) throw new CoreError('mergeChildrenPastHidden');
+  if (first.note.trim() && second.note.trim()) throw new CoreError('mergeBothHaveContent');
+  const match = item(doc.lines[first.line])!;
+  doc.lines[first.line] = match[1] + match[2] + ' ' + (match[3] === undefined ? '' : '[' + match[3] + '] ') + first.title + second.title;
+  const notes = shift(doc.lines.slice(second.line + 1, second.ownEnd), (first.depth - second.depth) * 2);
+  doc.lines.splice(second.line, second.end - second.line);
+  doc.lines.splice(first.ownEnd, 0, ...notes);
+  return { ...result(doc, first.line), column: first.title.length };
 }
 
 function shift(lines: string[], amount: number) {

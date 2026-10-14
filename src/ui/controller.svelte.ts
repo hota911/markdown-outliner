@@ -455,35 +455,20 @@ export class Controller {
     };
   }
 
-  // Backspace at the start or Delete at the end of a title. It merges with the item next to it
-  // only when that item is on screen, so that a filter or a fold never joins a hidden item.
-  // Otherwise an empty item is deleted and the caret goes to the nearest item on screen.
-  private joinOrRemove(path: string, row: KeyedRow, backwards: boolean) {
+  // Backspace at the start or Delete at the end of a title merges with the nearest item on
+  // screen, so that a filter or a fold never joins a hidden item.
+  private mergeOnScreen(path: string, row: KeyedRow, backwards: boolean) {
     const rows = this.rows(path), visible = this.onScreen(path);
     const index = rows.findIndex(value => value.line === row.line);
-    const neighbor = rows[index + (backwards ? -1 : 1)];
-    if (!neighbor) return;
-    if (visible(neighbor.line)) { this.merge(path, row, backwards); return; }
     const others = backwards ? rows.slice(0, index).reverse() : rows.slice(index + 1);
-    const next = others.find(value => visible(value.line) && (value.kind === 'task' || value.kind === 'bullet'));
-    if (!next) return;
-    let removed = false;
-    this.mutate(path, text => {
-      const result = core.remove(text, row.line);
-      removed = result.text !== text;
-      return removed ? { text: result.text, line: next.line - (next.line > row.line ? 1 : 0) } : result;
-    }, 'title');
-    const focused = this.activeElement;
-    if (removed && focused instanceof HTMLTextAreaElement && focused.dataset.field === 'title') {
-      const column = backwards ? focused.value.length : 0;
-      focused.setSelectionRange(column, column);
-    }
+    const neighbor = others.find(value => visible(value.line));
+    if (neighbor) this.merge(path, row, backwards, neighbor.line);
   }
 
-  private merge(path: string, row: KeyedRow, backwards: boolean) {
+  private merge(path: string, row: KeyedRow, backwards: boolean, neighborLine: number) {
     let column: number | undefined;
     this.mutate(path, text => {
-      const result = core.merge(text, row.line, backwards ? 'previous' : 'next');
+      const result = core.merge(text, row.line, backwards ? 'previous' : 'next', neighborLine);
       column = result.column;
       return result;
     }, 'title');
@@ -731,7 +716,7 @@ export class Controller {
     }
     if (collapsedSelection && (atStart || atEnd) && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
       event.preventDefault();
-      this.joinOrRemove(path, row, atStart);
+      this.mergeOnScreen(path, row, atStart);
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (event.shiftKey) this.toggleNote(path, row.line, field);
