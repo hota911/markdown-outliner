@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791966633305,
+  "lastUpdate": 1791967307199,
   "repoUrl": "https://github.com/hota911/markdown-outliner",
   "entries": {
     "Performance": [
@@ -1871,6 +1871,110 @@ window.BENCHMARK_DATA = {
           {
             "name": "filter by a status (34000 items)",
             "value": 22.915648000000033,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "158243242+devin-ai-integration[bot]@users.noreply.github.com",
+            "name": "devin-ai-integration[bot]",
+            "username": "devin-ai-integration[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "236858a97f929bd693202f6d5066d13e09e774cd",
+          "message": "Filter a bullet by the status of its nearest task (#70)\n\nCo-authored-by: Devin AI <158243242+devin-ai-integration[bot]@users.noreply.github.com>\nCo-authored-by: Hiroyuki Ota <hiroyuki.ot@gmail.com>",
+          "timestamp": "2026-10-14T08:41:29Z",
+          "tree_id": "9f68ee54a2df3e788df5382989c10f944efb73db",
+          "url": "https://github.com/hota911/markdown-outliner/commit/236858a97f929bd693202f6d5066d13e09e774cd"
+        },
+        "date": 1791967307184,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "open: parse the file and key its rows (17000 items)",
+            "value": 23.033508000000012,
+            "unit": "ms"
+          },
+          {
+            "name": "open: parse the file and key its rows (34000 items)",
+            "value": 36.524653,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (17000 items)",
+            "value": 34.57022699999999,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (34000 items)",
+            "value": 66.30614800000001,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (17000 items)",
+            "value": 27.830442000000005,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (34000 items)",
+            "value": 51.985207,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (17000 items)",
+            "value": 40.81583999999998,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (34000 items)",
+            "value": 84.75120500000003,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (17000 items)",
+            "value": 2.7709600000000023,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (34000 items)",
+            "value": 5.945065,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (17000 items)",
+            "value": 8.308942000000002,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (34000 items)",
+            "value": 15.465710999999999,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (17000 items)",
+            "value": 7.005841000000004,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (34000 items)",
+            "value": 13.985693999999967,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (17000 items)",
+            "value": 5.663341000000003,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (34000 items)",
+            "value": 11.913175999999964,
             "unit": "ms"
           }
         ]
