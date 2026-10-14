@@ -137,4 +137,27 @@ describe('bookmarks', () => {
     // The old file bookmark already holds this view.
     expect(screen.getByRole('button', { name: '今の表示のブックマークを解除' })).toBeTruthy();
   });
+
+  it('moves a bookmark with Alt+↑/↓, keeps the focus on it, saves the new order, and keeps unreadable bookmarks in the list', async () => {
+    const view = (id, file) => ({ id, kind: 'view', file, status: 'all', tags: [], searchText: '' });
+    const { user, screen, stored } = await setupWithStore({ bookmarks: [view('t', 'tasks.md'), view('o', 'other.md'), { id: 'broken' }] });
+    const order = () => screen.getAllByRole('listitem').map(item => item.querySelector('.bookmark-open').textContent);
+
+    screen.getByRole('button', { name: 'tasks.md' }).focus();
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
+    expect(order()).toEqual(['other.md', 'tasks.md', '読み込めないブックマーク']);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'tasks.md' }));
+    await flush();
+    expect(stored.at(-1).bookmarks.map(bookmark => bookmark.id)).toEqual(['o', 't', 'broken']);
+
+    // Past the end nothing moves; the handle takes the same keys. (jsdom has no pointer capture, so it is not clicked.)
+    screen.getByRole('button', { name: '読み込めないブックマーク を移動（ドラッグ / Alt+↑↓）' }).focus();
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
+    expect(order()).toEqual(['other.md', 'tasks.md', '読み込めないブックマーク']);
+    await user.keyboard('{Alt>}{ArrowUp}{ArrowUp}{/Alt}');
+    expect(order()).toEqual(['読み込めないブックマーク', 'other.md', 'tasks.md']);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '読み込めないブックマーク を移動（ドラッグ / Alt+↑↓）' }));
+    await flush();
+    expect(stored.at(-1).bookmarks.map(bookmark => bookmark.id)).toEqual(['broken', 'o', 't']);
+  });
 });

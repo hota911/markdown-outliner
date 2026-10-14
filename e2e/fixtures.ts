@@ -60,6 +60,32 @@ async function itemLine(page: Page, title: string) {
   return { field, line: field.locator('xpath=ancestor::div[contains(@class, "outline-line")][1]') };
 }
 
+/**
+ * Bookmarks the current view, stores copies of that bookmark named `names` in its place, and reloads
+ * the page to show them. The copies open the same view, which is enough to test the list itself.
+ */
+export async function storeBookmarks(page: Page, names: string[]) {
+  const sidebar = page.getByRole('complementary', { name: t.bookmarks.heading });
+  await sidebar.getByRole('button', { name: t.bookmarks.addView }).click();
+  await expect(sidebar.getByRole('listitem')).toHaveCount(1);
+  await page.evaluate(names => {
+    for (const key of Object.keys(localStorage)) {
+      const preferences = JSON.parse(localStorage.getItem(key)!) as { bookmarks?: { id: string; name: string }[] };
+      if (!preferences.bookmarks?.length) continue;
+      const [first] = preferences.bookmarks;
+      preferences.bookmarks = names.map(name => ({ ...first, id: `${first.id}-${name}`, name }));
+      localStorage.setItem(key, JSON.stringify(preferences));
+    }
+  }, names);
+  await page.reload();
+  await expect(sidebar.getByRole('listitem')).toHaveCount(names.length);
+}
+
+/** The bookmark names in the sidebar, in screen order. */
+export function bookmarkNames(page: Page) {
+  return page.getByRole('complementary', { name: t.bookmarks.heading }).locator('.bookmark-open').allTextContents();
+}
+
 /** How far the content of the element is wider than the element, in pixels; 0 or less means no horizontal scrollbar. */
 export function horizontalOverflow(locator: Locator) {
   return locator.evaluate(node => node.scrollWidth - node.clientWidth);

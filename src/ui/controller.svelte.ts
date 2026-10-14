@@ -3,7 +3,7 @@ import * as core from '../core.ts';
 import type { Status } from '../core.ts';
 import { merge3, type Side } from '../three-way-merge.ts';
 import { RowKeys, type KeyedRow } from './keys.ts';
-import { bookmarkView, sameView, savedView, validBookmark, type BookmarkView, type SavedView } from './bookmarks.ts';
+import { bookmarkView, moveEntry, sameView, savedView, validBookmark, type BookmarkView, type SavedView } from './bookmarks.ts';
 import { filterActive, rowMatches, statuses, type FilterQuery, type TextQuery } from './filter.ts';
 import { errorText, messages, type Messages } from './messages.ts';
 import { commandOptions, fileOptions, relativePath, sortTags, tagOptions, trigger, type Slash, type SlashCommand } from './slash.ts';
@@ -1424,6 +1424,16 @@ export class Controller {
 
   removeBookmark = (bookmark: unknown) => {
     this.preferences.bookmarks.splice(this.preferences.bookmarks.indexOf(bookmark), 1);
+    this.persistPreferences();
+    this.render();
+  };
+
+  // `to` is the index of the bookmark after the move; a move past either end does nothing.
+  moveBookmark = (bookmark: unknown, to: number) => {
+    const bookmarks = this.preferences.bookmarks;
+    const from = bookmarks.indexOf(bookmark);
+    if (from < 0 || to === from || to < 0 || to >= bookmarks.length) return;
+    moveEntry(bookmarks, from, to);
     this.persistPreferences();
     this.render();
   };

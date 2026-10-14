@@ -21,7 +21,13 @@
 .outliner .search-star[aria-pressed=true] { color: var(--color-yellow); }
 .outliner .bookmark-actions { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .outliner .bookmark-list { list-style: none; padding: 0; margin: 0; }
-.outliner .bookmark-item { display: flex; align-items: center; gap: 2px; margin-bottom: 4px; }
+.outliner .bookmark-item { position: relative; display: flex; align-items: center; gap: 2px; margin-bottom: 4px; }
+/* The handle takes the pointer while dragging: no scrolling by touch and no text selection. */
+.outliner .bookmark-handle { cursor: grab; color: var(--text-faint); touch-action: none; user-select: none; -webkit-user-select: none; }
+.outliner .bookmark-list.is-dragging { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+/* The insertion line (the outline's drop-before / drop-after, below) sits in the gap between two bookmarks. */
+.outliner .bookmark-item.drop-before::after { top: -3px; }
+.outliner .bookmark-item.drop-after::after { bottom: -3px; }
 /* Long names wrap. Obsidian gives every button a fixed height and a centered flex layout, which would let
    the wrapped lines spill over the next bookmark, so the buttons here set their own display and height. */
 .outliner .bookmark-actions button { font-size: 11px; height: auto; white-space: normal; overflow-wrap: anywhere; }
