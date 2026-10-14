@@ -170,6 +170,15 @@ describe('filtering', () => {
     expect(titleValues()).toEqual(['parent', 'open child #work', 'doing #home']);
   });
 
+  it('a bullet is filtered by the status of its nearest task', async () => {
+    const bullets = '- [x] done task\n  - done note\n    - deeper note\n- [ ] open task\n  - open note\n- loose bullet\n';
+    const { user, screen, titleValues } = await setup({ 'tasks.md': bullets });
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'not-done');
+    expect(titleValues()).toEqual(['open task', 'open note', 'loose bullet']);
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'done');
+    expect(titleValues()).toEqual(['done task', 'done note', 'deeper note']);
+  });
+
   it('status options show the same icon as the items with that status and are named without it', async () => {
     const { screen, container } = await setup({ 'tasks.md': text });
     const select = screen.getByRole('combobox', { name: '表示する状態' });
