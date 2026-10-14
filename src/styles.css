@@ -150,7 +150,8 @@
 .outliner .heading-line[data-level="2"] .heading-title { font-size: 17px; }
 .outliner .heading-title mark { background: var(--text-highlight-bg); color: inherit; border-radius: 2px; }
 .outliner .zoom-heading .heading-title { padding: 0; font-size: 24px; line-height: 32px; }
-.outliner .embed-actions { display: flex; gap: 12px; }
+.outliner .embed-actions { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; }
+.outliner .embed-confirm { font-size: 11px; color: var(--text-normal); }
 .outliner .embed-actions > .quiet { font-size: 11px; padding: 0 0 4px; }
 /* The rename field replaces the heading text in place, so it keeps the heading's font and line box. */
 .outliner .embed-title.is-renaming { display: inline-flex; align-items: baseline; min-width: 0; max-width: 100%; }

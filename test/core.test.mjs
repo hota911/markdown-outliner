@@ -394,6 +394,15 @@ test('名前の変更ではフォルダーを残してファイル名だけを�
   assert.equal(core.usableBaseName('done jobs 2'), true);
 });
 
+test('子項目もノートもない埋め込み行だけを消す', () => {
+  assert.deepEqual(core.removeEmbed('- [ ] a\n  - ![[work.md]]\n  - [ ] b\n', 1), { text: '- [ ] a\n  - [ ] b\n', line: 0 });
+  assert.deepEqual(core.removeEmbed('- ![[work.md]]\r\n- [ ] b\r\n', 0), { text: '- [ ] b\r\n', line: 0 });
+  assert.equal(core.removeEmbed('- ![[work.md]]\n', 0).text, '');
+  assert.throws(() => core.removeEmbed('- [ ] task\n', 0), { code: 'notEmbed' });
+  assert.throws(() => core.removeEmbed('- ![[work.md]]\n  - [ ] child\n', 0), { code: 'embedHasContent' });
+  assert.throws(() => core.removeEmbed('- ![[work.md]]\n  note\n', 0), { code: 'embedHasContent' });
+});
+
 test('埋め込み行の参照先だけを書き換え、ホストが書き換えた拡張子なしのリンクも置き換える', () => {
   assert.deepEqual(core.retargetEmbed('- [ ] a\n  - ![[sub/work.md]]\n', 1, 'sub/jobs.md'), { text: '- [ ] a\n  - ![[sub/jobs.md]]\n', line: 1 });
   assert.equal(core.retargetEmbed('- ![[jobs]]\n', 0, 'jobs.md').text, '- ![[jobs.md]]\n');

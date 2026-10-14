@@ -17,7 +17,8 @@ export type ServerErrorCode =
   | 'notMarkdown' | 'selectedFileOnly' | 'fileMissing' | 'outsideWorkspace' | 'fileTooLarge' | 'invalidContent'
   | 'saveBusy' | 'externalChange' | 'externalChangeBeforeSave' | 'saveRace' | 'createInSingleFile' | 'folderMissing'
   | 'createOutsideFolder' | 'fileExists' | 'badToken' | 'badOrigin' | 'contentTooLarge' | 'notFound' | 'hostRejected'
-  | 'invalidName' | 'renameOtherFolder' | 'renameInSingleFile' | 'renameSymlink' | 'internal';
+  | 'invalidName' | 'renameOtherFolder' | 'renameInSingleFile' | 'renameSymlink' | 'trashInSingleFile' | 'trashSymlink'
+  | 'trashNotFolder' | 'internal';
 
 const enStatus: Record<Status, string> = { todo: 'Not started', 'in-progress': 'In progress', done: 'Done' };
 const jaStatus: Record<Status, string> = { todo: '未着手', 'in-progress': '進行中', done: '完了' };
@@ -127,6 +128,11 @@ const en = {
     rename: 'Rename',
     renameLabel: (embed: string) => `New name for ${embed}, without .md`,
     renameHint: 'Enter: rename · Esc: cancel',
+    deleteTitle: 'Delete the embedded file',
+    delete: 'Delete',
+    deleteConfirm: (embed: string) => `Move ${embed} to the trash and remove this embed?`,
+    deleteConfirmButton: 'Move to trash',
+    deleteCancel: 'Cancel',
     zoomTitlePlaceholder: 'Enter a title',
     zoomTitle: 'Title of the zoomed item',
     zoomNoteTitle: 'Edit the note of the zoomed item',
@@ -213,6 +219,12 @@ const en = {
     renameFailed: (detail: string) => `Could not rename the file: ${detail}`,
     renameEmbedNotFound: (name: string) => `Renamed the file to ${name}, but could not update the link: no single embed of the old name was found. The text was left unchanged.`,
     renamed: (name: string) => `Renamed the file to ${name}. The undo history was cleared.`,
+    deleteBusy: 'Cannot delete while saving or during a save conflict.',
+    deleteUnsaved: 'Could not save the unsaved input. Save it, then delete.',
+    deleteEmbeddedElsewhere: (name: string) => `${name} is also embedded elsewhere. Remove the other embeds first.`,
+    deleteFailed: (detail: string) => `Could not delete the file: ${detail}`,
+    deleteEmbedNotFound: (name: string) => `Moved ${name} to the trash, but could not remove the embed: no single embed of it was found. The text was left unchanged.`,
+    deleted: (name: string) => `Moved ${name} to the trash and removed the embed. Undo brings back only the embed line.`,
   },
 
   core: {
@@ -246,6 +258,7 @@ const en = {
     invalidFileName: 'Invalid file name.',
     extractEmbed: 'An embed line cannot be moved to a file.',
     notEmbed: 'There is no embed on that line.',
+    embedHasContent: 'Cannot remove an embed that has children or a note.',
   } satisfies Record<CoreErrorCode, string>,
 
   server: {
@@ -272,6 +285,9 @@ const en = {
     renameOtherFolder: 'Only the file name can be changed, not its folder.',
     renameInSingleFile: 'Cannot rename files when a single file was opened.',
     renameSymlink: 'Cannot rename a symbolic link.',
+    trashInSingleFile: 'Cannot delete files when a single file was opened.',
+    trashSymlink: 'Cannot delete a symbolic link.',
+    trashNotFolder: 'Cannot move the file to the trash: .trash in the selected folder is not a folder.',
     internal: 'The file operation failed. Keep your input and try again.',
   } satisfies Record<ServerErrorCode, string>,
 
@@ -398,6 +414,11 @@ const ja: Messages = {
     rename: '名前を変更',
     renameLabel: embed => embed + ' の新しいファイル名（.md を除く）',
     renameHint: 'Enter: 変更 · Esc: 取り消し',
+    deleteTitle: '埋め込み先のファイルを削除',
+    delete: '削除',
+    deleteConfirm: embed => embed + ' をゴミ箱に移し、この埋め込みを消しますか？',
+    deleteConfirmButton: 'ゴミ箱に移す',
+    deleteCancel: 'キャンセル',
     zoomTitlePlaceholder: 'タイトルを入力',
     zoomTitle: 'ズーム対象のタイトル',
     zoomNoteTitle: 'ズーム対象のノートを編集',
@@ -481,6 +502,12 @@ const ja: Messages = {
     renameFailed: detail => 'ファイル名を変更できませんでした: ' + detail,
     renameEmbedNotFound: name => name + ' に名前を変更しましたが、リンクを更新できませんでした。元の名前の埋め込みが1つに定まらないため、本文は変更していません。',
     renamed: name => name + ' に名前を変更しました。Undo の履歴は消去しました。',
+    deleteBusy: '保存処理中または保存競合中は削除できません。',
+    deleteUnsaved: '未保存の入力を保存できませんでした。保存してから削除してください。',
+    deleteEmbeddedElsewhere: name => name + ' はほかの場所にも埋め込まれています。先にほかの埋め込みを消してください。',
+    deleteFailed: detail => 'ファイルを削除できませんでした: ' + detail,
+    deleteEmbedNotFound: name => name + ' をゴミ箱に移しましたが、埋め込みを消せませんでした。埋め込みが1つに定まらないため、本文は変更していません。',
+    deleted: name => name + ' をゴミ箱に移し、埋め込みを消しました。Undo で戻るのは埋め込みの行だけです。',
   },
 
   core: {
@@ -514,6 +541,7 @@ const ja: Messages = {
     invalidFileName: 'ファイル名が不正です',
     extractEmbed: '埋め込みの行はファイルにできません',
     notEmbed: '指定行に埋め込みがありません',
+    embedHasContent: '子項目やノートがある埋め込みは消せません',
   },
 
   server: {
@@ -540,6 +568,9 @@ const ja: Messages = {
     renameOtherFolder: 'ファイル名だけを変更でき、フォルダーは変更できません。',
     renameInSingleFile: 'ファイルを指定して開いたときはファイル名を変更できません。',
     renameSymlink: 'シンボリックリンクの名前は変更できません。',
+    trashInSingleFile: 'ファイルを指定して開いたときはファイルを削除できません。',
+    trashSymlink: 'シンボリックリンクは削除できません。',
+    trashNotFolder: 'ゴミ箱に移せません。選択したフォルダーの .trash がフォルダーではありません。',
     internal: 'ファイル操作に失敗しました。入力を保持してやり直してください。',
   },
 

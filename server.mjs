@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
-import { link, lstat, readFile, readdir, realpath, writeFile, rename, stat, unlink } from 'node:fs/promises';
+import { link, lstat, mkdir, readFile, readdir, realpath, writeFile, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -160,6 +160,36 @@ export async function createOutlinerApi(workspace) {
     } finally { busy.delete(full); }
   }
 
+  // Moves a file into `.trash/` at the root of the folder; files are never deleted. The trash is
+  // flat, so a number is added to the name when the trash already holds one by that name.
+  async function trashFile(relative) {
+    if (selectedFile) throw new RequestError(403, 'trashInSingleFile');
+    const full = await markdownFile(relative);
+    // `full` is the resolved path, so a symlink would move its target instead of the link.
+    const directory = await realpath(path.dirname(path.resolve(root, relative)));
+    if (path.join(directory, path.posix.basename(relative)) !== full) throw new RequestError(400, 'trashSymlink');
+    const trash = path.join(root, '.trash');
+    await mkdir(trash, { recursive: true });
+    // lstat does not follow a symlink, which could lead out of the folder.
+    if (!(await lstat(trash)).isDirectory()) throw new RequestError(409, 'trashNotFolder');
+    if (busy.has(full)) throw new RequestError(409, 'saveBusy');
+    busy.add(full);
+    try {
+      const base = path.basename(full, '.md');
+      for (let number = 1; ; number++) {
+        const destination = path.join(trash, (number === 1 ? base : `${base} ${number}`) + '.md');
+        // A hard link fails when anything already exists at the destination, unlike rename().
+        try { await link(full, destination); }
+        catch (error) {
+          if (error.code === 'EEXIST') continue;
+          throw error;
+        }
+        await unlink(full);
+        return {};
+      }
+    } finally { busy.delete(full); }
+  }
+
   async function handleApi(request, response, url, expectedHost) {
     if (request.method === 'GET' && url.pathname === '/api/files') return sendJson(response, 200, selectedFile ? [initialFile] : await filesIn(root));
     if (request.method === 'GET' && url.pathname === '/api/file') {
@@ -167,7 +197,7 @@ export async function createOutlinerApi(workspace) {
       return sendJson(response, 200, { text, revision: revisionOf(text) });
     }
     const write = ['PUT', 'POST'].includes(request.method) && url.pathname === '/api/file'
-      || request.method === 'POST' && url.pathname === '/api/rename';
+      || request.method === 'POST' && ['/api/rename', '/api/trash'].includes(url.pathname);
     if (write) {
       if (request.headers['x-outliner-token'] !== token) throw new RequestError(403, 'badToken');
       if (request.headers.origin && request.headers.origin !== `http://${expectedHost}`) throw new RequestError(403, 'badOrigin');
@@ -183,6 +213,7 @@ export async function createOutlinerApi(workspace) {
       catch { throw new RequestError(400, 'invalidContent'); }
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new RequestError(400, 'invalidContent');
       if (url.pathname === '/api/rename') return sendJson(response, 200, await renameFile(data.from, data.to));
+      if (url.pathname === '/api/trash') return sendJson(response, 200, await trashFile(data.path));
       const file = url.searchParams.get('path');
       return sendJson(response, 200, request.method === 'PUT' ? await save(file, data.text, data.revision) : await create(file, data.text));
     }

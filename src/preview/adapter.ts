@@ -7,7 +7,7 @@ const parentOf = (path: string) => path.split('/').slice(0, -1).join('/');
 /**
  * An adapter that keeps the files in memory, for the static preview build. It fails with the same
  * error codes as server.mjs where the page depends on them: a save with a stale revision, a create
- * or rename onto an existing file, and an invalid new name.
+ * or rename onto an existing file, an invalid new name, and moving a missing file to the trash.
  */
 export function createMemoryAdapter(seed: Record<string, string>, t: Messages): Adapter {
   const files = new Map(Object.entries(seed));
@@ -56,6 +56,12 @@ export function createMemoryAdapter(seed: Record<string, string>, t: Messages): 
       files.delete(path);
       files.set(newPath, text);
       revisions.set(newPath, revisions.get(path)!);
+      revisions.delete(path);
+    }),
+    // The preview has no trash to restore from; the file is only removed from memory.
+    trash: path => settle(() => {
+      existing(path);
+      files.delete(path);
       revisions.delete(path);
     }),
   };

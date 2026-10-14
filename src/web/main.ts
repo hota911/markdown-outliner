@@ -43,6 +43,9 @@ if (config.canCreate) {
   adapter.rename = async (from, to) => {
     await request('/api/rename', { method: 'POST', headers: writeHeaders, body: JSON.stringify({ from, to }) });
   };
+  adapter.trash = async file => {
+    await request('/api/trash', { method: 'POST', headers: writeHeaders, body: JSON.stringify({ path: file }) });
+  };
 }
 
 let preferences: Preferences = { bookmarks: [] };

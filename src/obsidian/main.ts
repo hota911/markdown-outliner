@@ -83,6 +83,10 @@ function mountInView(view: ItemView, plugin: MarkdownOutlinerPlugin, drafts: Map
         if (vault.getFileByPath(path) || vault.getFolderByPath(path)) throw new Error(t.fileExists);
         await view.app.fileManager.renameFile(file, path);
       },
+      // FileManager#trashFile follows the user's "Deleted files" setting, as Obsidian's own Delete command does.
+      trash: async relative => {
+        await view.app.fileManager.trashFile(resolve(relative));
+      },
     },
   });
 }

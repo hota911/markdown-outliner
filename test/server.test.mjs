@@ -247,6 +247,75 @@ test('does not rename through a symbolic link', async t => {
   assert.equal(await readFile(path.join(directory, 'real.md'), 'utf8'), 'real\n');
 });
 
+const trashRequest = (base, file, authentication) => fetch(`${base}/api/trash`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Outliner-Token': authentication },
+  body: JSON.stringify({ path: file })
+});
+
+async function startServer(t, directory) {
+  const server = await createOutlinerServer(directory, { webRoot });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  return { base, token: configOf(await (await fetch(base)).text()).token };
+}
+
+test('moves a file into .trash at the root without overwriting what the trash holds', async t => {
+  const parent = await mkdtemp(path.join(tmpdir(), 'markdown-outliner-trash-'));
+  const directory = path.join(parent, 'root');
+  await mkdir(path.join(directory, 'notes', 'deep'), { recursive: true });
+  await writeFile(path.join(directory, 'notes', 'work.md'), '- [ ] job\n');
+  await writeFile(path.join(directory, 'notes', 'deep', 'work.md'), '- [ ] deep job\n');
+  await writeFile(path.join(directory, 'keep.md'), 'keep\n');
+  await writeFile(path.join(parent, 'outside.md'), 'outside\n');
+  const { base, token: trashToken } = await startServer(t, directory);
+  const files = async () => (await (await fetch(`${base}/api/files`)).json()).sort();
+
+  const first = await trashRequest(base, 'notes/work.md', trashToken);
+  assert.equal(first.status, 200);
+  assert.equal((await trashRequest(base, 'notes/deep/work.md', trashToken)).status, 200);
+  // The trash is skipped by the file list, like every dot folder.
+  assert.deepEqual(await files(), ['keep.md']);
+  assert.equal(await readFile(path.join(directory, '.trash', 'work.md'), 'utf8'), '- [ ] job\n');
+  assert.equal(await readFile(path.join(directory, '.trash', 'work 2.md'), 'utf8'), '- [ ] deep job\n');
+
+  const rejected = [
+    ['notes/work.md', 404, 'fileMissing'],
+    ['../outside.md', 403, 'outsideWorkspace'],
+    ['notes/plain.txt', 400, 'notMarkdown'],
+    [42, 400, 'notMarkdown'],
+  ];
+  for (const [file, status, code] of rejected) {
+    const response = await trashRequest(base, file, trashToken);
+    assert.equal(response.status, status, String(file));
+    const body = await response.text();
+    assert.deepEqual(JSON.parse(body), { code }, String(file));
+    assert.doesNotMatch(body, new RegExp(parent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+  assert.equal((await trashRequest(base, 'keep.md', 'wrong')).status, 403);
+  assert.equal(await readFile(path.join(directory, 'keep.md'), 'utf8'), 'keep\n');
+  assert.equal(await readFile(path.join(parent, 'outside.md'), 'utf8'), 'outside\n');
+});
+
+test('does not move a symbolic link, or into a .trash that is not a folder', async t => {
+  const parent = await mkdtemp(path.join(tmpdir(), 'markdown-outliner-trash-link-'));
+  const directory = path.join(parent, 'root');
+  await mkdir(directory);
+  await writeFile(path.join(directory, 'real.md'), 'real\n');
+  await symlink(path.join(directory, 'real.md'), path.join(directory, 'link.md'));
+  await mkdir(path.join(parent, 'elsewhere'));
+  await symlink(path.join(parent, 'elsewhere'), path.join(directory, '.trash'));
+  const { base, token: trashToken } = await startServer(t, directory);
+  const linked = await trashRequest(base, 'link.md', trashToken);
+  assert.equal(linked.status, 400);
+  assert.deepEqual(await linked.json(), { code: 'trashSymlink' });
+  const escaped = await trashRequest(base, 'real.md', trashToken);
+  assert.equal(escaped.status, 409);
+  assert.deepEqual(await escaped.json(), { code: 'trashNotFolder' });
+  assert.equal(await readFile(path.join(directory, 'real.md'), 'utf8'), 'real\n');
+  await assert.rejects(readFile(path.join(parent, 'elsewhere', 'real.md'), 'utf8'));
+});
+
 test('every error code the server returns has text in English and Japanese', async () => {
   const source = await readFile(new URL('../server.mjs', import.meta.url), 'utf8');
   const codes = [...source.matchAll(/new RequestError\(\d+, '(\w+)'\)/g)].map(match => match[1]).concat('internal');
@@ -300,6 +369,9 @@ test('single-file mode lists, reads and saves only the selected Markdown file', 
   const deniedRename = await renameRequest(singleOrigin, 'TODO.md', 'DONE.md', singleToken);
   assert.equal(deniedRename.status, 403);
   assert.deepEqual(await deniedRename.json(), { code: 'renameInSingleFile' });
+  const deniedTrash = await trashRequest(singleOrigin, 'TODO.md', singleToken);
+  assert.equal(deniedTrash.status, 403);
+  assert.deepEqual(await deniedTrash.json(), { code: 'trashInSingleFile' });
   assert.equal(await readFile(selected, 'utf8'), changed);
 
   await rename(selected, path.join(directory, 'original.md'));
