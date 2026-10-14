@@ -134,6 +134,23 @@ test('両方にノートまたは子がある結合は拒否する', () => {
   assert.deepEqual(core.merge('- [ ] first\n- [ ] second\n', 0, 'next'), { text: '- [ ] firstsecond\n', line: 0, column: 5 });
 });
 
+test('間の項目をそのまま残して、指定した項目と結合する', () => {
+  assert.deepEqual(core.merge('- [ ] a\n- [x] h\n  - [ ] hc\n- [ ] b\n  memo\n', 3, 'previous', 0), {
+    text: '- [ ] ab\n  memo\n- [x] h\n  - [ ] hc\n', line: 0, column: 1
+  });
+  assert.deepEqual(core.merge('- [ ] a\n- [x] h\n- [ ] b\n', 0, 'next', 2), { text: '- [ ] ab\n- [x] h\n', line: 0, column: 1 });
+  assert.deepEqual(core.merge('- [ ] a\n  - [x] h\n  - [ ] b\n    memo\n', 2, 'previous', 0), { text: '- [ ] ab\n  memo\n  - [x] h\n', line: 0, column: 1 });
+  assert.deepEqual(core.merge('- [ ] a\n- [ ] b\n', 1, 'previous', 0), { text: '- [ ] ab\n', line: 0, column: 1 });
+});
+
+test('間に項目があるときは、子のある項目、両方のノート、見出しをまたぐ結合を拒否する', () => {
+  assert.throws(() => core.merge('- [ ] a\n- [x] h\n- [ ] b\n  - [ ] c\n', 2, 'previous', 0), { code: 'mergeChildrenPastHidden' });
+  assert.throws(() => core.merge('- [ ] a\n  n1\n- [x] h\n- [ ] b\n  n2\n', 3, 'previous', 0), { code: 'mergeBothHaveContent' });
+  assert.throws(() => core.merge('# H1\n- [ ] a\n# H2\n- [ ] b\n', 3, 'previous', 1), { code: 'mergeAcrossText' });
+  assert.throws(() => core.merge('- [ ] a\n- [x] h\n- [ ] b\n', 0, 'previous', 2), { code: 'invalidMergeDirection' });
+  assert.throws(() => core.merge('- [ ] a\n- [ ] b\n', 0, 'next', 5), { code: 'noEditableItem' });
+});
+
 test('先頭・末尾は変更せず、埋め込みと本文の境界をまたぐ結合は拒否する', () => {
   assert.deepEqual(core.merge('- [ ] only\n', 0, 'previous'), { text: '- [ ] only\n', line: 0, column: 0 });
   assert.deepEqual(core.merge('- [ ] only\n', 0, 'next'), { text: '- [ ] only\n', line: 0, column: 4 });

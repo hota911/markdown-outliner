@@ -478,10 +478,35 @@ export class Controller {
     this.mutate(path, text => core.insert(text, row.line, { ...this.insertion(false), kind, before: true }), 'title', 1);
   }
 
-  private merge(path: string, row: KeyedRow, backwards: boolean) {
+  // Lines of `path` on screen: shown by the filter, inside the zoomed item and not folded away.
+  private onScreen(path: string) {
+    const rows = this.rows(path);
+    const byLine = new Map(rows.map(row => [row.line, row]));
+    const shown = this.shown(path, this.docs.get(path)!.text);
+    const root = this.zoomRoot(path);
+    return (line: number) => {
+      if (!shown.has(line) || root && !(line > root.line && line < root.end)) return false;
+      for (let ancestor = byLine.get(line)?.parentLine ?? null; ancestor !== null; ancestor = byLine.get(ancestor)?.parentLine ?? null) {
+        if (this.collapsed.has(byLine.get(ancestor)!.key)) return false;
+      }
+      return true;
+    };
+  }
+
+  // Backspace at the start or Delete at the end of a title merges with the nearest item on
+  // screen, so that a filter or a fold never joins a hidden item.
+  private mergeOnScreen(path: string, row: KeyedRow, backwards: boolean) {
+    const rows = this.rows(path), visible = this.onScreen(path);
+    const index = rows.findIndex(value => value.line === row.line);
+    const others = backwards ? rows.slice(0, index).reverse() : rows.slice(index + 1);
+    const neighbor = others.find(value => visible(value.line));
+    if (neighbor) this.merge(path, row, backwards, neighbor.line);
+  }
+
+  private merge(path: string, row: KeyedRow, backwards: boolean, neighborLine: number) {
     let column: number | undefined;
     this.mutate(path, text => {
-      const result = core.merge(text, row.line, backwards ? 'previous' : 'next');
+      const result = core.merge(text, row.line, backwards ? 'previous' : 'next', neighborLine);
       column = result.column;
       return result;
     }, 'title');
@@ -798,12 +823,7 @@ export class Controller {
     }
     if (collapsedSelection && (atStart || atEnd) && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
       event.preventDefault();
-      if (zoomRoot) {
-        const rows = this.rows(path);
-        const neighbor = rows[rows.findIndex(value => value.line === row.line) + (atStart ? -1 : 1)];
-        if (!neighbor || neighbor.line <= zoomRoot.line || neighbor.line >= zoomRoot.end) return;
-      }
-      this.merge(path, row, atStart);
+      this.mergeOnScreen(path, row, atStart);
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (event.shiftKey) this.toggleNote(path, row.line, field);
@@ -1108,11 +1128,17 @@ export class Controller {
     const rows = this.rows(path, text);
     const byLine = new Map(rows.map(row => [row.line, row]));
     const keptLines = new Set(this.keepFor(path));
+    // A bullet has no status of its own, so the status filter sees the status of its nearest task.
+    const statusOf = (row: KeyedRow) => {
+      let item: KeyedRow | undefined = row;
+      while (item && item.kind === 'bullet') item = item.parentLine === null ? undefined : byLine.get(item.parentLine);
+      return item?.kind === 'task' ? item.status : row.status;
+    };
     const shown = new Map<number, boolean>();
     for (const row of rows) {
       // A heading is shown only for the items under it.
       const matches = !active || keptLines.has(row.line)
-        || (row.kind === 'embed' ? this.embedMatches(path, row, chain) : row.kind !== 'heading' && rowMatches(row, query));
+        || (row.kind === 'embed' ? this.embedMatches(path, row, chain) : row.kind !== 'heading' && rowMatches({ ...row, status: statusOf(row) }, query));
       if (!matches) continue;
       shown.set(row.line, true);
       // Ancestors come before their descendants, so an ancestor already shown has its own ancestors shown too.
@@ -1324,8 +1350,10 @@ export class Controller {
     this.render();
   };
 
-  searchInput = (value: string) => {
-    this.parseSearch(value);
+  // The filter follows the search box as it is typed, except while an IME is composing the text.
+  searchInput = (value: string, composing = false) => {
+    if (composing) this.parseSearch(value);
+    else this.applySearch(value);
     this.updateStar();
   };
 

@@ -175,6 +175,53 @@ describe('keyboard structure editing', () => {
     expect(await saved()).toBe('- [ ] a\n- [ ] c\n');
   });
 
+  const filterTodo = screen => screen.getByRole('combobox', { name: '表示する状態' });
+
+  it('Backspace merges with the previous item on screen and leaves the items hidden by the filter', async () => {
+    const { user, screen, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] a\n- [x] hidden\n- [ ] b\n' });
+    await user.selectOptions(filterTodo(screen), 'todo');
+    await user.type(title('b'), '{Backspace}', { initialSelectionStart: 0, initialSelectionEnd: 0 });
+    expect(titleValues()).toEqual(['ab']);
+    expect(document.activeElement.selectionStart).toBe(1);
+    expect(await saved()).toBe('- [ ] ab\n- [x] hidden\n');
+  });
+
+  it('Delete merges the next item on screen and leaves the items hidden by the filter', async () => {
+    const { user, screen, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] a\n- [x] hidden\n- [ ] b\n' });
+    await user.selectOptions(filterTodo(screen), 'todo');
+    await user.type(title('a'), '{Delete}');
+    expect(titleValues()).toEqual(['ab']);
+    expect(document.activeElement.selectionStart).toBe(1);
+    expect(await saved()).toBe('- [ ] ab\n- [x] hidden\n');
+  });
+
+  it('Backspace in an empty item deletes it past the hidden items and moves to the end of the previous item on screen', async () => {
+    const { user, screen, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] a\n- [x] hidden\n- [ ] \n' });
+    await user.selectOptions(filterTodo(screen), 'todo');
+    await user.type(title(''), '{Backspace}');
+    expect(titleValues()).toEqual(['a']);
+    expect(document.activeElement).toBe(title('a'));
+    expect(document.activeElement.selectionStart).toBe(1);
+    expect(await saved()).toBe('- [ ] a\n- [x] hidden\n');
+  });
+
+  it('Backspace does not merge an item with children past hidden items', async () => {
+    const { user, screen, title, titleValues, adapter } = await setup({ 'tasks.md': '- [ ] a\n- [x] hidden\n- [ ] b\n  - [ ] c\n' });
+    await user.selectOptions(filterTodo(screen), 'todo');
+    await user.type(title('b'), '{Backspace}', { initialSelectionStart: 0, initialSelectionEnd: 0 });
+    expect(titleValues()).toEqual(['a', 'b', 'c']);
+    expect(screen.getByText('間に隠れた項目があるため、子タスクのある項目は結合できません')).toBeTruthy();
+    expect(adapter.files.get('tasks.md')).toBe('- [ ] a\n- [x] hidden\n- [ ] b\n  - [ ] c\n');
+  });
+
+  it('Backspace merges with a folded item and keeps its hidden children', async () => {
+    const { user, row, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] a\n  - [ ] child\n- [ ] b\n' });
+    await user.click(row('a').getByTitle('子項目を折りたたむ／開く'));
+    await user.type(title('b'), '{Backspace}', { initialSelectionStart: 0, initialSelectionEnd: 0 });
+    expect(titleValues()).toEqual(['ab']);
+    expect(await saved()).toBe('- [ ] ab\n  - [ ] child\n');
+  });
+
   it('Alt+ArrowUp / Alt+ArrowDown move an item among its siblings', async () => {
     const { user, title, saved } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n' });
     await user.click(title('b'));
