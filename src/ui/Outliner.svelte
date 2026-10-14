@@ -1,6 +1,7 @@
 <script lang="ts">
   import Bookmarks from './Bookmarks.svelte';
   import Outline from './Outline.svelte';
+  import { estimateLabel } from './estimate.ts';
   import { filterIcons, syncValue, type Controller } from './controller.svelte.ts';
   import { filters, statuses } from './filter.ts';
   import type { StatusFilter } from './types.ts';
@@ -47,6 +48,9 @@
       <header class="app-header">
         <div class="app-name">Markdown Outliner</div>
         <span class="save-state" class:dirty={ctrl.saveState.dirty}>{ctrl.saveState.text}</span>
+        {#if view.estimate}
+          <span class="estimate-total" title={ctrl.t.toolbar.estimateTotal}>{estimateLabel(view.estimate)}</span>
+        {/if}
         <div class="toolbar">
           <select class="file-select" aria-label={ctrl.t.toolbar.fileSelect} value={view.current} onchange={event => ctrl.openFile(event.currentTarget.value)}>
             {#each view.fileList as path (path)}

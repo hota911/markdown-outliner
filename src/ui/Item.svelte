@@ -4,6 +4,7 @@
   import SlashMenu from './SlashMenu.svelte';
   import type { Controller, Drop, ItemView } from './controller.svelte.ts';
   import { syncNote, syncValue } from './controller.svelte.ts';
+  import { estimateLabel } from './estimate.ts';
   import { matchRanges } from './filter.ts';
   import { parseInline } from './inline.ts';
   import { grow } from './motion.ts';
@@ -92,6 +93,13 @@
       ctrl.filterByTag(tag.dataset.tag!);
       return;
     }
+    const meta = target.closest<HTMLElement>('[data-end]');
+    if (meta) {
+      const end = Number(meta.dataset.end);
+      field.focus();
+      field.setSelectionRange(end, end);
+      return;
+    }
     const caret = document.caretPositionFromPoint?.(event.clientX, event.clientY);
     const clicked = caret?.offsetNode.nodeType === Node.TEXT_NODE ? caret.offsetNode as Text : null;
     const leaf = clicked?.parentElement?.closest<HTMLElement>('[data-start]');
@@ -108,6 +116,12 @@
     field.setSelectionRange(offset, offset);
   }
 </script>
+
+{#snippet subtotal()}
+  {#if item.estimate}
+    <span class="estimate-subtotal" title={ctrl.t.item.estimateSubtotal}>Σ {estimateLabel(item.estimate)}</span>
+  {/if}
+{/snippet}
 
 {#snippet handle()}
   <button
@@ -136,6 +150,7 @@
       <div class="heading-title" role="heading" aria-level={item.row.level} data-path={item.path} data-line={item.row.line}>
         <InlineText nodes={display ?? [{ kind: 'text', text: shownTitle, start: 0 }]} {marks} />
       </div>
+      {@render subtotal()}
       <div class="row-actions" onpointerdown={keepFocus} onmousedown={keepFocus}>
         <button type="button" class="icon" title={ctrl.t.item.addUnderHeading} onclick={() => ctrl.add(item.path, item.row.line, true)}>+</button>
         <button type="button" class="icon" title={ctrl.t.item.zoomIn} onclick={() => ctrl.zoomTo(item.path, item.row.line)}>↗</button>
@@ -185,6 +200,7 @@
           <div class="title-display" onclick={event => displayClick(event, titleNode)}><InlineText nodes={display ?? [{ kind: 'text', text: shownTitle, start: 0 }]} {marks} /></div>
         {/if}
       </div>
+      {@render subtotal()}
       <!-- A press keeps the focus where it is: focus decides where the buttons sit (see styles.css), and a
            button that moved between the press and the release would get no click. The keyboard still
            reaches them with Tab. -->
@@ -193,6 +209,9 @@
         <!-- On touch screens the buttons marked in-touch-bar are hidden; the touch bar has the same commands. -->
         <button type="button" class="quiet in-touch-bar" title={ctrl.t.item.editNoteTitle} onclick={() => ctrl.showNote(item.path, item.row.line)}>{ctrl.t.item.note}</button>
         <button type="button" class="icon" title={ctrl.t.item.zoomIn} onclick={() => ctrl.zoomTo(item.path, item.row.line)}>↗</button>
+        {#if ctrl.canStartPomodoro && item.row.kind === 'task'}
+          <button type="button" class="icon" title={ctrl.t.item.startPomodoro} onclick={() => ctrl.startPomodoro(item.path, item.row.line)}>🍅</button>
+        {/if}
         <button type="button" class="icon in-touch-bar" title={ctrl.t.item.moveUp} onclick={() => ctrl.moveRow(item.path, item.row.line, 'up')}>↑</button>
         <button type="button" class="icon in-touch-bar" title={ctrl.t.item.moveDown} onclick={() => ctrl.moveRow(item.path, item.row.line, 'down')}>↓</button>
         <button type="button" class="quiet" title={ctrl.t.item.extractTitle} onclick={() => ctrl.extractToFile(item.path, item.row.line)}>{ctrl.t.item.extract}</button>

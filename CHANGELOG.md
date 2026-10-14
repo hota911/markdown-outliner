@@ -5,6 +5,15 @@ All notable changes to Markdown Outliner are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-10-14
+
+### Added
+
+- Reorder bookmarks by dragging their ⠿ handle, with the mouse or by touch, or with Alt+↑/↓ on a focused bookmark. The new order is saved.
+- Delete an embedded file from its embed header: after confirmation it moves to the trash (`.trash/` in the web version, the "Deleted files" setting in Obsidian) and the embed line is removed. Undo restores only the embed line.
+
+[0.1.5]: https://github.com/hota911/markdown-outliner/compare/0.1.4...0.1.5
+
 ## [0.1.4] - 2026-10-10
 
 ### Added

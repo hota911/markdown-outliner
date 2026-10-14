@@ -477,3 +477,75 @@ describe('outline view', () => {
 
   // Drag and drop needs layout and DataTransfer, which jsdom lacks; it is tested in e2e/drag.spec.ts.
 });
+
+describe('starting a pomodoro', () => {
+  const label = 'Pomodoro Timer プラグインでこのタスクのポモドーロを開始（試験機能）';
+
+  it('has no button when the host has no timer', async () => {
+    const { row } = await setup({ 'tasks.md': '- [ ] a\n' });
+    expect(row('a').queryByTitle(label)).toBeNull();
+  });
+
+  it('gives the task a block id, saves it, then hands the task to the host', async () => {
+    const calls = [];
+    const { user, row, adapter } = await setup({ 'tasks.md': '- [ ] write [🍅:: 1/3]\n- bullet\n' }, {
+      startPomodoro: async task => { calls.push({ ...task, text: adapter.files.get('tasks.md') }); },
+    });
+    expect(row('bullet').queryByTitle(label)).toBeNull();
+    await user.click(row('write [🍅:: 1/3]').getByTitle(label));
+    await waitFor(() => expect(calls).toHaveLength(1));
+    const [{ blockId, ...call }] = calls;
+    expect(blockId).toMatch(/^[a-z0-9]+$/);
+    expect(call).toEqual({ path: 'tasks.md', line: 0, title: `write [🍅:: 1/3] ^${blockId}`, text: `- [ ] write [🍅:: 1/3] ^${blockId}\n- bullet\n` });
+  });
+
+  it('keeps a block id the task already has', async () => {
+    const calls = [];
+    const { user, row, adapter } = await setup({ 'tasks.md': '- [ ] a ^ab12\n' }, { startPomodoro: async task => { calls.push(task); } });
+    await user.click(row('a ^ab12').getByTitle(label));
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0].blockId).toBe('ab12');
+    expect(adapter.saves).toEqual([]);
+  });
+
+  it('shows why the host could not start it', async () => {
+    const { user, row, screen } = await setup({ 'tasks.md': '- [ ] a ^ab12\n' }, { startPomodoro: async () => { throw new Error('止まっています'); } });
+    await user.click(row('a ^ab12').getByTitle(label));
+    expect(await screen.findByText('ポモドーロを開始できません：止まっています')).toBeTruthy();
+  });
+});
+
+describe('Tasks and pomodoro fields', () => {
+  const text = '- [ ] parent\n  - [ ] a [🍅:: 1/3] 🔁 every day ^ab12\n  - [x] b [🍅:: 2]\n- [ ] c [🍅:: 0/2]\n';
+
+  it('shows the fields as badges and keeps the source in the editable title', async () => {
+    const { title } = await setup({ 'tasks.md': text });
+    const badges = [...title('a [🍅:: 1/3] 🔁 every day ^ab12').closest('.outline-item').querySelectorAll('.title-display .meta')];
+    expect(badges.map(node => [node.dataset.meta, node.textContent])).toEqual([['pomodoro', '🍅 1/3'], ['recurrence', '🔁 every day'], ['block', '^ab12']]);
+    expect(badges[0].title).toBe('[🍅:: 1/3]');
+    expect(title('a [🍅:: 1/3] 🔁 every day ^ab12')).toBeTruthy();
+  });
+
+  it('clicking a badge edits the title with the caret after its field', async () => {
+    const { user, title } = await setup({ 'tasks.md': text });
+    await user.click(title('c [🍅:: 0/2]').closest('.outline-item').querySelector('.meta'));
+    const field = title('c [🍅:: 0/2]');
+    expect(document.activeElement).toBe(field);
+    expect(field.selectionStart).toBe('c [🍅:: 0/2]'.length);
+  });
+
+  it('sums the counts under a parent and of the items shown', async () => {
+    const { user, container, row, screen } = await setup({ 'tasks.md': text });
+    expect(row('parent').getByTitle('この項目の下にある項目のポモドーロ（実績/見積もり）').textContent).toBe('Σ 🍅 3/3');
+    expect(row('c [🍅:: 0/2]').queryByTitle('この項目の下にある項目のポモドーロ（実績/見積もり）')).toBeNull();
+    const total = () => container.querySelector('.estimate-total')?.textContent;
+    expect(total()).toBe('🍅 3/5');
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'not-done');
+    expect(total()).toBe('🍅 1/5');
+  });
+
+  it('shows no total without any pomodoro field', async () => {
+    const { container } = await setup({ 'tasks.md': '- [ ] a\n' });
+    expect(container.querySelector('.estimate-total')).toBeNull();
+  });
+});

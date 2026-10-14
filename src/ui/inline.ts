@@ -1,5 +1,7 @@
 // Inline Markdown shown over item titles and notes while they are not being edited.
 // The result is data for the template to build DOM from; nothing here produces HTML.
+import { estimateLabel, estimateOf, pomodoroField } from './estimate.ts';
+
 // Text, code and tag leaves keep their offset in the source so that a click can put the caret
 // there and filter matches can be marked in them.
 export type Inline =
@@ -7,7 +9,22 @@ export type Inline =
   // `tag` is without the `#`; `text` is the word as typed.
   | { kind: 'tag'; tag: string; text: string; start: number }
   | { kind: 'link'; href: string; children: Inline[] }
+  // A field of the Tasks or pomodoro-timer plugins, shown as a badge. `label` is what the badge
+  // shows and `text` the source it stands for.
+  | { kind: 'meta'; meta: Meta; label: string; text: string; start: number }
   | { kind: 'strong' | 'em' | 'del'; children: Inline[] };
+
+export type Meta = 'pomodoro' | 'recurrence' | 'date' | 'block';
+
+// `[🍅:: 1/3]`, Tasks' `🔁 every day` and dated fields such as `📅 2026-10-15`, and a block ID
+// (`^abcd`) at the very end. The recurrence runs to its last letter or digit, as Tasks reads it.
+const metaRules: { meta: Meta; pattern: RegExp; label: (match: RegExpMatchArray) => string }[] = [
+  { meta: 'pomodoro', pattern: pomodoroField, label: match => estimateLabel(estimateOf(match[0])!) },
+  { meta: 'recurrence', pattern: /🔁\uFE0F?[ \t]?([A-Za-z0-9, !]*[A-Za-z0-9!])/gu, label: match => '🔁 ' + match[1] },
+  { meta: 'date', pattern: /([📅⏳🛫➕✅❌])\uFE0F?[ \t]?(\d{4}-\d{2}-\d{2})/gu, label: match => match[1] + ' ' + match[2] },
+  // The space before the ID is captured rather than looked behind for, which iOS before 16.4 lacks.
+  { meta: 'block', pattern: /(^|[ \t])(\^[A-Za-z0-9-]+)[ \t]*$/g, label: match => match[2] },
+];
 
 // Only these targets become anchors; any other Markdown link stays plain text.
 const linkTarget = String.raw`(?:https?:\/\/|mailto:)[^\s)]+`;
@@ -44,20 +61,23 @@ function trimUrl(url: string) {
   }
 }
 
-// `tags` are the [start, end) ranges of the tags in the whole source. A tag becomes a node only
-// where it lies within one run of plain text outside links.
-function parse(source: string, base: number, links: boolean, tags: [number, number][]): Inline[] {
+// A tag or a meta field: a node for the [start, end) range of the whole source.
+type Token = { start: number; end: number; node: Inline };
+
+// `tokens` are sorted and do not overlap. A token becomes a node only where it lies within one run
+// of plain text outside links.
+function parse(source: string, base: number, links: boolean, tokens: Token[]): Inline[] {
   const nodes: Inline[] = [];
   const pattern = links ? withLinks : withoutLinks;
   let position = 0;
   const text = (end: number) => {
     let from = position;
     if (links) {
-      for (const [tagStart, tagEnd] of tags) {
-        const at = tagStart - base, to = tagEnd - base;
+      for (const token of tokens) {
+        const at = token.start - base, to = token.end - base;
         if (at < from || to > end) continue;
         if (at > from) nodes.push({ kind: 'text', text: source.slice(from, at), start: base + from });
-        nodes.push({ kind: 'tag', tag: source.slice(at + 1, to), text: source.slice(at, to), start: tagStart });
+        nodes.push(token.node);
         from = to;
       }
     }
@@ -69,7 +89,7 @@ function parse(source: string, base: number, links: boolean, tags: [number, numb
     text(at);
     let length = whole.length - before.length;
     if (code !== undefined) nodes.push({ kind: 'code', text: code, start: base + at + 1 });
-    else if (label !== undefined) nodes.push({ kind: 'link', href, children: parse(label, base + at + 1, false, tags) });
+    else if (label !== undefined) nodes.push({ kind: 'link', href, children: parse(label, base + at + 1, false, tokens) });
     else if (url !== undefined) {
       const trimmed = trimUrl(url);
       length = trimmed.length;
@@ -78,7 +98,7 @@ function parse(source: string, base: number, links: boolean, tags: [number, numb
       const [kind, content, open] = strong !== undefined ? ['strong', strong, 2] as const
         : del !== undefined ? ['del', del, 2] as const
         : ['em', em ?? underscore, 1] as const;
-      nodes.push({ kind, children: parse(content, base + at + open, links, tags) });
+      nodes.push({ kind, children: parse(content, base + at + open, links, tokens) });
     }
     position = at + length;
   }
@@ -86,10 +106,26 @@ function parse(source: string, base: number, links: boolean, tags: [number, numb
   return nodes;
 }
 
-// Null when the text has neither inline Markdown nor tags, so that it can be shown as typed.
+function tokensOf(source: string): Token[] {
+  const metas: Token[] = metaRules.flatMap(({ meta, pattern, label }) => [...source.matchAll(pattern)].map(match => {
+    const text = meta === 'block' ? match[2] : match[0];
+    const start = match.index + (meta === 'block' ? match[1].length : 0);
+    return { start, end: start + text.length, node: { kind: 'meta', meta, label: label(match), text, start } };
+  }));
+  const tags: Token[] = [...source.matchAll(tagWord)].map(match => {
+    const start = match.index + match[1].length, end = match.index + match[0].length;
+    return { start, end, node: { kind: 'tag', tag: source.slice(start + 1, end), text: source.slice(start, end), start } };
+  });
+  // The earlier token wins where two overlap.
+  const tokens: Token[] = [];
+  for (const token of [...metas, ...tags].sort((a, b) => a.start - b.start)) {
+    if (!tokens.length || tokens[tokens.length - 1].end <= token.start) tokens.push(token);
+  }
+  return tokens;
+}
+
+// Null when the text has neither inline Markdown, tags nor meta fields, so that it can be shown as typed.
 export function parseInline(source: string): Inline[] | null {
-  const tags = [...source.matchAll(tagWord)]
-    .map(match => [match.index + match[1].length, match.index + match[0].length] as [number, number]);
-  const nodes = parse(source, 0, true, tags);
+  const nodes = parse(source, 0, true, tokensOf(source));
   return nodes.some(node => node.kind !== 'text') ? nodes : null;
 }

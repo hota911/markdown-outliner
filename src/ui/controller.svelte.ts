@@ -5,10 +5,13 @@ import { localDate } from '../recurrence.ts';
 import { merge3, type Side } from '../three-way-merge.ts';
 import { RowKeys, type KeyedRow } from './keys.ts';
 import { bookmarkView, moveEntry, sameView, savedView, validBookmark, type BookmarkView, type SavedView } from './bookmarks.ts';
+import { addEstimates, estimateOf, type Estimate } from './estimate.ts';
 import { filterActive, rowMatches, statuses, type FilterQuery, type TextQuery } from './filter.ts';
 import { errorText, messages, type Messages } from './messages.ts';
 import { commandOptions, fileOptions, relativePath, sortTags, tagOptions, trigger, type Slash, type SlashCommand } from './slash.ts';
 import type { Adapter, Bookmark, Doc, MountOptions, Preferences, Revision, StatusFilter } from './types.ts';
+
+const blockIdOf = (title: string) => /(?:^|[ \t])\^([A-Za-z0-9-]+)[ \t]*$/.exec(title)?.[1] ?? null;
 
 export type Field = 'title' | 'note';
 type RowKind = 'task' | 'bullet';
@@ -72,6 +75,8 @@ export interface ItemView {
   // The search box words and #tags to mark in the title; null without a text filter and for context rows.
   highlight: TextQuery | null;
   embed: { target: string | null; error: string | null; outline: OutlineView | null } | null;
+  // The pomodoro counts of all the items under this one in its file, shown or not; null without any.
+  estimate: Estimate | null;
   // Drop targets after the last shown descendant of each ancestor that ends here, innermost first.
   ends: { key: string; parentLine: number; depth: number; label: string }[];
 }
@@ -85,7 +90,8 @@ export interface ZoomView {
 export type OutlineView =
   | { kind: 'cycle'; path: string }
   | { kind: 'missing' }
-  | { kind: 'outline'; path: string; zoom: ZoomView | null; items: ItemView[]; addKind: RowKind; appendLine: number | null; appendChild: boolean };
+  // `estimate` sums the pomodoro counts of the items that match the filter, embedded files included.
+  | { kind: 'outline'; path: string; zoom: ZoomView | null; items: ItemView[]; addKind: RowKind; appendLine: number | null; appendChild: boolean; estimate: Estimate | null };
 
 export interface View {
   fileList: string[];
@@ -101,6 +107,8 @@ export interface View {
   // `hunks` is null when the save failed without a conflicting external version.
   conflicts: { path: string; text: string; hunks: { ours: string | null; theirs: string | null }[] | null }[];
   outline: OutlineView | null;
+  // The pomodoro counts of the shown outline; null without any.
+  estimate: Estimate | null;
   sidebarCollapsed: boolean;
   bookmarksValid: boolean;
   bookmarks: BookmarkView[];
@@ -200,6 +208,10 @@ export class Controller {
 
   get canTrash() {
     return !!this.adapter.trash;
+  }
+
+  get canStartPomodoro() {
+    return !!this.adapter.startPomodoro;
   }
 
   private describe(error: unknown) {
@@ -1337,6 +1349,26 @@ export class Controller {
     catch (error) { this.message = this.describe(error); this.render(); }
   };
 
+  // The task gets a block id first and is saved, so that the timer can find and update its line.
+  startPomodoro = async (path: string, line: number) => {
+    const start = this.adapter.startPomodoro?.bind(this.adapter);
+    const row = this.rows(path).find(value => value.line === line);
+    if (!start || row?.kind !== 'task') return;
+    if (!blockIdOf(row.title)) {
+      const doc = this.docs.get(path)!;
+      let id: string;
+      do id = Math.random().toString(36).slice(2, 6); while (doc.text.includes('^' + id));
+      this.mutate(path, text => core.updateTitle(text, line, row.title.trimEnd() + ' ^' + id), null);
+    }
+    await this.saveAll();
+    const doc = this.docs.get(path);
+    const saved = this.rows(path).find(value => value.line === line);
+    const blockId = saved?.kind === 'task' ? blockIdOf(saved.title) : null;
+    if (!doc || doc.dirty || doc.conflict || !saved || !blockId) { this.showToast(this.t.edit.pomodoroUnsaved); return; }
+    try { await start({ path, line, title: saved.title, blockId }); }
+    catch (error) { this.showToast(this.t.edit.pomodoroFailed(this.describe(error))); }
+  };
+
   copyConflict = (path: string, node: HTMLTextAreaElement) => {
     node.focus();
     node.select();
@@ -1567,6 +1599,7 @@ export class Controller {
         hunks: doc.external?.conflicts.map(conflict => ({ ours: shownLines(conflict.ours), theirs: shownLines(conflict.theirs) })) ?? null,
       })),
       outline,
+      estimate: outline?.kind === 'outline' ? outline.estimate : null,
       sidebarCollapsed: this.preferences.sidebarCollapsed === true,
       bookmarksValid: Array.isArray(this.preferences.bookmarks),
       bookmarks: Array.isArray(this.preferences.bookmarks) ? this.bookmarkViews() : [],
@@ -1605,6 +1638,17 @@ export class Controller {
       return level;
     };
     const baseDepth = rootRow ? indent(rootRow) + 1 : 0;
+    const subtotals = new Map<number, Estimate>();
+    const own = new Map<number, Estimate>();
+    for (const row of rows) {
+      const estimate = estimateOf(row.title);
+      if (!estimate) continue;
+      own.set(row.line, estimate);
+      for (let parent = row.parentLine; parent !== null; parent = byLine.get(parent)?.parentLine ?? null) {
+        subtotals.set(parent, addEstimates(subtotals.get(parent) ?? null, estimate)!);
+      }
+    }
+    let estimate: Estimate | null = null;
     const items: ItemView[] = [];
     const itemByLine = new Map<number, ItemView>();
     for (const row of rows) {
@@ -1630,15 +1674,18 @@ export class Controller {
         context: visible.get(row.line) === false,
         // Context rows did not match, so any words they share with the query are not marked.
         highlight: visible.get(row.line) ? highlight : null,
+        estimate: subtotals.get(row.line) ?? null,
         embed: null,
         ends: [],
       };
+      if (visible.get(row.line)) estimate = addEstimates(estimate, own.get(row.line) ?? null);
       if (row.kind === 'embed') {
         item.embed = { target: null, error: null, outline: null };
         if (!collapsed) {
           try {
             item.embed.target = this.normalize(path, row.embed);
             item.embed.outline = this.outlineView(item.embed.target, [...chain, path]);
+            if (item.embed.outline.kind === 'outline') estimate = addEstimates(estimate, item.embed.outline.estimate);
           } catch (error) { item.embed.error = this.describe(error); }
         }
       }
@@ -1670,6 +1717,7 @@ export class Controller {
       addKind: lastEditable?.kind === 'bullet' ? 'bullet' : 'task',
       appendLine: !rootRow ? null : last ? last.line : rootRow.line,
       appendChild: !!rootRow && !last,
+      estimate,
     };
   }
 
