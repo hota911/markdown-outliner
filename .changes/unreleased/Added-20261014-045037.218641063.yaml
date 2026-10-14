@@ -1,0 +1,3 @@
+kind: Added
+body: "Recurring tasks in the Obsidian Tasks format: completing a task with `\U0001F501 every week` (and other day, week, weekday, month and year rules, also `when done`) adds `✅` with the date and puts its next occurrence above it, with the `\U0001F4C5` due, `⏳` scheduled and `\U0001F6EB` start dates moved as Tasks does and the `[\U0001F345:: n/m]` pomodoro count reset. Works in the web and desktop versions and without the Tasks plugin; one Undo removes the next occurrence."
+time: 2026-10-14T04:50:37.218641063Z

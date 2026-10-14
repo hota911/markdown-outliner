@@ -1,6 +1,7 @@
 import { flushSync } from 'svelte';
 import * as core from '../core.ts';
 import type { Status } from '../core.ts';
+import { localDate } from '../recurrence.ts';
 import { merge3, type Side } from '../three-way-merge.ts';
 import { RowKeys, type KeyedRow } from './keys.ts';
 import { bookmarkView, moveEntry, sameView, savedView, validBookmark, type BookmarkView, type SavedView } from './bookmarks.ts';
@@ -184,14 +185,21 @@ export class Controller {
   private focusRootAfterRender = false;
   private renderCount = 0;
   private readonly recorded = new WeakMap<HTMLElement, number>();
+  private readonly now: () => Date;
 
-  constructor({ adapter, drafts, initialFile, language, preferences = { bookmarks: [] }, savePreferences }: MountOptions) {
+  constructor({ adapter, drafts, initialFile, language, preferences = { bookmarks: [] }, savePreferences, now = () => new Date() }: MountOptions) {
+    this.now = now;
     this.t = messages[language];
     this.adapter = adapter;
     this.docs = drafts || new Map<string, Doc>();
     this.initialFile = initialFile;
     this.preferences = preferences;
     this.savePreferences = savePreferences;
+  }
+
+  // The date a task is completed on, which also places a `when done` recurring task.
+  private today() {
+    return localDate(this.now());
   }
 
   get canRename() {
@@ -382,7 +390,7 @@ export class Controller {
     const { path, line, field } = this.active;
     const row = this.rows(path).find(row => row.line === line);
     if (!row) return false;
-    if (row.status === 'in-progress') this.mutate(path, text => core.updateStatus(text, line, 'done'), field);
+    if (row.status === 'in-progress') this.mutate(path, text => core.updateStatus(text, line, 'done', this.today()), field);
     return true;
   };
 
@@ -405,7 +413,8 @@ export class Controller {
       this.active = { path, line: result.line + focusOffset, field: focus };
     } else this.active = null;
     if (this.zoom && this.zoom.path === path) {
-      const zoomLine = this.zoom.line;
+      const zoomLine = this.zoom.line + (result.inserted ?? []).filter(value => value <= this.zoom!.line).length;
+      this.zoom.line = zoomLine;
       if (zoomLine === result.line || !this.rows(path, doc.text).some(row => row.line === zoomLine)) this.zoom.line = result.line;
     }
     this.render();
@@ -864,7 +873,7 @@ export class Controller {
   // Same order as the status button: not started → in progress → done → not started.
   cycleActiveStatus = () => this.fromTouchBar((path, row, field) => {
     const status = row.kind === 'task' ? row.status : null;
-    if (status) this.mutate(path, text => core.updateStatus(text, row.line, nextStatus(status)), field);
+    if (status) this.mutate(path, text => core.updateStatus(text, row.line, nextStatus(status), this.today()), field);
   });
 
   // --- The `/` and `#` menus -----------------------------------------------------------------
@@ -1025,8 +1034,8 @@ export class Controller {
         .catch((error: unknown) => this.showToast(this.describe(error)));
       return;
     }
-    if (command === 'todo' || command === 'in-progress' || command === 'done') mutateTitle(text => core.updateStatus(strip(text), line, command));
-    else if (command === 'task') mutateTitle(text => core.updateStatus(strip(text), line, 'todo'));
+    if (command === 'todo' || command === 'in-progress' || command === 'done') mutateTitle(text => core.updateStatus(strip(text), line, command, this.today()));
+    else if (command === 'task') mutateTitle(text => core.updateStatus(strip(text), line, 'todo', this.today()));
     else if (command === 'bullet') mutateTitle(text => core.toBullet(strip(text), line));
     else {
       mutateTitle(text => core.updateTitle(text, line, title));
@@ -1040,7 +1049,7 @@ export class Controller {
 
   // --- Row actions --------------------------------------------------------------------------
 
-  setStatus = (path: string, line: number, status: Status) => this.mutate(path, text => core.updateStatus(text, line, status), 'title');
+  setStatus = (path: string, line: number, status: Status) => this.mutate(path, text => core.updateStatus(text, line, status, this.today()), 'title');
   moveRow = (path: string, line: number, direction: 'up' | 'down') => this.mutate(path, text => this.move(path, text, line, direction), 'title');
   showNote = (path: string, line: number) => this.focusNote(path, line);
 
@@ -1162,11 +1171,19 @@ export class Controller {
 
   setSelectionStatus = (status: Status) => {
     const path = this.selectedPath!;
-    const lines = [...this.selectedLines];
+    const lines = [...this.selectedLines].sort((a, b) => a - b);
+    const today = this.today();
     this.mutate(path, text => {
-      let result: core.EditResult = { text, line: lines[0] };
-      for (const value of lines) if (this.rows(path, result.text).find(row => row.line === value)?.kind === 'task') result = core.updateStatus(result.text, value, status);
-      return result;
+      // From the bottom up, so that a recurring task's next occurrence does not move the lines still to update.
+      let current = text;
+      const inserted: number[] = [];
+      for (const value of [...lines].reverse()) {
+        if (this.rows(path, current).find(row => row.line === value)?.kind !== 'task') continue;
+        const result = core.updateStatus(current, value, status, today);
+        current = result.text;
+        inserted.push(...result.inserted ?? []);
+      }
+      return { text: current, line: lines[0] + inserted.filter(value => value <= lines[0]).length, inserted };
     }, 'title');
   };
 

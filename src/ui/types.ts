@@ -81,6 +81,8 @@ export interface MountOptions {
   language: Language;
   preferences?: Preferences;
   savePreferences?: (value: Preferences) => Promise<void>;
+  // The clock for completion dates and recurring tasks. Tests pass a fixed date.
+  now?: () => Date;
 }
 
 export interface Mounted {

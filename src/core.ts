@@ -1,6 +1,8 @@
 // Pure Markdown edits for task lists. Every function takes the whole text and returns new text,
 // so callers never hold partially edited state.
 
+import { completedTitle, localDate, nextTitle } from './recurrence.ts';
+
 export type Status = 'todo' | 'in-progress' | 'done';
 
 export type CoreErrorCode =
@@ -62,6 +64,9 @@ interface Targeted extends Scanned {
 export interface EditResult {
   text: string;
   line: number;
+  // Lines of the original text before which one line was inserted, when the edit added lines
+  // above others (a recurring task's next occurrence).
+  inserted?: number[];
 }
 
 export interface InsertOptions {
@@ -255,10 +260,19 @@ export function updateTitle(text: string, line: number, title: string): EditResu
   return result(doc, line);
 }
 
-export function updateStatus(text: string, line: number, status: Status): EditResult {
+// Completing a recurring task (`🔁 every week`, see src/recurrence.ts) also adds `✅ today` to it and
+// puts its next occurrence above it, as the Obsidian Tasks plugin does. Only the line is copied;
+// the note and children stay with the completed task. `line` is then the completed task.
+export function updateStatus(text: string, line: number, status: Status, today = localDate(new Date())): EditResult {
   if (!isStatus(status)) throw new CoreError('unknownStatus');
   const doc = target(text, line), match = item(doc.lines[line])!;
   if (doc.row.kind === 'embed') throw new CoreError('embedHasNoStatus');
+  const next = status === 'done' && doc.row.kind === 'task' && doc.row.status !== 'done' ? nextTitle(match[4], today) : null;
+  if (next !== null) {
+    doc.lines[line] = match[1] + match[2] + ' [x] ' + completedTitle(match[4], today);
+    doc.lines.splice(line, 0, match[1] + match[2] + ' [ ] ' + next);
+    return { ...result(doc, line + 1), inserted: [line] };
+  }
   doc.lines[line] = match[1] + match[2] + ' [' + marks[status] + '] ' + match[4];
   return result(doc, line);
 }
