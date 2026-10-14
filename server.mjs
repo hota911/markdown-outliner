@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { link, lstat, mkdir, readFile, readdir, realpath, writeFile, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -10,6 +11,14 @@ const MAX_BYTES = 2 * 1024 * 1024;
 const revisionOf = text => createHash('sha256').update(text).digest('hex');
 const contentTypes = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json',
+};
+
+// Other files of the folder, opened from links in a new tab (`/api/raw`). Any other type is
+// downloaded rather than shown.
+const rawTypes = {
+  '.md': 'text/markdown; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.csv': 'text/csv; charset=utf-8',
+  '.json': 'application/json', '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.mp3': 'audio/mpeg', '.mp4': 'video/mp4', '.html': 'text/html',
 };
 
 // The same rule as usableBaseName in src/core.ts, which the page checks before asking; repeated
@@ -65,6 +74,37 @@ export async function createOutlinerApi(workspace) {
     const info = await stat(full);
     if (!info.isFile() || info.size > MAX_BYTES) throw new RequestError(400, 'fileTooLarge');
     return full;
+  }
+
+  // A file of the folder for a link: the first of `candidates` that exists. Hidden files and
+  // folders such as `.git` and `.trash` are refused, as they are not listed either.
+  async function linkedFile(candidates) {
+    if (selectedFile) throw new RequestError(403, 'selectedFileOnly');
+    for (const relative of candidates) {
+      if (!relative || relative.includes('\\') || path.isAbsolute(relative) || relative.split('/').some(part => part.startsWith('.'))) {
+        throw new RequestError(403, 'outsideWorkspace');
+      }
+      let full;
+      try { full = await realpath(path.resolve(root, relative)); }
+      catch (error) {
+        if (['ENOENT', 'ENOTDIR'].includes(error.code)) continue;
+        throw error;
+      }
+      if (!full.startsWith(root + path.sep)) throw new RequestError(403, 'outsideWorkspace');
+      if ((await stat(full)).isFile()) return full;
+    }
+    throw new RequestError(404, 'fileMissing');
+  }
+
+  // The page of the outliner holds the save token, so a served file runs in a sandbox, with no
+  // scripts and an origin of its own.
+  async function sendRaw(response, candidates) {
+    const full = await linkedFile(candidates);
+    response.writeHead(200, {
+      'Content-Type': rawTypes[path.extname(full).toLowerCase()] ?? 'application/octet-stream',
+      'Content-Security-Policy': 'sandbox', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store',
+    });
+    await new Promise((resolve, reject) => createReadStream(full).on('error', reject).on('end', resolve).pipe(response));
   }
 
   async function filesIn(directory, prefix = '') {
@@ -196,6 +236,7 @@ export async function createOutlinerApi(workspace) {
       const text = await readFile(await markdownFile(url.searchParams.get('path')), 'utf8');
       return sendJson(response, 200, { text, revision: revisionOf(text) });
     }
+    if (request.method === 'GET' && url.pathname === '/api/raw') return sendRaw(response, url.searchParams.getAll('path'));
     const write = ['PUT', 'POST'].includes(request.method) && url.pathname === '/api/file'
       || request.method === 'POST' && ['/api/rename', '/api/trash'].includes(url.pathname);
     if (write) {

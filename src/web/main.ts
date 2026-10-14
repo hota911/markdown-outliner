@@ -2,8 +2,9 @@ import '../styles.css';
 import './theme.css';
 import './web.css';
 import { languageOf, messages, serverErrorText } from '../ui/messages.ts';
+import { isMarkdownLink, linkCandidates, openMarkdownLink } from '../ui/links.ts';
 import { mountOutliner } from '../ui/mount.ts';
-import type { Adapter, Preferences } from '../ui/types.ts';
+import type { Adapter, FileLink, Mounted, Preferences } from '../ui/types.ts';
 
 // Written into the page by server.mjs (see injectConfig).
 interface WebConfig {
@@ -57,11 +58,23 @@ try {
   throw error;
 }
 
-mountOutliner(app, {
+// Markdown files open in the outliner. Other files open in a new tab from the server, which serves
+// the first of the candidate paths that exists; it serves them only for a folder (canCreate).
+// The tab is opened before anything is awaited, so that the browser does not block it.
+function openLink(link: FileLink) {
+  if (isMarkdownLink(link)) return openMarkdownLink(link, adapter, mounted, t);
+  if (!config.canCreate) return Promise.reject(new Error(t.link.otherFile));
+  const query = linkCandidates(link).map(file => 'path=' + encodeURIComponent(file)).join('&');
+  window.open('/api/raw?' + query, '_blank', 'noopener');
+  return Promise.resolve();
+}
+
+const mounted: Mounted = mountOutliner(app, {
   adapter,
   initialFile: config.initialFile,
   language,
   preferences,
+  openLink,
   savePreferences: value => {
     localStorage.setItem(config.preferencesKey, JSON.stringify(value));
     return Promise.resolve();

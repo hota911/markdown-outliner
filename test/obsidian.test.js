@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { posix } from 'node:path';
 import { test, vi } from 'vitest';
 import * as core from '../src/core.ts';
 import { TFile } from 'obsidian';
@@ -50,7 +51,8 @@ vi.mock('obsidian', async () => {
   // The existing tests run with Obsidian set to Japanese; fixture() can choose another language.
   // Like Obsidian's getAllTags: the tags of the text and of the frontmatter, written with `#`.
   const getAllTags = cache => [...(cache.tags ?? []).map(({ tag }) => tag), ...(cache.frontmatter?.tags ?? []).map(tag => '#' + tag)];
-  return { Plugin, ItemView, FileView, MarkdownView, TFile, Notice, Scope, getAllTags, normalizePath: posix.normalize,
+  const Keymap = { isModEvent: event => event.metaKey || event.ctrlKey ? 'tab' : event.button === 1 };
+  return { Plugin, ItemView, FileView, MarkdownView, TFile, Notice, Scope, Keymap, getAllTags, normalizePath: posix.normalize,
     getLanguage: () => state.language, requireApiVersion: () => true };
 });
 
@@ -125,10 +127,17 @@ async function fixture({ language = 'ja', pomodoro } = {}) {
     ['work.md', { tags: [{ tag: '#work' }, { tag: '#仕事/進行中' }] }],
     ['projects/plan.md', { frontmatter: { tags: ['plan'] } }],
   ]);
-  const metadataCache = { getFileCache: file => caches.get(file.path) ?? null };
+  // Like MetadataCache#getFirstLinkpathDest: from the folder of the source, then from the root.
+  const getFirstLinkpathDest = (linkpath, source) => {
+    const folder = source.split('/').slice(0, -1);
+    const name = /\.[^/.]+$/.test(linkpath) ? linkpath : linkpath + '.md';
+    const found = [[...folder, name].join('/'), name].map(path => posix.normalize(path)).find(path => files.has(path));
+    return found ? new TFile(found) : null;
+  };
+  const metadataCache = { getFileCache: file => caches.get(file.path) ?? null, getFirstLinkpathDest };
   const contentEl = { empty() {}, addClass() {} };
   const existing = [];
-  const created = [], revealed = [], states = [], opened = [], fileMenus = [];
+  const created = [], revealed = [], states = [], opened = [], fileMenus = [], linked = [];
   let plugin = null, activeView = null;
   // Like WorkspaceLeaf#setViewState: closes the current view and opens one of the new type.
   const newLeaf = () => {
@@ -167,6 +176,7 @@ async function fixture({ language = 'ja', pomodoro } = {}) {
       return leaf;
     },
     revealLeaf: leaf => { revealed.push(leaf); },
+    openLinkText: async (linktext, source, newLeaf) => { linked.push([linktext, source, newLeaf]); },
     getActiveViewOfType: type => activeView instanceof type ? activeView : null,
     on: (name, callback) => { if (name === 'file-menu') fileMenus.push(callback); },
   } };
@@ -176,7 +186,7 @@ async function fixture({ language = 'ja', pomodoro } = {}) {
   await view.onOpen();
   const setActiveView = value => { activeView = value; };
   return { plugin, view, adapter: mounts.at(-1).options.adapter, files, trashed, reads, writes, mounts, notices, existing, created, revealed, states, opened,
-    fileMenus, newLeaf, setActiveView };
+    fileMenus, newLeaf, setActiveView, linked };
 }
 
 test('ブックマーク設定を View に渡し Markdown と別に保存する', async () => {
@@ -575,4 +585,18 @@ test('ファイルの行が変わっていたり、プラグインの内部が�
   delete pomodoro.timer.start;
   await assert.rejects(f.adapter.startPomodoro({ path: 'TODO.md', line: 1, title: 'a ^ab12', blockId: 'ab12' }), /対応していないバージョン/);
   assert.equal(pomodoro.tracker.tasks.length, 0);
+});
+
+test('ファイルへのリンクはリンク元のファイルから解決して Obsidian で開き、⌘クリックでは新しいタブで開く', async () => {
+  const f = await fixture();
+  const { openLink } = f.mounts.at(-1).options;
+  await openLink({ path: 'plan.md', subpath: '#Goals', source: 'projects/plan.md' }, { button: 0 });
+  await openLink({ path: '../notes.txt', subpath: '', source: 'projects/plan.md' }, { button: 0, metaKey: true });
+  await openLink({ path: '/work', subpath: '', source: 'projects/plan.md' }, { button: 1 });
+  assert.deepEqual(f.linked, [
+    ['projects/plan.md#Goals', 'projects/plan.md', false],
+    ['notes.txt', 'projects/plan.md', 'tab'],
+    ['work.md', 'projects/plan.md', true],
+  ]);
+  await assert.rejects(openLink({ path: 'missing.md', subpath: '', source: 'TODO.md' }, { button: 0 }), { message: f.plugin.t.link.missing });
 });

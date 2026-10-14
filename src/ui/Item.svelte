@@ -6,7 +6,7 @@
   import { syncNote, syncValue } from './controller.svelte.ts';
   import { estimateLabel } from './estimate.ts';
   import { matchRanges } from './filter.ts';
-  import { parseInline } from './inline.ts';
+  import { linkAt, parseInline } from './inline.ts';
   import { grow } from './motion.ts';
 
   let { ctrl, item }: { ctrl: Controller; item: ItemView } = $props();
@@ -17,8 +17,8 @@
   // The rendered text follows the textarea when it loses focus, before the next render updates the row.
   let shownTitle = $derived(item.row.title);
   let shownNote = $derived(item.row.note);
-  const display = $derived(parseInline(shownTitle));
-  const noteDisplay = $derived(parseInline(shownNote));
+  const display = $derived(parseInline(shownTitle, ctrl.canOpenLinks));
+  const noteDisplay = $derived(parseInline(shownNote, ctrl.canOpenLinks));
   const marks = $derived(item.highlight ? matchRanges(shownTitle, item.highlight) : []);
   // The rendered title is laid over the textarea while it is not edited, for inline Markdown, tags
   // and filter matches.
@@ -65,10 +65,34 @@
     return true;
   }
 
+  // ⌘/Ctrl-click on a Markdown link in the raw text follows it, as a click does on the rendered text.
+  function followLinkAt(event: MouseEvent, text: string, offset: number) {
+    const link = event.metaKey || event.ctrlKey ? linkAt(parseInline(text, ctrl.canOpenLinks) ?? [], offset) : null;
+    if (!link) return false;
+    event.preventDefault();
+    if (link.file) ctrl.openLink(item.path, link.file, event);
+    else window.open(link.href, '_blank', 'noopener,noreferrer');
+    return true;
+  }
+
   function fieldClick(event: MouseEvent & { currentTarget: HTMLTextAreaElement }) {
     // The click has already put the caret where the pointer is.
     const node = event.currentTarget;
-    if (node.selectionStart === node.selectionEnd && filterTag(event, node.value, node.selectionStart)) node.blur();
+    if (node.selectionStart !== node.selectionEnd) return;
+    if (filterTag(event, node.value, node.selectionStart) || followLinkAt(event, node.value, node.selectionStart)) node.blur();
+  }
+
+  // A link to a file is opened by the host instead of the browser, also on a middle click.
+  function followFileLink(event: MouseEvent) {
+    const link = (event.target as Element).closest<HTMLElement>('a[data-file]');
+    if (!link) return false;
+    event.preventDefault();
+    ctrl.openLink(item.path, { path: link.dataset.file!, subpath: link.dataset.subpath ?? '' }, event);
+    return true;
+  }
+
+  function middleClick(event: MouseEvent) {
+    if (event.button === 1) followFileLink(event);
   }
 
   // The first non-empty text after `node` inside `root`.
@@ -87,7 +111,7 @@
   // not on text, the caret goes to the end.
   function displayClick(event: MouseEvent & { currentTarget: HTMLElement }, field: HTMLTextAreaElement | undefined) {
     const target = event.target as Element;
-    if (target.closest('a') || !field) return;
+    if (followFileLink(event) || target.closest('a') || !field) return;
     const tag = target.closest<HTMLElement>('[data-tag]');
     if (tag) {
       ctrl.filterByTag(tag.dataset.tag!);
@@ -147,7 +171,8 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="outline-line heading-line" data-level={item.row.level} {...lineEvents}>
       <button type="button" class="icon fold" title={ctrl.t.item.fold} disabled={!item.hasChildren} onclick={() => ctrl.toggleFold(item.path, item.row.line)}>{item.collapsed ? '▸' : '▾'}</button>
-      <div class="heading-title" role="heading" aria-level={item.row.level} data-path={item.path} data-line={item.row.line}>
+      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+      <div class="heading-title" role="heading" aria-level={item.row.level} data-path={item.path} data-line={item.row.line} onclick={followFileLink} onauxclick={middleClick}>
         <InlineText nodes={display ?? [{ kind: 'text', text: shownTitle, start: 0 }]} {marks} />
       </div>
       {@render subtotal()}
@@ -197,7 +222,7 @@
         {#if overlay}
           <!-- The textarea stays the keyboard target; clicking the rendered text only forwards focus. -->
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <div class="title-display" onclick={event => displayClick(event, titleNode)}><InlineText nodes={display ?? [{ kind: 'text', text: shownTitle, start: 0 }]} {marks} /></div>
+          <div class="title-display" onclick={event => displayClick(event, titleNode)} onauxclick={middleClick}><InlineText nodes={display ?? [{ kind: 'text', text: shownTitle, start: 0 }]} {marks} /></div>
         {/if}
       </div>
       {@render subtotal()}
@@ -236,7 +261,7 @@
         ></textarea>
         {#if noteDisplay !== null}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <div class="note-display" onclick={event => displayClick(event, noteNode)}><InlineText nodes={noteDisplay} /></div>
+          <div class="note-display" onclick={event => displayClick(event, noteNode)} onauxclick={middleClick}><InlineText nodes={noteDisplay} /></div>
         {/if}
       </div>
     {/if}

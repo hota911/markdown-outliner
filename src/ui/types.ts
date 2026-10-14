@@ -71,6 +71,16 @@ export interface Preferences {
   lastFile?: string;
 }
 
+// A Markdown link to a file of the vault or folder, such as `[plan](../plan.md#Next)`.
+export interface FileLink {
+  // The target without `#heading`, URL-decoded and without `<>`: `my plan.md` for `my%20plan.md`.
+  path: string;
+  // `#heading` with its `#`, or ''.
+  subpath: string;
+  // The file that contains the link, relative to the root.
+  source: string;
+}
+
 export interface MountOptions {
   adapter: Adapter;
   // Obsidian keeps drafts on the plugin so unsaved input survives closing the view.
@@ -83,9 +93,14 @@ export interface MountOptions {
   savePreferences?: (value: Preferences) => Promise<void>;
   // The clock for completion dates and recurring tasks. Tests pass a fixed date.
   now?: () => Date;
+  // Follows a link to a file. `event` is the click, so the host can open a new tab on a ⌘/Ctrl-click
+  // or a middle click. Without it, links to files are shown as plain text.
+  openLink?: (link: FileLink, event: MouseEvent) => Promise<void>;
 }
 
 export interface Mounted {
   completeActive(): boolean;
   destroy(): void;
+  // Shows another file, as choosing it in the file picker does.
+  openFile(path: string): Promise<void>;
 }

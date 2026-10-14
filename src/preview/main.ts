@@ -2,6 +2,7 @@ import '../styles.css';
 import '../web/theme.css';
 import '../web/web.css';
 import { languageOf, messages } from '../ui/messages.ts';
+import { isMarkdownLink, openMarkdownLink } from '../ui/links.ts';
 import { mountOutliner } from '../ui/mount.ts';
 import { createMemoryAdapter } from './adapter.ts';
 
@@ -14,5 +15,11 @@ const t = messages[language];
 document.documentElement.lang = language;
 document.title = t.web.title;
 
-// Nothing is persisted: a reload starts again from the samples.
-mountOutliner(document.getElementById('app')!, { adapter: createMemoryAdapter(seed, t), language });
+// Nothing is persisted: a reload starts again from the samples. Only links to Markdown files can be
+// opened, in the outliner.
+const adapter = createMemoryAdapter(seed, t);
+const mounted = mountOutliner(document.getElementById('app')!, {
+  adapter,
+  language,
+  openLink: link => isMarkdownLink(link) ? openMarkdownLink(link, adapter, mounted, t) : Promise.reject(new Error(t.link.otherFile)),
+});
