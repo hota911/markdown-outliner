@@ -1,3 +1,0 @@
-kind: Added
-body: 'Delete an embedded file from its embed header: after confirmation it moves to the trash (`.trash/` in the web version, the "Deleted files" setting in Obsidian) and the embed line is removed. Undo restores only the embed line.'
-time: 2026-10-11T17:30:24.265212+09:00

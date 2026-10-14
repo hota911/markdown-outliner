@@ -128,6 +128,12 @@
 .outliner :is(.title-display, .note-display) .tag { color: var(--tag-color, var(--text-accent)); background: var(--tag-background, none); border-radius: var(--tag-radius, 0); text-decoration: var(--tag-decoration, underline); cursor: pointer; }
 .outliner :is(.title-display, .note-display) .tag:hover { color: var(--tag-color-hover, var(--text-accent)); background: var(--tag-background-hover, none); text-decoration: var(--tag-decoration-hover, underline); }
 .outliner .is-done > .outline-line .title-display { color: var(--text-faint); text-decoration: line-through; }
+/* Fields of the Tasks and pomodoro-timer plugins (🍅, 🔁, 📅, ^id) show as small badges. */
+.outliner :is(.title-display, .note-display, .heading-title) .meta { display: inline-block; padding: 0 6px; border-radius: 10px; background: var(--background-modifier-hover); color: var(--text-muted); font-size: .8em; line-height: 20px; white-space: nowrap; }
+.outliner :is(.title-display, .note-display, .heading-title) .meta[data-meta="block"] { padding: 0 2px; background: none; color: var(--text-faint); }
+.outliner :is(.title-display, .note-display, .heading-title) .meta.is-marked { background: var(--text-highlight-bg); }
+.outliner :is(.estimate-subtotal, .estimate-total) { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+.outliner .estimate-subtotal { line-height: 28px; }
 .outliner .title-display mark { background: var(--text-highlight-bg); color: inherit; border-radius: 2px; }
 /* An ancestor shown only for a matching descendant: the same row, dimmed until it is edited. */
 .outliner .is-context > .outline-line:not(:focus-within) { opacity: .6; }

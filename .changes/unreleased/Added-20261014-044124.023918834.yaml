@@ -1,0 +1,3 @@
+kind: Added
+body: "Tasks and Pomodoro Timer fields (`[\U0001F345:: 1/3]`, `\U0001F501 every day`, `\U0001F4C5 2026-10-15`, `^id`) are shown as badges, with pomodoro sums for items with children and for the items shown."
+time: 2026-10-14T04:41:24.023918834Z

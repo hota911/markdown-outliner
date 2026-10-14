@@ -7,6 +7,7 @@ const shape = nodes => nodes.map(node => {
   if (node.kind === 'text') return node.text;
   if (node.kind === 'code') return ['code', node.text];
   if (node.kind === 'tag') return ['tag', node.tag];
+  if (node.kind === 'meta') return ['meta', node.meta, node.label];
   if (node.kind === 'link') return ['link', node.href, ...shape(node.children)];
   return [node.kind, ...shape(node.children)];
 });
@@ -73,4 +74,26 @@ test('words that the search box would not treat as a tag stay text', () => {
   assert.deepEqual(parsed('`#code` [#label](https://example.com) https://example.com/#anchor'), [
     ['code', '#code'], ' ', ['link', 'https://example.com', '#label'], ' ', ['link', 'https://example.com/#anchor', 'https://example.com/#anchor'],
   ]);
+});
+
+test('Tasks and pomodoro-timer fields become meta nodes', () => {
+  assert.deepEqual(parsed('Misc [🍅:: 3] 🔁 every day ^tlot'), ['Misc ', ['meta', 'pomodoro', '🍅 3'], ' ', ['meta', 'recurrence', '🔁 every day'], ' ', ['meta', 'block', '^tlot']]);
+  assert.deepEqual(parsed('a [🍅:: 0/1] 📅 2026-10-15 ✅ 2026-10-14 #home'), [
+    'a ', ['meta', 'pomodoro', '🍅 0/1'], ' ', ['meta', 'date', '📅 2026-10-15'], ' ', ['meta', 'date', '✅ 2026-10-14'], ' ', ['tag', 'home'],
+  ]);
+  assert.deepEqual(parsed('[🍅::]'), [['meta', 'pomodoro', '🍅 0']]);
+});
+
+test('meta nodes keep their source and its offset', () => {
+  assert.deepEqual(parseInline('x [🍅:: 1/2] ^ab-1'), [
+    { kind: 'text', text: 'x ', start: 0 },
+    { kind: 'meta', meta: 'pomodoro', label: '🍅 1/2', text: '[🍅:: 1/2]', start: 2 },
+    { kind: 'text', text: ' ', start: 12 },
+    { kind: 'meta', meta: 'block', label: '^ab-1', text: '^ab-1', start: 13 },
+  ]);
+});
+
+test('meta fields stay text inside code and a block ID only counts at the end', () => {
+  assert.deepEqual(parsed('`[🍅:: 1]` a'), [['code', '[🍅:: 1]'], ' a']);
+  assert.equal(parseInline('x^2 and ^id in the middle'), null);
 });

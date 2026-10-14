@@ -54,6 +54,7 @@ const en = {
     resetTitle: 'Reset the search, tag and status filters',
     reset: 'Reset',
     saveTitle: 'Save changed files',
+    estimateTotal: 'Pomodoros of the items shown (done/estimated)',
     save: 'Save',
     reloadTitle: 'Reload files; files with changes keep your input',
     reload: 'Reload',
@@ -164,6 +165,7 @@ const en = {
     extractTitle: 'Move the item with its children and notes to a new file and embed it',
     extract: 'Move to file',
     childrenEnd: (title: string) => `End of the children of ${title}`,
+    estimateSubtotal: 'Pomodoros of the items under this one (done/estimated)',
     filterContext: 'Shown because an item under it matches the filter',
   },
 
@@ -346,6 +348,7 @@ const ja: Messages = {
     resetTitle: '検索・タグ・状態の絞り込みをリセット',
     reset: 'リセット',
     saveTitle: '変更したファイルを保存',
+    estimateTotal: '表示中の項目のポモドーロ（実績/見積もり）',
     save: '保存',
     reloadTitle: '変更があるファイルは保存するか入力を保持します',
     reload: '再読込',
@@ -455,6 +458,7 @@ const ja: Messages = {
     extractTitle: '項目を子とノートごと新しいファイルへ移して埋め込みにする',
     extract: 'ファイルにする',
     childrenEnd: title => title + ' の子項目の末尾',
+    estimateSubtotal: 'この項目の下にある項目のポモドーロ（実績/見積もり）',
     filterContext: '配下の項目が絞り込みに一致するため表示',
   },
 

@@ -514,3 +514,38 @@ describe('starting a pomodoro', () => {
     expect(await screen.findByText('ポモドーロを開始できません：止まっています')).toBeTruthy();
   });
 });
+
+describe('Tasks and pomodoro fields', () => {
+  const text = '- [ ] parent\n  - [ ] a [🍅:: 1/3] 🔁 every day ^ab12\n  - [x] b [🍅:: 2]\n- [ ] c [🍅:: 0/2]\n';
+
+  it('shows the fields as badges and keeps the source in the editable title', async () => {
+    const { title } = await setup({ 'tasks.md': text });
+    const badges = [...title('a [🍅:: 1/3] 🔁 every day ^ab12').closest('.outline-item').querySelectorAll('.title-display .meta')];
+    expect(badges.map(node => [node.dataset.meta, node.textContent])).toEqual([['pomodoro', '🍅 1/3'], ['recurrence', '🔁 every day'], ['block', '^ab12']]);
+    expect(badges[0].title).toBe('[🍅:: 1/3]');
+    expect(title('a [🍅:: 1/3] 🔁 every day ^ab12')).toBeTruthy();
+  });
+
+  it('clicking a badge edits the title with the caret after its field', async () => {
+    const { user, title } = await setup({ 'tasks.md': text });
+    await user.click(title('c [🍅:: 0/2]').closest('.outline-item').querySelector('.meta'));
+    const field = title('c [🍅:: 0/2]');
+    expect(document.activeElement).toBe(field);
+    expect(field.selectionStart).toBe('c [🍅:: 0/2]'.length);
+  });
+
+  it('sums the counts under a parent and of the items shown', async () => {
+    const { user, container, row, screen } = await setup({ 'tasks.md': text });
+    expect(row('parent').getByTitle('この項目の下にある項目のポモドーロ（実績/見積もり）').textContent).toBe('Σ 🍅 3/3');
+    expect(row('c [🍅:: 0/2]').queryByTitle('この項目の下にある項目のポモドーロ（実績/見積もり）')).toBeNull();
+    const total = () => container.querySelector('.estimate-total')?.textContent;
+    expect(total()).toBe('🍅 3/5');
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'not-done');
+    expect(total()).toBe('🍅 1/5');
+  });
+
+  it('shows no total without any pomodoro field', async () => {
+    const { container } = await setup({ 'tasks.md': '- [ ] a\n' });
+    expect(container.querySelector('.estimate-total')).toBeNull();
+  });
+});
