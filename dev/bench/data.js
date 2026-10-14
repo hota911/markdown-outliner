@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791576978388,
+  "lastUpdate": 1791948570753,
   "repoUrl": "https://github.com/hota911/markdown-outliner",
   "entries": {
     "Performance": [
@@ -831,6 +831,110 @@ window.BENCHMARK_DATA = {
           {
             "name": "filter by a status (34000 items)",
             "value": 21.96171499999997,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "38419042+hota911@users.noreply.github.com",
+            "name": "Hiroyuki Ota",
+            "username": "hota911"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7be064edee9fba3ded6d8c8be1e550d8f3440b6c",
+          "message": "Reorder bookmarks by drag and drop or Alt+Up/Down (#60)\n\nEach bookmark gets a ⠿ handle. Dragging it with the mouse or by touch shows\nan insertion line between bookmarks and moves the bookmark there; Alt+Up/Down\non a focused bookmark or its handle moves it by one and keeps the focus on it.\nThe order is part of the saved preferences, so it persists in local storage\non the web and in the plugin data in Obsidian with no format change.\n\nDragging uses pointer events with pointer capture instead of HTML5 drag and\ndrop, which does not work reliably with touch (the outline items do not\nsupport touch dragging for that reason).\n\nCo-authored-by: Claude Opus 5.5 <noreply@anthropic.com>",
+          "timestamp": "2026-10-14T12:29:06+09:00",
+          "tree_id": "4de31a35ae17d0836265b4d2d69a5526a356a461",
+          "url": "https://github.com/hota911/markdown-outliner/commit/7be064edee9fba3ded6d8c8be1e550d8f3440b6c"
+        },
+        "date": 1791948570729,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "open: parse the file and key its rows (17000 items)",
+            "value": 37.454139999999995,
+            "unit": "ms"
+          },
+          {
+            "name": "open: parse the file and key its rows (34000 items)",
+            "value": 59.49333999999999,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (17000 items)",
+            "value": 60.41482000000008,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (34000 items)",
+            "value": 112.32221400000003,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (17000 items)",
+            "value": 46.207516999999996,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (34000 items)",
+            "value": 87.58016099999998,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (17000 items)",
+            "value": 71.210555,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (34000 items)",
+            "value": 140.29458099999988,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (17000 items)",
+            "value": 4.674343000000022,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (34000 items)",
+            "value": 9.951526999999999,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (17000 items)",
+            "value": 15.617549999999994,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (34000 items)",
+            "value": 28.67060799999996,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (17000 items)",
+            "value": 13.518701999999962,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (34000 items)",
+            "value": 26.915705000000003,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (17000 items)",
+            "value": 11.006036000000023,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (34000 items)",
+            "value": 21.434597000000053,
             "unit": "ms"
           }
         ]
