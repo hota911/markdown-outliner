@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791959549630,
+  "lastUpdate": 1791960052355,
   "repoUrl": "https://github.com/hota911/markdown-outliner",
   "entries": {
     "Performance": [
@@ -1351,6 +1351,110 @@ window.BENCHMARK_DATA = {
           {
             "name": "filter by a status (34000 items)",
             "value": 22.119518000000028,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "158243242+devin-ai-integration[bot]@users.noreply.github.com",
+            "name": "devin-ai-integration[bot]",
+            "username": "devin-ai-integration[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fdd5faefa130b3ecb9f27e59a003536e0bd59d14",
+          "message": "Complete recurring tasks (🔁) with their next occurrence, as the Tasks plugin does (#65)\n\nCo-authored-by: Devin AI <158243242+devin-ai-integration[bot]@users.noreply.github.com>\nCo-authored-by: Hiroyuki Ota <hiroyuki.ot@gmail.com>",
+          "timestamp": "2026-10-14T06:40:35Z",
+          "tree_id": "ae102102a69c75c96cadd949057adf5b52c4d2f9",
+          "url": "https://github.com/hota911/markdown-outliner/commit/fdd5faefa130b3ecb9f27e59a003536e0bd59d14"
+        },
+        "date": 1791960052341,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "open: parse the file and key its rows (17000 items)",
+            "value": 21.938221,
+            "unit": "ms"
+          },
+          {
+            "name": "open: parse the file and key its rows (34000 items)",
+            "value": 36.781206000000054,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (17000 items)",
+            "value": 32.93635999999998,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (34000 items)",
+            "value": 65.33440700000006,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (17000 items)",
+            "value": 23.795726000000002,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (34000 items)",
+            "value": 46.05752499999994,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (17000 items)",
+            "value": 39.99613199999999,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (34000 items)",
+            "value": 81.03360599999985,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (17000 items)",
+            "value": 2.641829999999999,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (34000 items)",
+            "value": 5.689873000000006,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (17000 items)",
+            "value": 8.045549999999992,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (34000 items)",
+            "value": 14.084104000000025,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (17000 items)",
+            "value": 6.809495999999996,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (34000 items)",
+            "value": 13.374511999999982,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (17000 items)",
+            "value": 5.503763000000021,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (34000 items)",
+            "value": 10.739432000000022,
             "unit": "ms"
           }
         ]
