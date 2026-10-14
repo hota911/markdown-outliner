@@ -200,6 +200,19 @@ describe('filtering', () => {
     expect(titleValues()).toEqual(['done top']);
   });
 
+  it('filters as the search box is typed in, keeping the text as typed', async () => {
+    const { user, screen, titleValues } = await setup({ 'tasks.md': text });
+    const search = screen.getByRole('searchbox', { name: '語句・タグで絞り込み' });
+    await user.type(search, '#work op');
+    expect(titleValues()).toEqual(['parent', 'open child #work']);
+    expect(search.value).toBe('#work op');
+    await user.clear(search);
+    expect(titleValues()).toEqual(['parent', 'finished child', 'open child #work', 'doing #home', 'done top']);
+    await user.type(search, 'do ');
+    expect(titleValues()).toEqual(['doing #home', 'done top']);
+    expect(search.value).toBe('do ');
+  });
+
   const contextNote = '配下の項目が絞り込みに一致するため表示';
   const contextTitles = screen => screen.queryAllByRole('textbox', { name: '項目の内容', description: contextNote }).map(node => node.value);
   const depth = node => node.closest('.outline-item').style.getPropertyValue('--depth');
