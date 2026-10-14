@@ -176,6 +176,8 @@ export class Controller {
   private selectedPath: string | null = null;
   private selectedLines = new Set<number>();
   private selectionAnchor: number | null = null;
+  // A press in a title, followed while the button is held: reaching another item selects items.
+  private textDrag: { path: string; line: number; items: boolean } | null = null;
   private dragging: { path: string; lines: number[] } | null = null;
   // Row keys (see RowKeys) of folded items, so a fold follows its item when lines move or other
   // items share its text. An item whose line is rewritten externally gets a new key and unfolds.
@@ -251,6 +253,11 @@ export class Controller {
     this.pollTimer = view.setInterval(() => { void this.poll(); }, 3000);
     view.addEventListener('focus', this.resume);
     view.document.addEventListener('visibilitychange', this.resume);
+    container.addEventListener('pointerdown', this.textDragStart);
+    // On the document: while text is selected the moves go to the field, which a render may replace.
+    view.document.addEventListener('pointermove', this.textDragMove);
+    view.document.addEventListener('pointerup', this.textDragEnd);
+    view.document.addEventListener('pointercancel', this.textDragEnd);
     this.render();
     this.adapter.list().then(list => {
       this.fileList = list;
@@ -270,6 +277,10 @@ export class Controller {
     this.pollWindow?.clearInterval(this.pollTimer);
     this.pollWindow?.removeEventListener('focus', this.resume);
     this.pollWindow?.document.removeEventListener('visibilitychange', this.resume);
+    this.pollWindow?.document.removeEventListener('pointerup', this.textDragEnd);
+    this.pollWindow?.document.removeEventListener('pointercancel', this.textDragEnd);
+    this.container?.removeEventListener('pointerdown', this.textDragStart);
+    this.pollWindow?.document.removeEventListener('pointermove', this.textDragMove);
     this.resizeObserver?.disconnect();
     window.clearTimeout(this.saveTimer);
     this.clearToast();
@@ -1163,6 +1174,66 @@ export class Controller {
     if (!doc || chain.includes(target) || target === path) return false;
     return [...this.shown(target, doc.text, [...chain, path]).values()].some(Boolean);
   }
+
+  // The item a pointer event is over: the row of its title, handle or status, read from data-line.
+  private itemAt(event: PointerEvent) {
+    const doc = this.container!.ownerDocument;
+    // While text is being selected, the browser sends the moves to the field the press started in.
+    const under = typeof doc.elementFromPoint === 'function' ? doc.elementFromPoint(event.clientX, event.clientY) : event.target;
+    const node = under instanceof Element ? under.closest('.outline-item')?.querySelector<HTMLElement>('[data-path][data-line]') : null;
+    return node ? { path: node.dataset.path!, line: Number(node.dataset.line) } : null;
+  }
+
+  private textDragStart = (event: PointerEvent) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const field = target?.closest('.title-area')?.querySelector<HTMLElement>('[data-field="title"]');
+    this.textDrag = field && event.button === 0 && !event.shiftKey && !event.metaKey && !event.ctrlKey
+      ? { path: field.dataset.path!, line: Number(field.dataset.line), items: false } : null;
+  };
+
+  private textDragEnd = () => { this.textDrag = null; };
+
+  // A text selection cannot run across items, since each title is a field of its own. When the
+  // drag reaches another item, it selects the items from the first one to it instead, as
+  // Shift-click does: siblings, so an item deeper or shallower stands for its ancestor at that level.
+  private textDragMove = (event: PointerEvent) => {
+    const drag = this.textDrag;
+    if (!drag || !(event.buttons & 1)) return;
+    const at = this.itemAt(event);
+    if (!at || at.path !== drag.path || !drag.items && at.line === drag.line) return;
+    const rows = this.rows(drag.path);
+    const byLine = new Map(rows.map(row => [row.line, row]));
+    const chain = (line: number) => {
+      const result: KeyedRow[] = [];
+      for (let row = byLine.get(line); row; row = row.parentLine === null ? undefined : byLine.get(row.parentLine)) result.push(row);
+      return result;
+    };
+    const targets = chain(at.line);
+    let pair: [KeyedRow, KeyedRow] | undefined;
+    for (const from of chain(drag.line)) {
+      const to = targets.find(row => row.parentLine === from.parentLine);
+      if (to) { pair = [from, to]; break; }
+    }
+    if (!pair || pair[0] === pair[1] && !drag.items) return;
+    const [from, to] = pair;
+    const visible = this.shown(drag.path, this.docs.get(drag.path)!.text);
+    const lines = rows.filter(row => row.parentLine === from.parentLine && visible.has(row.line)
+      && row.line >= Math.min(from.line, to.line) && row.line <= Math.max(from.line, to.line)).map(row => row.line);
+    if (drag.items && this.selectedPath === drag.path && lines.length === this.selectedLines.size && lines.every(line => this.selectedLines.has(line))) return;
+    if (!drag.items) {
+      drag.items = true;
+      const doc = this.container!.ownerDocument;
+      (doc.activeElement as HTMLElement | null)?.blur?.();
+      doc.getSelection?.()?.removeAllRanges();
+    }
+    event.preventDefault();
+    this.clearSelection();
+    this.selectedPath = drag.path;
+    this.selectedLines = new Set(lines);
+    this.selectionAnchor = from.line;
+    this.active = null;
+    this.render();
+  };
 
   selectRow = (path: string, row: KeyedRow, event: MouseEvent) => {
     const rows = this.rows(path);
