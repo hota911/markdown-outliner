@@ -5,7 +5,7 @@ import { localDate } from '../recurrence.ts';
 import { merge3, type Side } from '../three-way-merge.ts';
 import { RowKeys, type KeyedRow } from './keys.ts';
 import { bookmarkView, moveEntry, sameView, savedView, validBookmark, type BookmarkView, type SavedView } from './bookmarks.ts';
-import { addEstimates, estimateOf, type Estimate } from './estimate.ts';
+import { addEstimates, changeEstimate as estimateChanged, estimateOf, type Estimate } from './estimate.ts';
 import type { LinkTarget } from './inline.ts';
 import { filterActive, rowMatches, statuses, type FilterQuery, type TextQuery } from './filter.ts';
 import { errorText, messages, type Messages } from './messages.ts';
@@ -977,7 +977,7 @@ export class Controller {
     // The zoomed-in row is the root of the view; zooming in expands it, and folding it would hide the whole view.
     const hasChildren = !zoomed && this.rows(slash.path).some(child => child.parentLine === row.line);
     const fold = hasChildren ? this.collapsed.has(row.key) ? 'collapsed' : 'expanded' : null;
-    return commandOptions(slash.query, row.kind, zoomed, fold, this.t);
+    return commandOptions(slash.query, row.kind, zoomed, fold, this.t, estimateOf(row.title)?.estimated ?? 0);
   }
 
   // The open menu of a title, or null. A menu without matches is not shown, and Enter stays Enter.
@@ -1084,6 +1084,7 @@ export class Controller {
     if (command === 'todo' || command === 'in-progress' || command === 'done') mutateTitle(text => core.updateStatus(strip(text), line, command, this.today()));
     else if (command === 'task') mutateTitle(text => core.updateStatus(strip(text), line, 'todo', this.today()));
     else if (command === 'bullet') mutateTitle(text => core.toBullet(strip(text), line));
+    else if (command === 'estimate-up' || command === 'estimate-down') mutateTitle(text => core.updateTitle(text, line, estimateChanged(title, command === 'estimate-up' ? 1 : -1)));
     else {
       mutateTitle(text => core.updateTitle(text, line, title));
       if (command === 'note') this.focusNote(path, line);
@@ -1099,6 +1100,8 @@ export class Controller {
   setStatus = (path: string, line: number, status: Status) => this.mutate(path, text => core.updateStatus(text, line, status, this.today()), 'title');
   moveRow = (path: string, line: number, direction: 'up' | 'down') => this.mutate(path, text => this.move(path, text, line, direction), 'title');
   showNote = (path: string, line: number) => this.focusNote(path, line);
+  changeEstimate = (path: string, line: number, delta: number) => this.mutate(path, text =>
+    core.updateTitle(text, line, estimateChanged(core.parse(text).find(row => row.line === line)!.title, delta)), 'title');
 
   toggleFold = (path: string, line: number) => {
     const id = this.rowKey(path, line);

@@ -40,6 +40,11 @@ const effects: { button: string; title: string; check: (page: Page, outliner: Ou
     check: async (_page, outliner) => expect.poll(outliner.saved).toBe('- [ ] b\n- [ ] a\n  - [ ] a1\n'),
   },
   {
+    button: t.item.addEstimate,
+    title: 'b',
+    check: async (_page, outliner) => expect.poll(outliner.saved).toBe('- [ ] a\n  - [ ] a1\n- [ ] b [🍅:: 0/1]\n'),
+  },
+  {
     button: t.item.moveDown,
     title: 'a',
     check: async (_page, outliner) => expect.poll(outliner.saved).toBe('- [ ] b\n- [ ] a\n  - [ ] a1\n'),

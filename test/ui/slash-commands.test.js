@@ -274,3 +274,15 @@ describe('embedding an existing file from the / menu', () => {
     expect(title('/')).toBeTruthy();
   });
 });
+
+describe('the pomodoro estimate commands', () => {
+  it('add a pomodoro to the estimate and take one away, removing the typed command', async () => {
+    const { user, screen, title, saved } = await setup({ 'tasks.md': '- [ ] Plan [🍅:: 1/2]\n' });
+    await user.type(title('Plan [🍅:: 1/2]'), ' /見積もり');
+    expect(options(screen)).toEqual(['🍅 見積もり +1', '🍅 見積もり −1']);
+    await user.keyboard('{Enter}');
+    expect(await saved()).toBe('- [ ] Plan [🍅:: 1/3]\n');
+    await user.type(title('Plan [🍅:: 1/3]'), ' /見積もり{ArrowDown}{Enter}');
+    expect(await saved()).toBe('- [ ] Plan [🍅:: 1/2]\n');
+  });
+});
