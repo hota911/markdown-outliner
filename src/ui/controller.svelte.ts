@@ -9,6 +9,8 @@ import { errorText, messages, type Messages } from './messages.ts';
 import { commandOptions, fileOptions, relativePath, sortTags, tagOptions, trigger, type Slash, type SlashCommand } from './slash.ts';
 import type { Adapter, Bookmark, Doc, MountOptions, Preferences, Revision, StatusFilter } from './types.ts';
 
+const blockIdOf = (title: string) => /(?:^|[ \t])\^([A-Za-z0-9-]+)[ \t]*$/.exec(title)?.[1] ?? null;
+
 export type Field = 'title' | 'note';
 type RowKind = 'task' | 'bullet';
 
@@ -192,6 +194,10 @@ export class Controller {
 
   get canTrash() {
     return !!this.adapter.trash;
+  }
+
+  get canStartPomodoro() {
+    return !!this.adapter.startPomodoro;
   }
 
   private describe(error: unknown) {
@@ -1318,6 +1324,26 @@ export class Controller {
     if (path === null) return;
     try { await this.adapter.openSource!(path); }
     catch (error) { this.message = this.describe(error); this.render(); }
+  };
+
+  // The task gets a block id first and is saved, so that the timer can find and update its line.
+  startPomodoro = async (path: string, line: number) => {
+    const start = this.adapter.startPomodoro?.bind(this.adapter);
+    const row = this.rows(path).find(value => value.line === line);
+    if (!start || row?.kind !== 'task') return;
+    if (!blockIdOf(row.title)) {
+      const doc = this.docs.get(path)!;
+      let id: string;
+      do id = Math.random().toString(36).slice(2, 6); while (doc.text.includes('^' + id));
+      this.mutate(path, text => core.updateTitle(text, line, row.title.trimEnd() + ' ^' + id), null);
+    }
+    await this.saveAll();
+    const doc = this.docs.get(path);
+    const saved = this.rows(path).find(value => value.line === line);
+    const blockId = saved?.kind === 'task' ? blockIdOf(saved.title) : null;
+    if (!doc || doc.dirty || doc.conflict || !saved || !blockId) { this.showToast(this.t.edit.pomodoroUnsaved); return; }
+    try { await start({ path, line, title: saved.title, blockId }); }
+    catch (error) { this.showToast(this.t.edit.pomodoroFailed(this.describe(error))); }
   };
 
   copyConflict = (path: string, node: HTMLTextAreaElement) => {

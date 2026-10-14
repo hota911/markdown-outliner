@@ -78,7 +78,7 @@ vi.mock('../src/ui/mount.ts', () => ({
   },
 }));
 
-async function fixture({ language = 'ja' } = {}) {
+async function fixture({ language = 'ja', pomodoro } = {}) {
   state.language = language;
   const files = new Map([
     ['TODO.md', '- ![[work.md]]\n'],
@@ -157,7 +157,8 @@ async function fixture({ language = 'ja' } = {}) {
     // Like FileManager#trashFile: removes the file and leaves links to it as they are.
     trashFile: async file => { trashed.push(file.path); files.delete(file.path); },
   };
-  const app = { vault, metadataCache, contentEl, fileManager, workspace: {
+  const plugins = pomodoro && { enabledPlugins: new Set(['pomodoro-timer']), getPlugin: id => id === 'pomodoro-timer' ? pomodoro : null };
+  const app = { vault, metadataCache, contentEl, fileManager, plugins, workspace: {
     getLeavesOfType: type => existing.filter(leaf => leaf.type === type),
     getLeaf: mode => {
       created.push(mode);
@@ -526,4 +527,52 @@ test('閉じたタブの未保存の入力は名前を変えたファイルを�
   const reopened = f.newLeaf();
   await reopened.setViewState({ type: 'markdown-outliner-file', state: { file: 'renamed.md' } });
   assert.equal(f.mounts.at(-1).options.drafts.get('renamed.md'), draft);
+});
+
+// The parts of the Pomodoro Timer plugin that its own task list uses.
+function pomodoroTimer(state = {}) {
+  const timer = { state: { running: false, inSession: false, mode: 'WORK', ...state }, starts: 0, toggles: 0 };
+  timer.subscribe = run => { run(timer.state); return () => {}; };
+  timer.start = () => { timer.starts++; };
+  timer.toggleMode = () => { timer.toggles++; };
+  const tracker = { pinned: false, tasks: [], togglePinned() { this.pinned = !this.pinned; }, async active(task) { this.tasks.push(task); } };
+  return { tracker, timer };
+}
+
+test('Pomodoro Timer が無効なら開始を出さない', async () => {
+  const f = await fixture();
+  assert.equal(f.adapter.startPomodoro, undefined);
+});
+
+test('Pomodoro Timer の task tracker にタスクを渡し、作業のタイマーを開始する', async () => {
+  const pomodoro = pomodoroTimer({ mode: 'BREAK' });
+  const f = await fixture({ pomodoro });
+  f.files.set('TODO.md', '- [ ] a\n  - [ ] write [🍅:: 1/3] 🔁 every day 📅 2026-10-15 ^ab12\n');
+  await f.adapter.startPomodoro({ path: 'TODO.md', line: 1, title: 'write [🍅:: 1/3] 🔁 every day 📅 2026-10-15 ^ab12', blockId: 'ab12' });
+  const [task] = pomodoro.tracker.tasks;
+  assert.deepEqual(
+    { name: task.name, path: task.path, line: task.line, blockLink: task.blockLink, actual: task.actual, expected: task.expected, status: task.status },
+    { name: 'write', path: 'TODO.md', line: 1, blockLink: ' ^ab12', actual: 1, expected: 3, status: ' ' },
+  );
+  assert.equal(pomodoro.tracker.pinned, true);
+  assert.deepEqual([pomodoro.timer.toggles, pomodoro.timer.starts], [1, 1]);
+});
+
+test('動いているタイマーはタスクだけ替えて開始し直さない', async () => {
+  const pomodoro = pomodoroTimer({ running: true, inSession: true });
+  const f = await fixture({ pomodoro });
+  f.files.set('TODO.md', '- [ ] a ^ab12\n');
+  await f.adapter.startPomodoro({ path: 'TODO.md', line: 0, title: 'a ^ab12', blockId: 'ab12' });
+  assert.equal(pomodoro.tracker.tasks.length, 1);
+  assert.equal(pomodoro.timer.starts, 0);
+});
+
+test('ファイルの行が変わっていたり、プラグインの内部が違ったりすれば開始しない', async () => {
+  const pomodoro = pomodoroTimer();
+  const f = await fixture({ pomodoro });
+  f.files.set('TODO.md', '- [ ] b\n- [ ] a ^ab12\n');
+  await assert.rejects(f.adapter.startPomodoro({ path: 'TODO.md', line: 0, title: 'a ^ab12', blockId: 'ab12' }), /タスクが変わりました/);
+  delete pomodoro.timer.start;
+  await assert.rejects(f.adapter.startPomodoro({ path: 'TODO.md', line: 1, title: 'a ^ab12', blockId: 'ab12' }), /対応していないバージョン/);
+  assert.equal(pomodoro.tracker.tasks.length, 0);
 });

@@ -20,6 +20,9 @@ export interface Adapter {
   // Missing when the web app was opened on a single file.
   trash?(path: string): Promise<void>;
   openSource?(path: string): Promise<void>;
+  // Experimental: hands a saved task to a pomodoro timer and starts it. The timer finds the line
+  // again by `blockId`, the task's `^id`. Obsidian has it while the Pomodoro Timer plugin is enabled.
+  startPomodoro?(task: { path: string; line: number; title: string; blockId: string }): Promise<void>;
   // Tags in use across the host's files, without `#`, for the `#` menu. Obsidian has them from its
   // metadata cache; without this method the menu offers the tags of the files the outliner has read.
   tags?(): Promise<string[]>;
