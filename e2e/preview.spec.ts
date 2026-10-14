@@ -36,3 +36,11 @@ test('the preview opens the samples from file://, saves an edit in memory, and s
   expect(errors).toEqual([]);
   expect(new Set(requests)).toEqual(new Set([previewPage.href]));
 });
+
+test('in the preview, Ctrl+F moves the focus to the search box from anywhere on the page', async ({ page }) => {
+  await page.goto(previewPage.href);
+  await page.getByRole('textbox', { name: 'Item text' }).first().waitFor();
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('Control+f');
+  await expect(page.getByRole('searchbox')).toBeFocused();
+});

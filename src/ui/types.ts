@@ -100,6 +100,8 @@ export interface MountOptions {
 
 export interface Mounted {
   completeActive(): boolean;
+  // Focuses the search box; false when there is none.
+  focusSearch(): boolean;
   destroy(): void;
   // Shows another file, as choosing it in the file picker does.
   openFile(path: string): Promise<void>;

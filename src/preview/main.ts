@@ -4,6 +4,7 @@ import '../web/web.css';
 import { languageOf, messages } from '../ui/messages.ts';
 import { isMarkdownLink, openMarkdownLink } from '../ui/links.ts';
 import { mountOutliner } from '../ui/mount.ts';
+import { isSearchShortcut } from '../ui/controller.svelte.ts';
 import { createMemoryAdapter } from './adapter.ts';
 
 // The files of samples/, embedded at build time and keyed by their path inside samples/.
@@ -22,4 +23,8 @@ const mounted = mountOutliner(document.getElementById('app')!, {
   adapter,
   language,
   openLink: link => isMarkdownLink(link) ? openMarkdownLink(link, adapter, mounted, t) : Promise.reject(new Error(t.link.otherFile)),
+});
+
+window.addEventListener('keydown', event => {
+  if (!event.defaultPrevented && !event.isComposing && isSearchShortcut(event) && mounted.focusSearch()) event.preventDefault();
 });

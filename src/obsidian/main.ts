@@ -7,13 +7,18 @@ const VIEW_TYPE = 'markdown-outliner';
 // Experimental: one Markdown file per tab, restored from the view state like a regular editor tab.
 const FILE_VIEW_TYPE = 'markdown-outliner-file';
 
-// Mod+Enter would otherwise run Obsidian's own hotkey, so the view's scope hands it to the outliner.
+// Mod+Enter and Mod+F would otherwise run Obsidian's own hotkeys (Mod+F: search in the file), so the
+// view's scope hands them to the outliner.
 function bindCompleteShortcut(view: ItemView, mounted: () => Mounted | null) {
   view.scope = new Scope(view.app.scope);
   view.scope.register(['Mod'], 'Enter', event => {
     // keyCode 229 is the only IME signal some browsers give for the key that ends composition.
     if (event.isComposing || event.keyCode === 229) return;
     if (mounted()?.completeActive()) { event.preventDefault(); return false; }
+  });
+  view.scope.register(['Mod'], 'f', event => {
+    if (event.isComposing || event.keyCode === 229) return;
+    if (mounted()?.focusSearch()) { event.preventDefault(); return false; }
   });
 }
 

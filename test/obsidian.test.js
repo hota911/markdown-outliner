@@ -46,7 +46,10 @@ vi.mock('obsidian', async () => {
   }
   class Notice { constructor(message) { state.notices.push(message); } }
   class Scope {
-    register(modifiers, key, callback) { this.handler = callback; }
+    register(modifiers, key, callback) {
+      (this.handlers ??= {})[key] = callback;
+      if (key === 'Enter') this.handler = callback;
+    }
   }
   // The existing tests run with Obsidian set to Japanese; fixture() can choose another language.
   // Like Obsidian's getAllTags: the tags of the text and of the frontmatter, written with `#`.
@@ -74,7 +77,8 @@ function menu() {
 vi.mock('../src/ui/mount.ts', () => ({
   mountOutliner: (element, options) => {
     const mounted = { element, options, destroyed: 0, completed: 0,
-      completeActive() { this.completed++; return true; }, destroy() { this.destroyed++; } };
+      completeActive() { this.completed++; return true; }, focusSearch() { this.searched = (this.searched ?? 0) + 1; return true; },
+      destroy() { this.destroyed++; } };
     state.mounts.push(mounted);
     return mounted;
   },
@@ -209,6 +213,16 @@ test('View の Enter ショートカットを編集画面へ渡し変換中は�
   assert.equal(f.mounts.at(-1).completed, 1);
   f.view.scope.handler({ isComposing: true });
   assert.equal(f.mounts.at(-1).completed, 1);
+});
+
+test('View の Mod+F で Obsidian の検索ではなく絞り込みの入力欄へ移り変換中は何もしない', async () => {
+  const f = await fixture();
+  let prevented = false;
+  assert.equal(f.view.scope.handlers.f({ preventDefault() { prevented = true; } }), false);
+  assert.equal(prevented, true);
+  assert.equal(f.mounts.at(-1).searched, 1);
+  f.view.scope.handlers.f({ isComposing: true });
+  assert.equal(f.mounts.at(-1).searched, 1);
 });
 
 test('埋め込み先の公開 read/save で参照元ファイルを変更しない', async () => {
