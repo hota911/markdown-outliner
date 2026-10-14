@@ -2,7 +2,7 @@
   import Bookmarks from './Bookmarks.svelte';
   import Outline from './Outline.svelte';
   import { estimateLabel } from './estimate.ts';
-  import { filterIcons, syncValue, type Controller } from './controller.svelte.ts';
+  import { filterIcons, type Controller } from './controller.svelte.ts';
   import { filters, statuses } from './filter.ts';
   import type { StatusFilter } from './types.ts';
 
@@ -12,6 +12,15 @@
   // Height of the pinned header, so that a row scrolled into view is not left under it (styles.css).
   let pinnedHeight = $state(0);
   const starLabel = $derived(ctrl.searchSaved ? ctrl.t.toolbar.removeSearchBookmark : ctrl.t.toolbar.bookmarkSearch);
+
+  // The search box being typed in keeps its text while it means the same search as the view
+  // (which puts words before tags and drops extra spaces), so typing is not rewritten under the caret.
+  const searchWords = (value: string) => value.trim().split(/\s+/).filter(Boolean).sort().join(' ');
+  const syncSearch = (value: () => string) => (node: HTMLInputElement) => {
+    const next = value();
+    if (node === document.activeElement && searchWords(node.value) === searchWords(next)) return;
+    if (node.value !== next) node.value = next;
+  };
 
   function searchKeydown(event: KeyboardEvent & { currentTarget: HTMLInputElement }) {
     // keyCode 229 is the only IME signal some browsers give for the key that ends composition.
@@ -67,10 +76,11 @@
             <input
               class="title-search"
               type="search"
-              {@attach syncValue(() => view.searchValue)}
+              {@attach syncSearch(() => view.searchValue)}
               placeholder={ctrl.t.toolbar.searchPlaceholder}
               aria-label={ctrl.t.toolbar.search}
-              oninput={event => ctrl.searchInput(event.currentTarget.value)}
+              oninput={event => ctrl.searchInput(event.currentTarget.value, event instanceof InputEvent && event.isComposing)}
+              oncompositionend={event => ctrl.searchInput(event.currentTarget.value)}
               onkeydown={searchKeydown}
             />
             <button type="button" class="search-star" title={starLabel} aria-label={starLabel} aria-pressed={ctrl.searchSaved} onclick={ctrl.toggleSearchBookmark}>{ctrl.searchSaved ? '★' : '☆'}</button>
