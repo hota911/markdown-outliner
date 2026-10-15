@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791967619514,
+  "lastUpdate": 1792053528598,
   "repoUrl": "https://github.com/hota911/markdown-outliner",
   "entries": {
     "Performance": [
@@ -2287,6 +2287,110 @@ window.BENCHMARK_DATA = {
           {
             "name": "filter by a status (34000 items)",
             "value": 23.08839499999999,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "158243242+devin-ai-integration[bot]@users.noreply.github.com",
+            "name": "devin-ai-integration[bot]",
+            "username": "devin-ai-integration[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "925c9b1113d8cfd0ac1b8747de0a232558d4abf4",
+          "message": "Change the pomodoro estimate of a task from its row buttons or the / menu (#76)\n\nCo-authored-by: Devin AI <158243242+devin-ai-integration[bot]@users.noreply.github.com>\nCo-authored-by: Hiroyuki Ota <hiroyuki.ot@gmail.com>",
+          "timestamp": "2026-10-15T08:38:30Z",
+          "tree_id": "246999b12f13dc6e704d82000ffc8f5f10f3d236",
+          "url": "https://github.com/hota911/markdown-outliner/commit/925c9b1113d8cfd0ac1b8747de0a232558d4abf4"
+        },
+        "date": 1792053528584,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "open: parse the file and key its rows (17000 items)",
+            "value": 23.407607999999982,
+            "unit": "ms"
+          },
+          {
+            "name": "open: parse the file and key its rows (34000 items)",
+            "value": 36.89110199999999,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (17000 items)",
+            "value": 34.020167999999956,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (34000 items)",
+            "value": 70.83216500000003,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (17000 items)",
+            "value": 25.176830999999993,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (34000 items)",
+            "value": 48.42778899999996,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (17000 items)",
+            "value": 38.85028199999999,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (34000 items)",
+            "value": 85.97738500000003,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (17000 items)",
+            "value": 2.8384690000000035,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (34000 items)",
+            "value": 6.10522499999999,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (17000 items)",
+            "value": 8.631672000000009,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (34000 items)",
+            "value": 15.911642,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (17000 items)",
+            "value": 7.17055400000001,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (34000 items)",
+            "value": 14.321840000000009,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (17000 items)",
+            "value": 5.473631000000012,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (34000 items)",
+            "value": 11.22907699999999,
             "unit": "ms"
           }
         ]
