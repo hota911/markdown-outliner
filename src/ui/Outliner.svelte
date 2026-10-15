@@ -72,6 +72,7 @@
               <option {value} aria-label={ctrl.t.filter[value]}>{filterIcons[value] ? filterIcons[value] + ' ' : ''}{ctrl.t.filter[value]}</option>
             {/each}
           </select>
+          <label class="auto-save" title={ctrl.t.toolbar.subtasksTitle}><input type="checkbox" checked={view.subtasks} aria-label={ctrl.t.toolbar.subtasks} onchange={event => ctrl.setSubtasks(event.currentTarget.checked)} />{ctrl.t.toolbar.subtasks}</label>
           <div class="search-box">
             <input
               class="title-search"

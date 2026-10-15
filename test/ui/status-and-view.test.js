@@ -607,3 +607,25 @@ describe('one-line notes', () => {
     expect(container.querySelector('.note-display').textContent).toBe('first…');
   });
 });
+
+describe('show subtasks', () => {
+  it('shows everything under the items that match the filter, dimmed, until it is turned off', async () => {
+    const { user, screen, titles, titleValues, title } = await setup({ 'tasks.md': '- [/] a\n  - [ ] todo\n  - [x] done\n    - [ ] deep\n  - [/] doing\n- [ ] b\n  - [x] c\n' });
+    const dimmed = () => titles().filter(node => node.closest('.outline-item').classList.contains('is-context')).map(node => node.value);
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'in-progress');
+    expect(titleValues()).toEqual(['a', 'doing']);
+    await user.click(screen.getByRole('checkbox', { name: 'サブタスクも表示' }));
+    expect(titleValues()).toEqual(['a', 'todo', 'done', 'deep', 'doing']);
+    expect(dimmed()).toEqual(['todo', 'done', 'deep']);
+    expect(document.getElementById(title('todo').getAttribute('aria-describedby')).textContent).toBe('上の項目が絞り込みに一致するため表示');
+    await user.click(screen.getByRole('checkbox', { name: 'サブタスクも表示' }));
+    expect(titleValues()).toEqual(['a', 'doing']);
+  });
+
+  it('changes nothing without a filter', async () => {
+    const { user, screen, titleValues, titles } = await setup({ 'tasks.md': '- [/] a\n  - [ ] todo\n' });
+    await user.click(screen.getByRole('checkbox', { name: 'サブタスクも表示' }));
+    expect(titleValues()).toEqual(['a', 'todo']);
+    expect(titles().some(node => node.closest('.outline-item').classList.contains('is-context'))).toBe(false);
+  });
+});

@@ -65,6 +65,8 @@ const en = {
     autoSave: 'Auto-save',
     oneLineNotes: 'One-line notes',
     oneLineNotesTitle: 'Show only the first line of each note until it is edited',
+    subtasks: 'Show subtasks',
+    subtasksTitle: 'While filtering, also show everything under the items that match, dimmed',
     selected: (count: number) => `${count} selected`,
     moveSelectionUp: 'Move the selected items up',
     moveSelectionDown: 'Move the selected items down',
@@ -115,6 +117,7 @@ const en = {
       status + (tags ? ' ' + tags : '') + (text ? ` "${text}"` : '') + ' · ' + file,
     zoomLabel: (label: string, title: string) => `${label} › ${title}`,
     oneLineNotesLabel: (label: string) => `${label} (one-line notes)`,
+    subtasksLabel: (label: string) => `${label} (with subtasks)`,
     zoomMissing: (title: string) => `Cannot find the zoomed item "${title}". Showing the whole file.`,
     listUnreadable: 'Cannot read the bookmark settings. Check the settings file.',
     exists: 'This bookmark already exists.',
@@ -172,6 +175,7 @@ const en = {
     childrenEnd: (title: string) => `End of the children of ${title}`,
     estimateSubtotal: 'Pomodoros of the items under this one (done/estimated)',
     filterContext: 'Shown because an item under it matches the filter',
+    filterSubtask: 'Shown because an item above it matches the filter',
   },
 
   // The menu that `/` opens in an item's text. A command matches the typed text by its label or
@@ -372,6 +376,8 @@ const ja: Messages = {
     autoSave: '自動保存',
     oneLineNotes: 'ノートを1行で表示',
     oneLineNotesTitle: '編集するまで、各ノートの1行目だけを表示する',
+    subtasks: 'サブタスクも表示',
+    subtasksTitle: '絞り込み中、一致した項目の下にある項目もすべて薄く表示する',
     selected: count => count + ' 項目を選択',
     moveSelectionUp: '選択した項目をまとめて上へ移動',
     moveSelectionDown: '選択した項目をまとめて下へ移動',
@@ -421,6 +427,7 @@ const ja: Messages = {
     searchLabel: (status, tags, text, file) => status + (tags ? ' ' + tags : '') + (text ? '「' + text + '」' : '') + ' · ' + file,
     zoomLabel: (label, title) => label + ' › ' + title,
     oneLineNotesLabel: label => label + '（ノート1行）',
+    subtasksLabel: label => label + '（サブタスクも）',
     zoomMissing: title => 'ズームしていた項目「' + title + '」が見つかりません。ファイル全体を表示します。',
     listUnreadable: 'ブックマークの設定を読み込めません。設定ファイルを確認してください。',
     exists: 'このブックマークは登録済みです。',
@@ -478,6 +485,7 @@ const ja: Messages = {
     childrenEnd: title => title + ' の子項目の末尾',
     estimateSubtotal: 'この項目の下にある項目のポモドーロ（実績/見積もり）',
     filterContext: '配下の項目が絞り込みに一致するため表示',
+    filterSubtask: '上の項目が絞り込みに一致するため表示',
   },
 
   slash: {

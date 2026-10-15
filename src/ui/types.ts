@@ -59,6 +59,8 @@ export interface Bookmark {
   tags: string[];
   searchText?: string;
   zoom?: BookmarkZoom;
+  // Shows everything under the items that match the filter.
+  subtasks?: boolean;
   oneLineNotes?: boolean;
   // Set when the user renamed the bookmark; otherwise the label is derived from the view.
   name?: string;

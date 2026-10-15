@@ -1,0 +1,3 @@
+kind: Added
+body: The "Show subtasks" toolbar toggle also shows, dimmed, everything under the items that match the filter, such as the done and not started subtasks of an in-progress task; bookmarks save it
+time: 2026-10-15T09:34:36.906693575Z

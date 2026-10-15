@@ -8,13 +8,13 @@ const view = { id: 'a', kind: 'view', file: 'notes/tasks.md', status: 'todo', ta
 test('rejects bookmarks that user-edited storage may hold', () => {
   assert.equal(validBookmark(view), true);
   for (const broken of [null, 'x', { ...view, file: '' }, { ...view, status: 'later' }, { ...view, tags: [1] },
-    { ...view, kind: 'other' }, { ...view, zoom: { path: 'a.md', line: 1.5, title: 'x' } }, { ...view, name: 3 }, { ...view, oneLineNotes: 'yes' }]) {
+    { ...view, kind: 'other' }, { ...view, zoom: { path: 'a.md', line: 1.5, title: 'x' } }, { ...view, name: 3 }, { ...view, oneLineNotes: 'yes' }, { ...view, subtasks: 1 }]) {
     assert.equal(validBookmark(broken), false, JSON.stringify(broken));
   }
 });
 
 test('a file bookmark restores the file without filters', () => {
-  assert.deepEqual(savedView({ ...view, kind: 'file' }), { file: 'notes/tasks.md', status: 'all', tags: [], searchText: '', zoom: null, oneLineNotes: false });
+  assert.deepEqual(savedView({ ...view, kind: 'file' }), { file: 'notes/tasks.md', status: 'all', tags: [], searchText: '', zoom: null, subtasks: false, oneLineNotes: false });
 });
 
 test('compares the zoomed item by path and title, not by line', () => {
@@ -22,6 +22,7 @@ test('compares the zoomed item by path and title, not by line', () => {
   assert.equal(sameView(zoomed(1), zoomed(5)), true);
   assert.equal(sameView(zoomed(1), savedView(view)), false);
   assert.equal(sameView(savedView({ ...view, oneLineNotes: true }), savedView(view)), false);
+  assert.equal(sameView(savedView({ ...view, subtasks: true }), savedView(view)), false);
 });
 
 test('labels a bookmark by its name, else by its view', () => {
@@ -29,6 +30,7 @@ test('labels a bookmark by its name, else by its view', () => {
   assert.equal(bookmarkView({ ...view, kind: 'file' }, t).label, 'tasks.md');
   assert.equal(bookmarkView({ ...view, name: 'Mine' }, t).label, 'Mine');
   assert.equal(bookmarkView({ ...view, kind: 'view', status: 'all', tags: [], searchText: '', oneLineNotes: true }, t).label, 'tasks.md (one-line notes)');
+  assert.equal(bookmarkView({ ...view, subtasks: true, oneLineNotes: true, zoom: { path: 'notes/tasks.md', line: 0, title: 'Plan' } }, t).label, 'Not started #work "plan" · tasks.md (with subtasks) › Plan (one-line notes)');
   assert.deepEqual(bookmarkView({ id: 1 }, t), { bookmark: { id: 1 }, label: t.bookmarks.unreadableLabel, title: t.bookmarks.unreadableLabel, defaultLabel: '' });
 });
 

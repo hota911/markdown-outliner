@@ -166,7 +166,7 @@
   >⠿</button>
 {/snippet}
 
-<div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} class:is-context={item.context} style:--depth={item.depth} in:grow>
+<div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} class:is-context={item.context !== null} style:--depth={item.depth} in:grow>
   {#if item.embed}
     <EmbedRow {ctrl} {item} embed={item.embed} {handle} {lineEvents} />
   {:else if item.row.kind === 'heading'}
@@ -217,7 +217,7 @@
           onblur={event => { editing = false; shownTitle = event.currentTarget.value; titleEvents.onblur(event); }}
         ></textarea>
         {#if item.context}
-          <span id={uid + '-context'} class="visually-hidden">{ctrl.t.item.filterContext}</span>
+          <span id={uid + '-context'} class="visually-hidden">{item.context === 'subtask' ? ctrl.t.item.filterSubtask : ctrl.t.item.filterContext}</span>
         {/if}
         {#if slashMenu}
           <SlashMenu {ctrl} menu={slashMenu} />
