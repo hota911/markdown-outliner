@@ -18,7 +18,10 @@
   let shownTitle = $derived(item.row.title);
   let shownNote = $derived(item.row.note);
   const display = $derived(parseInline(shownTitle, ctrl.canOpenLinks));
-  const noteDisplay = $derived(parseInline(shownNote, ctrl.canOpenLinks));
+  // A one-line note shows its first line over the textarea until it is edited.
+  const oneLine = $derived(ctrl.oneLineNotes && shownNote !== '');
+  const firstLine = $derived(shownNote.split('\n', 1)[0]);
+  const noteDisplay = $derived(parseInline(oneLine ? firstLine : shownNote, ctrl.canOpenLinks));
   const marks = $derived(item.highlight ? matchRanges(shownTitle, item.highlight) : []);
   // The rendered title is laid over the textarea while it is not edited, for inline Markdown, tags
   // and filter matches.
@@ -249,7 +252,7 @@
       </div>
     </div>
     {#if item.showNote}
-      <div class="note-area" class:has-overlay={noteDisplay !== null} class:is-editing={noteEditing}>
+      <div class="note-area" class:has-overlay={noteDisplay !== null || oneLine} class:is-editing={noteEditing}>
         <textarea
           bind:this={noteNode}
           class="note-input"
@@ -265,9 +268,9 @@
           onfocus={event => { noteEvents.onfocus(event); noteEditing = true; }}
           onblur={event => { noteEditing = false; noteEvents.onblur(event); shownNote = event.currentTarget.value; }}
         ></textarea>
-        {#if noteDisplay !== null}
+        {#if noteDisplay !== null || oneLine}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <div class="note-display" onclick={event => displayClick(event, noteNode)} onauxclick={middleClick}><InlineText nodes={noteDisplay} /></div>
+          <div class="note-display" class:is-one-line={oneLine} onclick={event => displayClick(event, noteNode)} onauxclick={middleClick}><InlineText nodes={noteDisplay ?? [{ kind: 'text', text: firstLine, start: 0 }]} />{#if oneLine && shownNote.includes('\n')}<span class="note-more">…</span>{/if}</div>
         {/if}
       </div>
     {/if}

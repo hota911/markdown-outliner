@@ -94,6 +94,7 @@
           <button type="button" title={ctrl.t.toolbar.undoTitle} onclick={() => ctrl.history(true)}>{ctrl.t.toolbar.undo}</button>
           <button type="button" title={ctrl.t.toolbar.redoTitle} onclick={() => ctrl.history(false)}>{ctrl.t.toolbar.redo}</button>
           <label class="auto-save"><input type="checkbox" checked={view.autoSave} aria-label={ctrl.t.toolbar.autoSave} onchange={event => ctrl.setAutoSave(event.currentTarget.checked)} />{ctrl.t.toolbar.autoSave}</label>
+          <label class="auto-save" title={ctrl.t.toolbar.oneLineNotesTitle}><input type="checkbox" checked={ctrl.oneLineNotes} aria-label={ctrl.t.toolbar.oneLineNotes} onchange={event => ctrl.setOneLineNotes(event.currentTarget.checked)} />{ctrl.t.toolbar.oneLineNotes}</label>
           {#if view.selectionCount}
             <div class="selection-bar">
               <span>{ctrl.t.toolbar.selected(view.selectionCount)}</span>

@@ -52,6 +52,21 @@ describe('bookmarks', () => {
     expect(zoomTitle().value).toBe('a #work');
   });
 
+  it('saves whether notes show one line, and restores it', async () => {
+    const { user, screen, container, stored, addView, leave } = await setupWithStore();
+    const toggle = () => screen.getByRole('checkbox', { name: 'ノートを1行で表示' });
+    await user.click(toggle());
+    await addView();
+    await flush();
+    expect(stored.at(-1).bookmarks).toMatchObject([{ file: 'tasks.md', oneLineNotes: true }]);
+    await leave();
+    await user.click(toggle());
+    expect(toggle().checked).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'tasks.md（ノート1行）' }));
+    await waitFor(() => expect(toggle().checked).toBe(true));
+    expect(container.querySelector('.search-star').getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('restores the "not done" filter', async () => {
     const { user, screen, titleValues, status, addView, leave } = await setupWithStore();
     await user.selectOptions(status(), 'not-done');
