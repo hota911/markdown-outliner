@@ -30,3 +30,14 @@ test('matches Collapse and Expand by their English and Japanese words', () => {
   for (const query of ['col', 'fold', '折', 'おりたたむ']) assert.deepEqual(ids(query, 'expanded'), ['collapse'], query);
   for (const query of ['exp', 'unfold', 'fold', '展開', 'てんかい']) assert.deepEqual(ids(query, 'collapsed'), ['expand'], query);
 });
+
+test('offers the pomodoro estimate commands for tasks, and lowering only an estimate above 0', () => {
+  const ids = (kind, estimated) => commandOptions('', kind, false, null, messages.en, estimated).map(option => option.id);
+  assert.ok(ids('task', 0).includes('estimate-up'));
+  assert.ok(!ids('task', 0).includes('estimate-down'));
+  assert.ok(ids('task', 2).includes('estimate-down'));
+  assert.ok(!ids('bullet', 2).some(id => id.startsWith('estimate-')));
+  const ja = query => commandOptions(query, 'task', false, null, messages.ja, 1).map(option => option.id);
+  assert.deepEqual(ja('見積'), ['estimate-up', 'estimate-down']);
+  assert.deepEqual(ja('pomodoro'), ['estimate-up', 'estimate-down']);
+});

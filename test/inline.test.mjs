@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { changeEstimate } from '../src/ui/estimate.ts';
 import { linkAt, parseInline } from '../src/ui/inline.ts';
 import { isMarkdownLink, linkCandidates, resolveLink } from '../src/ui/links.ts';
 
@@ -161,4 +162,15 @@ test('links resolve from the folder of the file containing them, then from the r
   assert.equal(isMarkdownLink(link('plan')), true);
   assert.equal(isMarkdownLink(link('a/README.MD')), true);
   assert.equal(isMarkdownLink(link('slides.pdf')), false);
+});
+
+test('changes the pomodoro estimate of a title by one', () => {
+  assert.equal(changeEstimate('Plan', 1), 'Plan [🍅:: 0/1]');
+  assert.equal(changeEstimate('Plan ^abc', 1), 'Plan [🍅:: 0/1] ^abc');
+  assert.equal(changeEstimate('Plan [🍅:: 1/2] #work', 1), 'Plan [🍅:: 1/3] #work');
+  assert.equal(changeEstimate('Plan [🍅:: 3]', 1), 'Plan [🍅:: 3/1]');
+  assert.equal(changeEstimate('Plan [🍅:: 1/2]', -1), 'Plan [🍅:: 1/1]');
+  assert.equal(changeEstimate('Plan [🍅:: 2/1]', -1), 'Plan [🍅:: 2]');
+  assert.equal(changeEstimate('Plan [🍅:: 0/1] ^id', -1), 'Plan ^id');
+  assert.equal(changeEstimate('Plan', -1), 'Plan');
 });

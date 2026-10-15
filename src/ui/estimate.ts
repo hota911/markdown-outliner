@@ -28,3 +28,21 @@ export function estimateOf(title: string): Estimate | null {
 }
 
 export const estimateLabel = (estimate: Estimate) => '🍅 ' + estimate.done + (estimate.hasEstimate ? '/' + estimate.estimated : '');
+
+// `title` with the estimate of its first pomodoro field changed by `delta`. A title without a field
+// gets `[🍅:: 0/1]` before a block ID at the end, which has to stay last; a field left with no
+// pomodoro done or estimated goes away, and one with pomodoros done but no estimate keeps them.
+export function changeEstimate(title: string, delta: number): string {
+  const field = new RegExp(pomodoroField.source, 'u').exec(title);
+  if (!field) {
+    if (delta <= 0) return title;
+    const block = /[ \t]+\^[A-Za-z0-9-]+[ \t]*$/.exec(title), end = block ? block.index : title.trimEnd().length;
+    const before = title.slice(0, end);
+    return before + (before === '' || /\s$/.test(before) ? '' : ' ') + `[🍅:: 0/${delta}]` + title.slice(end);
+  }
+  const done = Number(field[1] || 0), estimated = Math.max(0, Number(field[2] || 0) + delta);
+  const replacement = estimated > 0 ? `[🍅:: ${done}/${estimated}]` : done > 0 ? `[🍅:: ${done}]` : '';
+  const before = title.slice(0, field.index), after = title.slice(field.index + field[0].length);
+  if (replacement) return before + replacement + after;
+  return /\s$/.test(before) && /^(\s|$)/.test(after) ? before.trimEnd() + after : before + after;
+}

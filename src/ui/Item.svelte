@@ -4,7 +4,7 @@
   import SlashMenu from './SlashMenu.svelte';
   import type { Controller, Drop, ItemView } from './controller.svelte.ts';
   import { syncNote, syncValue } from './controller.svelte.ts';
-  import { estimateLabel } from './estimate.ts';
+  import { estimateLabel, estimateOf } from './estimate.ts';
   import { matchRanges } from './filter.ts';
   import { linkAt, parseInline } from './inline.ts';
   import { grow } from './motion.ts';
@@ -236,6 +236,12 @@
         <button type="button" class="icon" title={ctrl.t.item.zoomIn} onclick={() => ctrl.zoomTo(item.path, item.row.line)}>↗</button>
         {#if ctrl.canStartPomodoro && item.row.kind === 'task'}
           <button type="button" class="icon" title={ctrl.t.item.startPomodoro} onclick={() => ctrl.startPomodoro(item.path, item.row.line)}>🍅</button>
+        {/if}
+        {#if item.row.kind === 'task'}
+          <button type="button" class="quiet" title={ctrl.t.item.addEstimate} onclick={() => ctrl.changeEstimate(item.path, item.row.line, 1)}>+🍅</button>
+          {#if (estimateOf(item.row.title)?.estimated ?? 0) > 0}
+            <button type="button" class="quiet" title={ctrl.t.item.removeEstimate} onclick={() => ctrl.changeEstimate(item.path, item.row.line, -1)}>−🍅</button>
+          {/if}
         {/if}
         <button type="button" class="icon in-touch-bar" title={ctrl.t.item.moveUp} onclick={() => ctrl.moveRow(item.path, item.row.line, 'up')}>↑</button>
         <button type="button" class="icon in-touch-bar" title={ctrl.t.item.moveDown} onclick={() => ctrl.moveRow(item.path, item.row.line, 'down')}>↓</button>
