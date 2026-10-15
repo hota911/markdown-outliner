@@ -59,6 +59,7 @@ export interface Bookmark {
   tags: string[];
   searchText?: string;
   zoom?: BookmarkZoom;
+  oneLineNotes?: boolean;
   // Set when the user renamed the bookmark; otherwise the label is derived from the view.
   name?: string;
 }

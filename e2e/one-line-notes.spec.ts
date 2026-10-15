@@ -16,3 +16,16 @@ test('one-line notes show the first line until the note is clicked, then the who
   await note.blur();
   await expect(page.locator('.note-display')).toHaveText('first line of a note…');
 });
+
+test('a bookmark keeps whether notes show one line', async ({ openOutliner, page }) => {
+  await openOutliner('- [ ] a\n  first\n  second\n');
+  const toggle = page.getByRole('checkbox', { name: t.toolbar.oneLineNotes });
+  await toggle.check();
+  const sidebar = page.getByRole('complementary', { name: t.bookmarks.heading });
+  await sidebar.getByRole('button', { name: t.bookmarks.addView }).click();
+  await toggle.uncheck();
+  await expect(page.locator('.note-display')).toHaveCount(0);
+  await sidebar.getByRole('button', { name: /^\S+\.md \(one-line notes\)$/ }).click();
+  await expect(toggle).toBeChecked();
+  await expect(page.locator('.note-display')).toHaveText('first…');
+});

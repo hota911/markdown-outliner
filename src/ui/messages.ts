@@ -114,6 +114,7 @@ const en = {
     searchLabel: (status: string, tags: string, text: string, file: string) =>
       status + (tags ? ' ' + tags : '') + (text ? ` "${text}"` : '') + ' · ' + file,
     zoomLabel: (label: string, title: string) => `${label} › ${title}`,
+    oneLineNotesLabel: (label: string) => `${label} (one-line notes)`,
     zoomMissing: (title: string) => `Cannot find the zoomed item "${title}". Showing the whole file.`,
     listUnreadable: 'Cannot read the bookmark settings. Check the settings file.',
     exists: 'This bookmark already exists.',
@@ -419,6 +420,7 @@ const ja: Messages = {
     unreadableLabel: '読み込めないブックマーク',
     searchLabel: (status, tags, text, file) => status + (tags ? ' ' + tags : '') + (text ? '「' + text + '」' : '') + ' · ' + file,
     zoomLabel: (label, title) => label + ' › ' + title,
+    oneLineNotesLabel: label => label + '（ノート1行）',
     zoomMissing: title => 'ズームしていた項目「' + title + '」が見つかりません。ファイル全体を表示します。',
     listUnreadable: 'ブックマークの設定を読み込めません。設定ファイルを確認してください。',
     exists: 'このブックマークは登録済みです。',

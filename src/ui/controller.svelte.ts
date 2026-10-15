@@ -1461,6 +1461,7 @@ export class Controller {
     this.oneLineNotes = value;
     this.preferences.oneLineNotes = value;
     this.persistPreferences();
+    this.updateStar();
   };
 
   setAutoSave = (value: boolean) => {
@@ -1552,6 +1553,7 @@ export class Controller {
     const bookmark: Bookmark = {
       id: crypto.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(36).slice(2), kind: 'view',
       file: view.file, status: view.status, tags: view.tags, searchText: view.searchText, ...(view.zoom ? { zoom: view.zoom } : {}),
+      ...(view.oneLineNotes ? { oneLineNotes: true } : {}),
     };
     this.preferences.bookmarks.push(bookmark);
     this.persistPreferences();
@@ -1565,6 +1567,7 @@ export class Controller {
     return {
       file: this.current, status: this.filter, tags: this.tagList(), searchText: this.textSearch.trim(),
       zoom: zoom && zoomRow ? { path: zoom.path, line: zoom.line, title: zoomRow.title } : null,
+      oneLineNotes: this.oneLineNotes,
     };
   }
 
@@ -1628,6 +1631,7 @@ export class Controller {
     this.filter = view.status;
     this.tags = view.tags.map(tag => '#' + tag).join(' ');
     this.textSearch = view.searchText;
+    this.setOneLineNotes(view.oneLineNotes);
     this.kept.clear();
     await this.openFile(view.file);
     if (this.destroyed || !view.zoom || this.current !== view.file) return;
