@@ -584,3 +584,26 @@ describe('Tasks and pomodoro fields', () => {
     expect(container.querySelector('.estimate-total')).toBeNull();
   });
 });
+
+describe('one-line notes', () => {
+  it('shows the first line of each note until it is edited, and remembers the choice', async () => {
+    const stored = [];
+    const { user, screen, container } = await setup({ 'tasks.md': '- [ ] A\n  first **line**\n  second\n- [ ] B\n  only\n' }, { savePreferences: async value => { stored.push(value); } });
+    await user.click(screen.getByRole('checkbox', { name: 'ノートを1行で表示' }));
+    const displays = () => [...container.querySelectorAll('.note-display')].map(node => node.textContent);
+    expect(displays()).toEqual(['first line…', 'only']);
+    await waitFor(() => expect(stored.at(-1)?.oneLineNotes).toBe(true));
+    const note = screen.getAllByRole('textbox', { name: '項目のノート' })[0];
+    note.focus();
+    await waitFor(() => expect(note.closest('.note-area').classList.contains('is-editing')).toBe(true));
+    expect(note.value).toBe('first **line**\nsecond');
+    await user.click(screen.getByRole('checkbox', { name: 'ノートを1行で表示' }));
+    expect(displays()).toEqual(['first line\nsecond']);
+  });
+
+  it('starts with one-line notes when the preference was saved', async () => {
+    const { screen, container } = await setup({ 'tasks.md': '- [ ] A\n  first\n  second\n' }, { preferences: { bookmarks: [], oneLineNotes: true } });
+    expect(screen.getByRole('checkbox', { name: 'ノートを1行で表示' }).checked).toBe(true);
+    expect(container.querySelector('.note-display').textContent).toBe('first…');
+  });
+});

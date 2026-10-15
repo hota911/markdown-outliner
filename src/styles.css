@@ -147,6 +147,7 @@
 .outliner .note-area { position: relative; margin: 0 0 3px 66px; width: calc(100% - 70px); }
 .outliner .note-area .note-input { display: block; width: 100%; }
 .outliner .note-display { position: relative; color: var(--text-muted); line-height: 1.4; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+.outliner .note-display.is-one-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .outliner .embedded { margin: 2px 0 8px 22px; padding: 2px 0 2px 12px; background: transparent; border: 0; border-left: 1px solid var(--background-modifier-border); border-radius: 0; }
 .outliner .embed-title { font-weight: 600; color: var(--text-accent); }
 /* A heading row has no handle or status: its text starts right after the fold button, in bold. */

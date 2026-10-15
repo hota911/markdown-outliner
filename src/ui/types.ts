@@ -67,6 +67,8 @@ export interface Bookmark {
 export interface Preferences {
   bookmarks: unknown[];
   sidebarCollapsed?: boolean;
+  // Notes show only their first line until they are edited.
+  oneLineNotes?: boolean;
   // The file shown last; reopened on the next start while it is still in the file list.
   lastFile?: string;
 }

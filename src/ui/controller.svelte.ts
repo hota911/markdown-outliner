@@ -135,6 +135,7 @@ export class Controller {
   notice = $state('');
   saveState = $state({ text: '', dirty: false });
   searchSaved = $state(false);
+  oneLineNotes = $state(false);
   private slash = $state<Slash | null>(null);
   private readonly slashId = 'outliner-slash-' + ++slashMenus;
 
@@ -201,6 +202,7 @@ export class Controller {
     this.docs = drafts || new Map<string, Doc>();
     this.initialFile = initialFile;
     this.preferences = preferences;
+    this.oneLineNotes = preferences.oneLineNotes === true;
     this.savePreferences = savePreferences;
     this.followLink = openLink;
   }
@@ -1453,6 +1455,12 @@ export class Controller {
     this.kept.clear();
     this.active = null;
     this.render();
+  };
+
+  setOneLineNotes = (value: boolean) => {
+    this.oneLineNotes = value;
+    this.preferences.oneLineNotes = value;
+    this.persistPreferences();
   };
 
   setAutoSave = (value: boolean) => {
