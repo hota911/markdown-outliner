@@ -166,7 +166,7 @@
   >⠿</button>
 {/snippet}
 
-<div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} class:is-context={item.context} style:--depth={item.depth} in:grow>
+<div class="outline-item" class:is-done={item.row.status === 'done'} class:is-selected={item.selected} class:is-context={item.context !== null} style:--depth={item.depth} in:grow>
   {#if item.embed}
     <EmbedRow {ctrl} {item} embed={item.embed} {handle} {lineEvents} />
   {:else if item.row.kind === 'heading'}
@@ -217,7 +217,7 @@
           onblur={event => { editing = false; shownTitle = event.currentTarget.value; titleEvents.onblur(event); }}
         ></textarea>
         {#if item.context}
-          <span id={uid + '-context'} class="visually-hidden">{ctrl.t.item.filterContext}</span>
+          <span id={uid + '-context'} class="visually-hidden">{item.context === 'subtask' ? ctrl.t.item.filterSubtask : ctrl.t.item.filterContext}</span>
         {/if}
         {#if slashMenu}
           <SlashMenu {ctrl} menu={slashMenu} />
@@ -272,6 +272,15 @@
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
           <div class="note-display" class:is-one-line={oneLine} onclick={event => displayClick(event, noteNode)} onauxclick={middleClick}><InlineText nodes={noteDisplay ?? [{ kind: 'text', text: firstLine, start: 0 }]} />{#if oneLine && shownNote.includes('\n')}<span class="note-more">…</span>{/if}</div>
         {/if}
+      </div>
+    {/if}
+    {#if item.more}
+      {@const more = item.more}
+      {@const label = more.expanded ? ctrl.t.item.hideMoreLabel(more.count, item.row.title) : ctrl.t.item.showMoreLabel(more.count, item.row.title)}
+      <!-- Below the row, where the hidden items would be, so the row buttons floating over the line never cover it. -->
+      <div class="show-more-line">
+        <button type="button" class="quiet show-more" aria-expanded={more.expanded} aria-label={label} title={label} onclick={() => ctrl.toggleMore(item.path, item.row.line)}
+        >{more.expanded ? ctrl.t.item.hideMore : ctrl.t.item.showMore(more.count)}</button>
       </div>
     {/if}
   {/if}

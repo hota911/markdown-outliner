@@ -172,6 +172,11 @@ const en = {
     childrenEnd: (title: string) => `End of the children of ${title}`,
     estimateSubtotal: 'Pomodoros of the items under this one (done/estimated)',
     filterContext: 'Shown because an item under it matches the filter',
+    filterSubtask: 'Shown because an item above it matches the filter',
+    showMore: (count: number) => `${count} more`,
+    showMoreLabel: (count: number, title: string) => `Show the ${count} ${count === 1 ? 'item' : 'items'} under "${title}" hidden by the filter`,
+    hideMore: 'Hide',
+    hideMoreLabel: (count: number, title: string) => `Hide the ${count} ${count === 1 ? 'item' : 'items'} under "${title}" that do not match the filter`,
   },
 
   // The menu that `/` opens in an item's text. A command matches the typed text by its label or
@@ -478,6 +483,11 @@ const ja: Messages = {
     childrenEnd: title => title + ' の子項目の末尾',
     estimateSubtotal: 'この項目の下にある項目のポモドーロ（実績/見積もり）',
     filterContext: '配下の項目が絞り込みに一致するため表示',
+    filterSubtask: '上の項目が絞り込みに一致するため表示',
+    showMore: count => 'ほか ' + count + ' 件',
+    showMoreLabel: (count, title) => '「' + title + '」の下で絞り込みにより隠れている ' + count + ' 件を表示',
+    hideMore: '隠す',
+    hideMoreLabel: (count, title) => '「' + title + '」の下で絞り込みに一致しない ' + count + ' 件を隠す',
   },
 
   slash: {
