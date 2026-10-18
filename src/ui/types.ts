@@ -59,6 +59,7 @@ export interface Bookmark {
   tags: string[];
   searchText?: string;
   zoom?: BookmarkZoom;
+  oneLineNotes?: boolean;
   // Set when the user renamed the bookmark; otherwise the label is derived from the view.
   name?: string;
 }
@@ -67,6 +68,8 @@ export interface Bookmark {
 export interface Preferences {
   bookmarks: unknown[];
   sidebarCollapsed?: boolean;
+  // Notes show only their first line until they are edited.
+  oneLineNotes?: boolean;
   // The file shown last; reopened on the next start while it is still in the file list.
   lastFile?: string;
 }

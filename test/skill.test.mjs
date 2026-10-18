@@ -33,6 +33,7 @@ const edits = {
     const started = core.updateStatus(text, lineOf(text, 'Write the report #work'), 'in-progress').text;
     return core.updateStatus(started, lineOf(started, 'Collect numbers'), 'done').text;
   },
+  'complete-recurring': text => core.updateStatus(text, lineOf(text, 'Water the plants #home 🔁 every week on Monday 📅 2026-10-12 [🍅:: 1/1] ^plants'), 'done', '2026-10-14').text,
   'add-note': text => core.updateNote(text, lineOf(text, 'Collect numbers'), 'Ask finance for the Q3 sheet.').text,
   'move-subtree': text => core.reparent(text, [lineOf(text, 'Pack')], lineOf(text, 'Prepare the trip')).text,
   'embed-file': text => core.embedFile(text, lineOf(text, 'Plan the release'), 'release/checklist.md').text,

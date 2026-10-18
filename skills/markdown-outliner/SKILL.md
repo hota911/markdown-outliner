@@ -1,6 +1,6 @@
 ---
 name: markdown-outliner
-description: Create and edit TODO lists, task lists, and checklists as Markdown files that Markdown Outliner (the Obsidian plugin and local web app) can show as an outline. Use this skill whenever you create a TODO list or add, complete, reorder, or annotate tasks in a Markdown file, even if the user does not mention Markdown Outliner, and whenever a Markdown file is a nested list with `- [ ]` / `- [/]` / `- [x]` items, indented notes under items, `#tags`, or `- ![[file.md]]` embed lines.
+description: Create and edit TODO lists, task lists, and checklists as Markdown files that Markdown Outliner (the Obsidian plugin and local web app) can show as an outline. Use this skill whenever you create a TODO list or add, complete, reorder, or annotate tasks in a Markdown file, even if the user does not mention Markdown Outliner, and whenever a Markdown file is a nested list with `- [ ]` / `- [/]` / `- [x]` items, indented notes under items, `#tags`, or `- ![[file.md]]` embed lines, or Tasks and Pomodoro fields such as `🔁 every day`, `📅 2026-10-15`, or `[🍅:: 1/3]`.
 ---
 
 # Markdown Outliner files
@@ -23,7 +23,7 @@ Markdown Outliner shows the list items of a plain Markdown file as an outline. I
 ```
 
 - Item: a line `<indent><marker> <title>`. The marker is `-`, `*`, or `+`, followed by exactly one space. Numbered lines (`1.`) are not items.
-- Status: an optional box right after the marker, followed by one space. `[ ]` is not started, `[/]` is in progress, `[x]` (or `[X]`) is done. Without a box the item is a plain bullet, which has no status. Any other box, such as `[-]` or `[>]`, is not a status: the item is a bullet whose title starts with `[-]`.
+- Status: an optional box right after the marker, followed by one space. `[ ]` is not started, `[/]` is in progress, `[x]` (or `[X]`) is done. Without a box the item is a plain bullet, which has no status; the status filter treats it as having the status of its nearest task above it in the outline (its closest ancestor task). Any other box, such as `[-]` or `[>]`, is not a status: the item is a bullet whose title starts with `[-]`.
 - Nesting: one level is 2 spaces or one tab (a tab counts as 2 columns). An item belongs to the closest item above it with less indentation. An item whose indentation is an odd number of columns is not an item.
 - Title: the rest of the line, one line only.
 - Note: the lines directly under an item, before its first child, indented 2 columns deeper than the item. A note can span several lines and contain blank lines between its lines.
@@ -32,7 +32,26 @@ Markdown Outliner shows the list items of a plain Markdown file as an outline. I
 - Heading: a line starting at column 0 with `#` to `######` and a space (or only the `#`s). The outliner shows it as a read-only row. Its section runs until the next heading of the same or a higher level: deeper headings and the unindented items in the section are its children. Items before the first heading are at the top level. Underlined (setext) headings are ordinary text.
 - Everything else (paragraphs, tables, frontmatter at the top, fenced code blocks, numbered lists) is kept but not shown. List lines and headings inside frontmatter or code fences are not items or headings. A line of non-list text that starts at column 0 ends the list above it: the items after it are not children of any item above it, though they stay in the same heading's section.
 
-The outliner shows `[text](url)` links (http, https, mailto), bare http(s) URLs, `**bold**`, `*italic*` / `_italic_`, `` `code` ``, and `~~strike~~` in titles and notes. `[[wiki links]]` are kept but shown as plain text.
+The outliner shows `[text](url)` links (http, https, mailto), links to files such as `[plan](notes/plan.md)`, bare http(s) URLs, `**bold**`, `*italic*` / `_italic_`, `` `code` ``, and `~~strike~~` in titles and notes. A file link is resolved as in Obsidian: from the folder of the file containing it, then from the root of the vault or folder. Write a path with spaces as `<my plan.md>` or `my%20plan.md`. `[[wiki links]]` are kept but shown as plain text, so link files with `[text](path.md)`.
+
+## Tasks and Pomodoro fields
+
+Fields of the [Tasks](https://publish.obsidian.md/tasks/) and [Pomodoro Timer](https://github.com/eatgrass/obsidian-pomodoro-timer) Obsidian plugins are part of the title. The outliner shows them as badges and works with or without those plugins:
+
+```markdown
+- [ ] Write the daily report #work 🔁 every weekday 📅 2026-10-14 [🍅:: 1/2] ^daily
+```
+
+- Pomodoro count: `[🍅:: done/estimated]`, or `[🍅:: done]` without an estimate. An item shows the sum of the counts of the items under it, and the toolbar shows the sum of the items shown, so give every task you estimate its own count instead of writing a total by hand.
+- Recurrence: `🔁 every …`, in the Tasks plugin's wording.
+- Dates: `📅` due, `⏳` scheduled, `🛫` start, `➕` created, `✅` done, `❌` cancelled, each followed by a space and `YYYY-MM-DD`.
+- Block ID: `^id` at the very end of the title. The Pomodoro Timer plugin adds one to the task it tracks; keep it and keep it last.
+
+Recurring tasks: completing a task whose `🔁` rule the outliner knows also adds the next occurrence, as the Tasks plugin does. Do the same when you mark such a task done, rather than only changing its box (see "Complete a recurring task" below). The rules it knows are `every day`, `every N days`, `every week`, `every N weeks`, `every week on Monday, Friday`, `every weekday`, `every month`, `every N months`, `every month on the 15th`, `every year`, and `every N years`, each optionally followed by `when done`.
+
+- The completed task gets `✅` and today's date at the end of its title, before a block ID, and keeps its note and children.
+- The next occurrence is a new `[ ]` task on the line above it, at the same indentation, with no note or children. Its title is the old one with the dates moved and without the done, cancelled, and created dates, the `🆔` id, the `⛔` dependency, and the block ID. A pomodoro count starts again: `[🍅:: 2/3]` becomes `[🍅:: 0/3]`.
+- The dates move by the rule, counted from the due date (else the scheduled date, else the start date); with `when done`, from today. The other dates keep their distance to that date. A month or a year later is the same day of the month, or the last day of a shorter month.
 
 ## Writing a new TODO list
 
@@ -114,6 +133,23 @@ Change a status. Only the box changes:
 ```markdown after:change-status
 - [/] Write the report #work
   - [x] Collect numbers
+```
+
+Complete a recurring task, here on 2026-10-14. The next occurrence goes above the completed task:
+
+```markdown before:complete-recurring
+- [ ] Water the plants #home 🔁 every week on Monday 📅 2026-10-12 [🍅:: 1/1] ^plants
+  Use the blue can.
+  - [x] Fill the can
+- [ ] Clean the desk
+```
+
+```markdown after:complete-recurring
+- [ ] Water the plants #home 🔁 every week on Monday 📅 2026-10-19 [🍅:: 0/1]
+- [x] Water the plants #home 🔁 every week on Monday 📅 2026-10-12 [🍅:: 1/1] ✅ 2026-10-14 ^plants
+  Use the blue can.
+  - [x] Fill the can
+- [ ] Clean the desk
 ```
 
 Add a note. It goes right under the item, 2 spaces deeper than the item:
