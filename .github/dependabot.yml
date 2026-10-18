@@ -7,6 +7,12 @@ updates:
     # Wait a few days after a release so that compromised or broken versions are caught first.
     cooldown:
       default-days: 7
+    # TypeScript 7 ships the native compiler without the JavaScript API that svelte-check and
+    # typescript-eslint load (https://github.com/sveltejs/language-tools/issues/3063).
+    # Remove this once they support it.
+    ignore:
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
     groups:
       npm:
         patterns: ['*']
