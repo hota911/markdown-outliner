@@ -240,4 +240,20 @@ describe('keyboard structure editing', () => {
     await user.keyboard('{ArrowUp}');
     expect(document.activeElement).toBe(title('a'));
   });
+
+  it('on macOS, Ctrl+P / Ctrl+N move the focus between titles as ↑↓ do', async () => {
+    const { user, title } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n' }, { mac: true });
+    await user.click(title('a'));
+    await user.keyboard('{Control>}n{/Control}');
+    expect(document.activeElement).toBe(title('b'));
+    await user.keyboard('{Control>}p{/Control}');
+    expect(document.activeElement).toBe(title('a'));
+  });
+
+  it('elsewhere, Ctrl+P / Ctrl+N are left to the app and the browser', async () => {
+    const { user, title } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n' }, { mac: false });
+    await user.click(title('a'));
+    await user.keyboard('{Control>}n{/Control}');
+    expect(document.activeElement).toBe(title('a'));
+  });
 });

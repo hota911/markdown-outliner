@@ -99,6 +99,9 @@ export interface MountOptions {
   // Follows a link to a file. `event` is the click, so the host can open a new tab on a ⌘/Ctrl-click
   // or a middle click. Without it, links to files are shown as plain text.
   openLink?: (link: FileLink, event: MouseEvent) => Promise<void>;
+  // On macOS, Ctrl+P / Ctrl+N move like ↑↓, as in its other text fields. Elsewhere they are app and
+  // browser shortcuts, such as Obsidian's command palette, so they are left alone.
+  mac?: boolean;
 }
 
 export interface Mounted {
