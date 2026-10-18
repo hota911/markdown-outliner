@@ -46,6 +46,14 @@ const nextStatus = (status: Status | null) => statuses[(statuses.indexOf(status!
 export const isSearchShortcut = (event: KeyboardEvent) =>
   (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'f';
 
+// ↑↓, and on macOS also Ctrl+P / Ctrl+N (see MountOptions.mac).
+export const verticalKey = (event: KeyboardEvent, mac: boolean): 'ArrowUp' | 'ArrowDown' | null => {
+  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') return event.key;
+  if (!mac || !event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return null;
+  const key = event.key.toLowerCase();
+  return key === 'p' ? 'ArrowUp' : key === 'n' ? 'ArrowDown' : null;
+};
+
 export const syncValue = (value: () => string) => (node: HTMLInputElement | HTMLTextAreaElement) => {
   const next = value();
   if (node.value !== next) node.value = next;
@@ -141,6 +149,7 @@ export class Controller {
 
   // Messages in the display language chosen by the host (see MountOptions.language).
   readonly t: Messages;
+  private readonly mac: boolean;
   readonly docs: Map<string, Doc>;
   private readonly adapter: Adapter;
   private readonly preferences: Preferences;
@@ -195,7 +204,8 @@ export class Controller {
   private readonly recorded = new WeakMap<HTMLElement, number>();
   private readonly now: () => Date;
 
-  constructor({ adapter, drafts, initialFile, language, preferences = { bookmarks: [] }, savePreferences, now = () => new Date(), openLink }: MountOptions) {
+  constructor({ adapter, drafts, initialFile, language, preferences = { bookmarks: [] }, savePreferences, now = () => new Date(), openLink, mac = false }: MountOptions) {
+    this.mac = mac;
     this.now = now;
     this.t = messages[language];
     this.adapter = adapter;
@@ -827,6 +837,7 @@ export class Controller {
     const collapsedSelection = node.selectionStart === node.selectionEnd;
     const atStart = event.key === 'Backspace' && node.selectionStart === 0;
     const atEnd = event.key === 'Delete' && node.selectionEnd === node.value.length;
+    const vertical = verticalKey(event, this.mac);
     const zoomRoot = this.zoomRoot(path);
     if (zoomRoot && row.line === zoomRoot.line) {
       if (event.key === 'Enter') {
@@ -851,10 +862,10 @@ export class Controller {
     } else if (event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key)) {
       event.preventDefault();
       this.moveItem(path, row, event.key === 'ArrowUp' ? 'up' : 'down', field);
-    } else if (['ArrowUp', 'ArrowDown'].includes(event.key) && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+    } else if (vertical && (vertical !== event.key || !event.metaKey && !event.ctrlKey && !event.shiftKey)) {
       event.preventDefault();
       const titles = [...this.container!.querySelectorAll<HTMLTextAreaElement>('[data-field="title"]')];
-      const next = titles[titles.indexOf(node) + (event.key === 'ArrowUp' ? -1 : 1)];
+      const next = titles[titles.indexOf(node) + (vertical === 'ArrowUp' ? -1 : 1)];
       if (next) {
         const column = node.selectionStart;
         next.focus();
@@ -1004,10 +1015,11 @@ export class Controller {
       return true;
     }
     const options = this.slashOptions(slash);
-    if (!options.length || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    const vertical = verticalKey(event, this.mac), emacs = vertical !== null && vertical !== event.key;
+    if (!options.length || !emacs && (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey)) return false;
+    if (vertical) {
       event.preventDefault();
-      slash.index = (Math.min(slash.index, options.length - 1) + (event.key === 'ArrowDown' ? 1 : options.length - 1)) % options.length;
+      slash.index = (Math.min(slash.index, options.length - 1) + (vertical === 'ArrowDown' ? 1 : options.length - 1)) % options.length;
       return true;
     }
     if (event.key === 'Enter' || event.key === 'Tab') {

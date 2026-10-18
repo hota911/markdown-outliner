@@ -56,7 +56,7 @@ vi.mock('obsidian', async () => {
   const getAllTags = cache => [...(cache.tags ?? []).map(({ tag }) => tag), ...(cache.frontmatter?.tags ?? []).map(tag => '#' + tag)];
   const Keymap = { isModEvent: event => event.metaKey || event.ctrlKey ? 'tab' : event.button === 1 };
   return { Plugin, ItemView, FileView, MarkdownView, TFile, Notice, Scope, Keymap, getAllTags, normalizePath: posix.normalize,
-    getLanguage: () => state.language, requireApiVersion: () => true };
+    getLanguage: () => state.language, requireApiVersion: () => true, Platform: { isMacOS: false } };
 });
 
 // Collects the items a menu callback adds.
