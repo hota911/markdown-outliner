@@ -274,6 +274,15 @@
         {/if}
       </div>
     {/if}
+    {#if item.more}
+      {@const more = item.more}
+      {@const label = more.expanded ? ctrl.t.item.hideMoreLabel(more.count, item.row.title) : ctrl.t.item.showMoreLabel(more.count, item.row.title)}
+      <!-- Below the row, where the hidden items would be, so the row buttons floating over the line never cover it. -->
+      <div class="show-more-line">
+        <button type="button" class="quiet show-more" aria-expanded={more.expanded} aria-label={label} title={label} onclick={() => ctrl.toggleMore(item.path, item.row.line)}
+        >{more.expanded ? ctrl.t.item.hideMore : ctrl.t.item.showMore(more.count)}</button>
+      </div>
+    {/if}
   {/if}
 </div>
 {#each item.ends as end (end.key)}

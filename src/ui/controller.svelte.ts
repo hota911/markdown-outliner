@@ -74,8 +74,10 @@ export interface ItemView {
   hasChildren: boolean;
   showNote: boolean;
   status: { icon: string; label: string; next: Status } | null;
-  // Shown only as an ancestor of a match, or with "show subtasks" as a descendant of one; rendered dimmed.
+  // Shown only as an ancestor of a match, or as a descendant of a match whose other items are shown; rendered dimmed.
   context: Exclude<Shown, 'match'> | null;
+  // On a match with items under it hidden by the filter: how many, and whether they are shown anyway.
+  more: { count: number; expanded: boolean } | null;
   // The search box words and #tags to mark in the title; null without a text filter and for context rows.
   highlight: TextQuery | null;
   embed: { target: string | null; error: string | null; outline: OutlineView | null } | null;
@@ -106,7 +108,6 @@ export interface View {
   current: string | null;
   noFiles: boolean;
   filter: StatusFilter;
-  subtasks: boolean;
   searchValue: string;
   canOpenSource: boolean;
   autoSave: boolean;
@@ -156,8 +157,6 @@ export class Controller {
   private fileList: string[] = [];
   private noFiles = false;
   private filter: StatusFilter = 'all';
-  // Shows everything under the items that match the filter.
-  private subtasks = false;
   private tags = '';
   private textSearch = '';
   private zoom: { path: string; line: number } | null = null;
@@ -190,6 +189,8 @@ export class Controller {
   // items share its text. An item whose line is rewritten externally gets a new key and unfolds.
   private readonly collapsed = new Set<string>();
   private readonly kept = new Map<string, Set<number>>();
+  // Keys of the matches whose items hidden by the filter are shown anyway, until the filter or the file changes.
+  private readonly expanded = new Set<string>();
   private readonly undo: Snapshot[] = [];
   private readonly redo: Snapshot[] = [];
   private readonly keys = new RowKeys();
@@ -1146,7 +1147,7 @@ export class Controller {
   }
 
   // The lines to show, each mapped to whether the row matches the filter itself, or is shown only as
-  // an ancestor of a match or, with "show subtasks", as a descendant of one. An embed matches when anything in its file matches.
+  // an ancestor of a match or as a descendant of an expanded match. An embed matches when anything in its file matches.
   // `chain` holds the files embedding this one, as in outlineView(), to stop at cycles.
   private shown(path: string, text: string, chain: string[] = []): Map<number, Shown> {
     const query = this.query(), active = filterActive(query);
@@ -1160,16 +1161,19 @@ export class Controller {
       return item?.kind === 'task' ? item.status : row.status;
     };
     const shown = new Map<number, Shown>();
+    // Rows under an expanded match, all of which are shown.
+    const open = new Set<number>();
     for (const row of rows) {
+      const opened = row.parentLine !== null && open.has(row.parentLine);
       // A heading is shown only for the items under it.
       const matches = !active || keptLines.has(row.line)
         || (row.kind === 'embed' ? this.embedMatches(path, row, chain) : row.kind !== 'heading' && rowMatches({ ...row, status: statusOf(row) }, query));
       if (!matches) {
-        const parent = row.parentLine === null ? undefined : shown.get(row.parentLine);
-        if (this.subtasks && (parent === 'match' || parent === 'subtask')) shown.set(row.line, 'subtask');
+        if (opened) { shown.set(row.line, 'subtask'); open.add(row.line); }
         continue;
       }
       shown.set(row.line, 'match');
+      if (opened || active && this.expanded.has(row.key)) open.add(row.line);
       // Ancestors come before their descendants, so an ancestor already shown has its own ancestors shown too.
       for (let ancestor = row.parentLine === null ? undefined : byLine.get(row.parentLine); ancestor && !shown.has(ancestor.line);
         ancestor = ancestor.parentLine === null ? undefined : byLine.get(ancestor.parentLine)) {
@@ -1435,14 +1439,16 @@ export class Controller {
   setFilter = (value: StatusFilter) => {
     this.filter = value;
     this.kept.clear();
+    this.expanded.clear();
     this.active = null;
     this.render();
   };
 
-  setSubtasks = (value: boolean) => {
-    this.subtasks = value;
-    this.kept.clear();
-    this.active = null;
+  // Shows or hides again the items under a match that the filter hides.
+  toggleMore = (path: string, line: number) => {
+    const id = this.rowKey(path, line);
+    if (id === undefined) return;
+    if (this.expanded.has(id)) this.expanded.delete(id); else this.expanded.add(id);
     this.render();
   };
 
@@ -1456,6 +1462,7 @@ export class Controller {
   applySearch = (value: string) => {
     this.parseSearch(value);
     this.kept.clear();
+    this.expanded.clear();
     this.active = null;
     this.render();
   };
@@ -1467,10 +1474,10 @@ export class Controller {
 
   reset = () => {
     this.filter = 'all';
-    this.subtasks = false;
     this.tags = '';
     this.textSearch = '';
     this.kept.clear();
+    this.expanded.clear();
     this.active = null;
     this.render();
   };
@@ -1571,7 +1578,6 @@ export class Controller {
     const bookmark: Bookmark = {
       id: crypto.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(36).slice(2), kind: 'view',
       file: view.file, status: view.status, tags: view.tags, searchText: view.searchText, ...(view.zoom ? { zoom: view.zoom } : {}),
-      ...(view.subtasks ? { subtasks: true } : {}),
       ...(view.oneLineNotes ? { oneLineNotes: true } : {}),
     };
     this.preferences.bookmarks.push(bookmark);
@@ -1586,7 +1592,6 @@ export class Controller {
     return {
       file: this.current, status: this.filter, tags: this.tagList(), searchText: this.textSearch.trim(),
       zoom: zoom && zoomRow ? { path: zoom.path, line: zoom.line, title: zoomRow.title } : null,
-      subtasks: this.subtasks,
       oneLineNotes: this.oneLineNotes,
     };
   }
@@ -1651,9 +1656,9 @@ export class Controller {
     this.filter = view.status;
     this.tags = view.tags.map(tag => '#' + tag).join(' ');
     this.textSearch = view.searchText;
-    this.subtasks = view.subtasks;
     this.setOneLineNotes(view.oneLineNotes);
     this.kept.clear();
+    this.expanded.clear();
     await this.openFile(view.file);
     if (this.destroyed || !view.zoom || this.current !== view.file) return;
     const zoom = view.zoom;
@@ -1739,7 +1744,6 @@ export class Controller {
       current: this.current,
       noFiles: this.noFiles,
       filter: this.filter,
-      subtasks: this.subtasks,
       searchValue: this.searchValue(),
       canOpenSource: !!this.adapter.openSource,
       autoSave: this.autoSave,
@@ -1778,6 +1782,24 @@ export class Controller {
     const query = this.query();
     const highlight = query.text || query.tags.length ? { text: query.text, tags: query.tags } : null;
     const byLine = new Map(rows.map(row => [row.line, row]));
+    // How many items under each row the filter hides, counting those shown only because a match was expanded.
+    const hiddenUnder = new Map<number, number>();
+    if (filterActive(query)) {
+      for (const row of rows) {
+        const shownAs = visible.get(row.line);
+        if (shownAs !== undefined && shownAs !== 'subtask') continue;
+        for (let parent = row.parentLine; parent !== null; parent = byLine.get(parent)?.parentLine ?? null) {
+          hiddenUnder.set(parent, (hiddenUnder.get(parent) ?? 0) + 1);
+        }
+      }
+    }
+    // A match inside an expanded match has everything under it shown already.
+    const insideExpanded = (row: KeyedRow) => {
+      for (let parent = row.parentLine === null ? undefined : byLine.get(row.parentLine); parent; parent = parent.parentLine === null ? undefined : byLine.get(parent.parentLine)) {
+        if (visible.get(parent.line) === 'match' && this.expanded.has(parent.key)) return true;
+      }
+      return false;
+    };
     const zoom = this.zoom;
     const rootRow = zoom && zoom.path === path ? byLine.get(zoom.line) ?? null : null;
     // Items keep their Markdown depth under a heading, so each enclosing heading adds a level on
@@ -1813,6 +1835,7 @@ export class Controller {
       if (hidden) continue;
       const collapsed = this.collapsed.has(row.key);
       const shownAs = visible.get(row.line)!;
+      const hiddenCount = hiddenUnder.get(row.line) ?? 0;
       const item: ItemView = {
         key: row.key,
         path,
@@ -1825,6 +1848,8 @@ export class Controller {
         showNote: row.kind !== 'embed' && (!!row.note || this.isActive(path, row.line, 'note')),
         status: this.statusView(row, false),
         context: shownAs === 'match' ? null : shownAs,
+        more: shownAs === 'match' && hiddenCount > 0 && !collapsed && row.kind !== 'embed' && row.kind !== 'heading' && !insideExpanded(row)
+          ? { count: hiddenCount, expanded: this.expanded.has(row.key) } : null,
         // Context rows did not match, so any words they share with the query are not marked.
         highlight: shownAs === 'match' ? highlight : null,
         estimate: subtotals.get(row.line) ?? null,
@@ -1877,6 +1902,7 @@ export class Controller {
   // --- Files --------------------------------------------------------------------------------
 
   openFile = async (path: string) => {
+    if (this.current !== path) this.expanded.clear();
     this.current = path;
     this.clearSelection();
     this.zoom = null;

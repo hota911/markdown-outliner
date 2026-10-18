@@ -67,21 +67,6 @@ describe('bookmarks', () => {
     expect(container.querySelector('.search-star').getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('saves "show subtasks" with the filter, and restores it', async () => {
-    const { user, screen, stored, status, titleValues, addView, leave } = await setupWithStore();
-    const toggle = () => screen.getByRole('checkbox', { name: 'サブタスクも表示' });
-    await user.selectOptions(status(), 'in-progress');
-    await user.click(toggle());
-    await addView();
-    await flush();
-    expect(stored.at(-1).bookmarks).toMatchObject([{ status: 'in-progress', subtasks: true }]);
-    await leave();
-    expect(toggle().checked).toBe(false);
-    await user.click(screen.getByRole('button', { name: '進行中 · tasks.md（サブタスクも）' }));
-    await waitFor(() => expect(toggle().checked).toBe(true));
-    expect(titleValues()).toEqual(['a #work', 'child #work']);
-  });
-
   it('restores the "not done" filter', async () => {
     const { user, screen, titleValues, status, addView, leave } = await setupWithStore();
     await user.selectOptions(status(), 'not-done');

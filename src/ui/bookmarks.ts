@@ -14,21 +14,20 @@ export function validBookmark(bookmark: unknown): bookmark is Bookmark {
     && Array.isArray(value.tags) && value.tags.every(tag => typeof tag === 'string')
     && (value.searchText === undefined || typeof value.searchText === 'string')
     && (zoom === undefined || !!zoom && typeof zoom.path === 'string' && Number.isInteger(zoom.line) && typeof zoom.title === 'string')
-    && (value.subtasks === undefined || typeof value.subtasks === 'boolean')
     && (value.oneLineNotes === undefined || typeof value.oneLineNotes === 'boolean')
     && (value.name === undefined || typeof value.name === 'string');
 }
 
 // What a bookmark restores. A 'file' bookmark of 0.1.x shows the file without filters.
-export interface SavedView { file: string; status: StatusFilter; tags: string[]; searchText: string; zoom: BookmarkZoom | null; subtasks: boolean; oneLineNotes: boolean }
+export interface SavedView { file: string; status: StatusFilter; tags: string[]; searchText: string; zoom: BookmarkZoom | null; oneLineNotes: boolean }
 
 export const savedView = (bookmark: Bookmark): SavedView => bookmark.kind === 'file'
-  ? { file: bookmark.file, status: 'all', tags: [], searchText: '', zoom: null, subtasks: false, oneLineNotes: false }
-  : { file: bookmark.file, status: bookmark.status, tags: bookmark.tags, searchText: bookmark.searchText || '', zoom: bookmark.zoom ?? null, subtasks: bookmark.subtasks === true, oneLineNotes: bookmark.oneLineNotes === true };
+  ? { file: bookmark.file, status: 'all', tags: [], searchText: '', zoom: null, oneLineNotes: false }
+  : { file: bookmark.file, status: bookmark.status, tags: bookmark.tags, searchText: bookmark.searchText || '', zoom: bookmark.zoom ?? null, oneLineNotes: bookmark.oneLineNotes === true };
 
 // The zoomed item is compared by title, the same way Controller.openBookmark() finds it again.
 export const sameView = (a: SavedView, b: SavedView) => a.file === b.file && a.status === b.status
-  && JSON.stringify(a.tags) === JSON.stringify(b.tags) && a.searchText === b.searchText && a.subtasks === b.subtasks && a.oneLineNotes === b.oneLineNotes
+  && JSON.stringify(a.tags) === JSON.stringify(b.tags) && a.searchText === b.searchText && a.oneLineNotes === b.oneLineNotes
   && (a.zoom === null ? b.zoom === null : b.zoom !== null && a.zoom.path === b.zoom.path && a.zoom.title === b.zoom.title);
 
 // The sidebar entry of a stored bookmark, which may be unreadable since storage is user-editable.
@@ -40,8 +39,7 @@ export function bookmarkView(bookmark: unknown, t: Messages): BookmarkView {
   const base = filtered || bookmark.kind === 'search'
     ? t.bookmarks.searchLabel(t.filter[view.status], view.tags.map(tag => '#' + tag).join(' '), view.searchText, filename)
     : filename;
-  const filter = view.subtasks ? t.bookmarks.subtasksLabel(base) : base;
-  const zoomed = view.zoom ? t.bookmarks.zoomLabel(filter, view.zoom.title) : filter;
+  const zoomed = view.zoom ? t.bookmarks.zoomLabel(base, view.zoom.title) : base;
   const defaultLabel = view.oneLineNotes ? t.bookmarks.oneLineNotesLabel(zoomed) : zoomed;
   return { bookmark, label: bookmark.name ?? defaultLabel, title: view.file, defaultLabel };
 }
