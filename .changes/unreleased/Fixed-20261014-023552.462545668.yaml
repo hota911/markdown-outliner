@@ -1,3 +1,0 @@
-kind: Fixed
-body: With a filter or a fold, Backspace at the start and Delete at the end of a title merge the item with the nearest item on screen instead of a hidden one, and leave the hidden items in between as they are. An item with children is not merged across hidden items.
-time: 2026-10-14T02:35:52.462545668Z
