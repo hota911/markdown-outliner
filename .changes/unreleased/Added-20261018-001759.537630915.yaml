@@ -1,3 +1,0 @@
-kind: Added
-body: While filtering, an item that matches shows an "N more" button when the filter hides items under it, such as the done and not started subtasks of an in-progress task; it shows them, dimmed, until "Hide" is pressed or the filter or file changes
-time: 2026-10-18T00:17:59.537630915Z
