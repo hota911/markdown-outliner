@@ -74,6 +74,7 @@ const mounted: Mounted = mountOutliner(app, {
   adapter,
   initialFile: config.initialFile,
   language,
+  mac: /Mac|iPhone|iPad/.test(navigator.platform),
   preferences,
   openLink,
   savePreferences: value => {

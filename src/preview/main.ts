@@ -22,6 +22,7 @@ const adapter = createMemoryAdapter(seed, t);
 const mounted = mountOutliner(document.getElementById('app')!, {
   adapter,
   language,
+  mac: /Mac|iPhone|iPad/.test(navigator.platform),
   openLink: link => isMarkdownLink(link) ? openMarkdownLink(link, adapter, mounted, t) : Promise.reject(new Error(t.link.otherFile)),
 });
 

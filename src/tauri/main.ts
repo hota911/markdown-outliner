@@ -25,6 +25,7 @@ async function start() {
   mountOutliner(app, {
     adapter: api.adapter,
     language,
+    mac: /Mac|iPhone|iPad/.test(navigator.platform),
     preferences,
     savePreferences: value => api.savePreferences(JSON.stringify(value)),
   });

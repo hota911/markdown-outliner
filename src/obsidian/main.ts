@@ -1,4 +1,4 @@
-import { FileView, ItemView, Keymap, MarkdownView, Notice, Plugin, Scope, TFile, getAllTags, getLanguage, normalizePath, requireApiVersion, type Menu, type WorkspaceLeaf } from 'obsidian';
+import { FileView, ItemView, Keymap, MarkdownView, Notice, Platform, Plugin, Scope, TFile, getAllTags, getLanguage, normalizePath, requireApiVersion, type Menu, type WorkspaceLeaf } from 'obsidian';
 import { languageOf, messages, type Language, type Messages } from '../ui/messages.ts';
 import { mountOutliner } from '../ui/mount.ts';
 import type { Doc, Mounted, Preferences } from '../ui/types.ts';
@@ -100,6 +100,7 @@ function mountInView(view: ItemView, plugin: MarkdownOutlinerPlugin, drafts: Map
     drafts,
     initialFile,
     language: plugin.language,
+    mac: Platform.isMacOS,
     preferences: plugin.preferences,
     savePreferences: value => plugin.saveData(value),
     // As in a note: the link resolves from the file containing it, then from the vault root, and

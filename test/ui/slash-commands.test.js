@@ -178,6 +178,15 @@ describe('using the / menu', () => {
     expect(await saved()).toBe('- [/] a\n');
   });
 
+  it('on macOS, Ctrl+N / Ctrl+P move the highlight as the arrows do', async () => {
+    const { user, screen, title, saved } = await setup({ 'tasks.md': '- a\n' }, { mac: true });
+    await user.type(title('a'), ' /');
+    await user.keyboard('{Control>}n{/Control}{Control>}n{/Control}{Control>}p{/Control}');
+    expect(optionNodes(screen)[1].getAttribute('aria-selected')).toBe('true');
+    await user.keyboard('{Tab}');
+    expect(await saved()).toBe('- [/] a\n');
+  });
+
   it('clicking a command runs it, and the bullet command drops the status', async () => {
     const { user, screen, title, saved } = await setup({ 'tasks.md': '- [/] a /x\n' });
     await user.type(title('a /x'), ' /bul');

@@ -76,4 +76,9 @@ export default defineConfig([
     files: ['src/web/**'],
     rules: { 'no-restricted-globals': 'off' },
   },
+  {
+    // The web, desktop and preview pages run outside Obsidian, where its Platform API does not exist.
+    files: ['src/web/**', 'src/tauri/**', 'src/preview/**'],
+    rules: { 'obsidianmd/platform': 'off' },
+  },
 ]);
