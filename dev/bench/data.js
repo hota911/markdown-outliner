@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792404560440,
+  "lastUpdate": 1792404586391,
   "repoUrl": "https://github.com/hota911/markdown-outliner",
   "entries": {
     "Performance": [
@@ -2911,6 +2911,110 @@ window.BENCHMARK_DATA = {
           {
             "name": "filter by a status (34000 items)",
             "value": 19.338426000000027,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "49699333+dependabot[bot]@users.noreply.github.com",
+            "name": "dependabot[bot]",
+            "username": "dependabot[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "55456020b87fc504fbe5712b4213c8379c6b1cb4",
+          "message": "Bump the npm group with 4 updates (#78)\n\n* Bump the npm group with 4 updates\n\nBumps the npm group with 4 updates: [@eslint/json](https://github.com/eslint/json), [eslint](https://github.com/eslint/eslint), [jsdom](https://github.com/jsdom/jsdom) and [typescript](https://github.com/microsoft/TypeScript).\n\n\nUpdates `@eslint/json` from 2.1.0 to 2.1.1\n- [Release notes](https://github.com/eslint/json/releases)\n- [Changelog](https://github.com/eslint/json/blob/main/CHANGELOG.md)\n- [Commits](https://github.com/eslint/json/compare/json-v2.1.0...json-v2.1.1)\n\nUpdates `eslint` from 10.11.0 to 10.12.0\n- [Release notes](https://github.com/eslint/eslint/releases)\n- [Commits](https://github.com/eslint/eslint/compare/v10.11.0...v10.12.0)\n\nUpdates `jsdom` from 30.1.1 to 30.1.2\n- [Release notes](https://github.com/jsdom/jsdom/releases)\n- [Commits](https://github.com/jsdom/jsdom/compare/v30.1.1...v30.1.2)\n\nUpdates `typescript` from 6.0.3 to 7.0.2\n- [Release notes](https://github.com/microsoft/TypeScript/releases)\n- [Commits](https://github.com/microsoft/TypeScript/compare/v6.0.3...v7.0.2)\n\n---\nupdated-dependencies:\n- dependency-name: \"@eslint/json\"\n  dependency-version: 2.1.1\n  dependency-type: direct:development\n  update-type: version-update:semver-patch\n  dependency-group: npm\n- dependency-name: eslint\n  dependency-version: 10.12.0\n  dependency-type: direct:development\n  update-type: version-update:semver-minor\n  dependency-group: npm\n- dependency-name: jsdom\n  dependency-version: 30.1.2\n  dependency-type: direct:development\n  update-type: version-update:semver-patch\n  dependency-group: npm\n- dependency-name: typescript\n  dependency-version: 7.0.2\n  dependency-type: direct:development\n  update-type: version-update:semver-major\n  dependency-group: npm\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\n\n* Keep TypeScript 6 in the npm group update and ignore TypeScript major updates\n\nTypeScript 7.0 ships the native compiler without the JavaScript API that\nsvelte-check and typescript-eslint load, so npm ci fails with ERESOLVE.\nRegenerate the lockfile from main with the other three updates.\n\nCo-Authored-By: Hiroyuki Ota <hiroyuki.ot@gmail.com>\n\n---------\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\nCo-authored-by: Devin AI <158243242+devin-ai-integration[bot]@users.noreply.github.com>\nCo-authored-by: Hiroyuki Ota <hiroyuki.ot@gmail.com>",
+          "timestamp": "2026-10-19T10:09:26Z",
+          "tree_id": "56c86d54c8ff93926c9fbdda752e4ba8393a0a8e",
+          "url": "https://github.com/hota911/markdown-outliner/commit/55456020b87fc504fbe5712b4213c8379c6b1cb4"
+        },
+        "date": 1792404586376,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "open: parse the file and key its rows (17000 items)",
+            "value": 25.74372900000003,
+            "unit": "ms"
+          },
+          {
+            "name": "open: parse the file and key its rows (34000 items)",
+            "value": 46.34304399999996,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (17000 items)",
+            "value": 42.49186499999996,
+            "unit": "ms"
+          },
+          {
+            "name": "type: change a title, as every keystroke does (34000 items)",
+            "value": 95.009141,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (17000 items)",
+            "value": 33.621532,
+            "unit": "ms"
+          },
+          {
+            "name": "indent and move an item (34000 items)",
+            "value": 68.176536,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (17000 items)",
+            "value": 59.257960000000026,
+            "unit": "ms"
+          },
+          {
+            "name": "merge an external change into unsaved input (34000 items)",
+            "value": 109.45593900000006,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (17000 items)",
+            "value": 3.3645539999999983,
+            "unit": "ms"
+          },
+          {
+            "name": "resolve a conflict (34000 items)",
+            "value": 6.844435999999973,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (17000 items)",
+            "value": 8.782380999999987,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by words (34000 items)",
+            "value": 18.59086099999996,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (17000 items)",
+            "value": 8.954200000000014,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a tag (34000 items)",
+            "value": 18.28717499999999,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (17000 items)",
+            "value": 8.047916000000015,
+            "unit": "ms"
+          },
+          {
+            "name": "filter by a status (34000 items)",
+            "value": 15.531668000000025,
             "unit": "ms"
           }
         ]
