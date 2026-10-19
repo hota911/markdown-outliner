@@ -607,3 +607,73 @@ describe('one-line notes', () => {
     expect(container.querySelector('.note-display').textContent).toBe('first…');
   });
 });
+
+describe('items hidden under a match', () => {
+  const text = '- [/] a\n  - [ ] todo\n  - [x] done\n    - [ ] deep\n  - [/] doing\n- [ ] b\n  - [x] c\n';
+  const inProgress = (user, screen) => user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'in-progress');
+  const dimmedValues = titles => titles().filter(node => node.closest('.outline-item').classList.contains('is-context')).map(node => node.value);
+
+  it('shows, dimmed, everything under one match from its "N more" button, and hides it again', async () => {
+    const { user, screen, titles, titleValues, title } = await setup({ 'tasks.md': text });
+    await inProgress(user, screen);
+    expect(titleValues()).toEqual(['a', 'doing']);
+    const more = screen.getByRole('button', { name: '「a」の下で絞り込みにより隠れている 3 件を表示' });
+    expect(more.textContent).toBe('ほか 3 件');
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getAllByRole('button', { name: /件を表示$/ })).toHaveLength(1);
+    await user.click(more);
+    expect(titleValues()).toEqual(['a', 'todo', 'done', 'deep', 'doing']);
+    expect(dimmedValues(titles)).toEqual(['todo', 'done', 'deep']);
+    expect(document.getElementById(title('todo').getAttribute('aria-describedby')).textContent).toBe('上の項目が絞り込みに一致するため表示');
+    const hide = screen.getByRole('button', { name: '「a」の下で絞り込みに一致しない 3 件を隠す' });
+    expect(hide.textContent).toBe('隠す');
+    expect(hide.getAttribute('aria-expanded')).toBe('true');
+    await user.click(hide);
+    expect(titleValues()).toEqual(['a', 'doing']);
+  });
+
+  it('works from the keyboard', async () => {
+    const { user, screen, titleValues } = await setup({ 'tasks.md': text });
+    await inProgress(user, screen);
+    screen.getByRole('button', { name: /3 件を表示$/ }).focus();
+    await user.keyboard('{Enter}');
+    expect(titleValues()).toEqual(['a', 'todo', 'done', 'deep', 'doing']);
+    expect(document.activeElement.getAttribute('aria-expanded')).toBe('true');
+    await user.keyboard(' ');
+    expect(titleValues()).toEqual(['a', 'doing']);
+  });
+
+  it('expands only that item, and a match inside it gets no button', async () => {
+    const { user, screen, titleValues } = await setup({ 'tasks.md': '- [/] a\n  - [/] b\n    - [ ] c\n  - [ ] d\n- [/] e\n  - [ ] f\n' });
+    await inProgress(user, screen);
+    expect(titleValues()).toEqual(['a', 'b', 'e']);
+    const buttons = () => screen.queryAllByRole('button', { name: /件を(表示|隠す)$/ }).map(node => node.getAttribute('aria-label'));
+    expect(buttons()).toEqual(['「a」の下で絞り込みにより隠れている 2 件を表示', '「b」の下で絞り込みにより隠れている 1 件を表示', '「e」の下で絞り込みにより隠れている 1 件を表示']);
+    await user.click(screen.getByRole('button', { name: /「a」.*2 件を表示$/ }));
+    expect(titleValues()).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(buttons()).toEqual(['「a」の下で絞り込みに一致しない 2 件を隠す', '「e」の下で絞り込みにより隠れている 1 件を表示']);
+  });
+
+  it('forgets the expanded items when the filter or the file changes', async () => {
+    const { user, screen, titleValues } = await setup({ 'tasks.md': text, 'other.md': '- [/] x\n  - [ ] y\n' });
+    await inProgress(user, screen);
+    await user.click(screen.getByRole('button', { name: /3 件を表示$/ }));
+    expect(titleValues()).toHaveLength(5);
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'not-done');
+    await inProgress(user, screen);
+    expect(titleValues()).toEqual(['a', 'doing']);
+    await user.click(screen.getByRole('button', { name: /3 件を表示$/ }));
+    const files = screen.getByRole('combobox', { name: '開くファイル' });
+    await user.selectOptions(files, 'other.md');
+    await waitFor(() => expect(titleValues()).toEqual(['x']));
+    await user.selectOptions(files, 'tasks.md');
+    await waitFor(() => expect(titleValues()).toEqual(['a', 'doing']));
+  });
+
+  it('shows no button without a filter', async () => {
+    const { titleValues, screen, titles } = await setup({ 'tasks.md': text });
+    expect(titleValues()).toHaveLength(7);
+    expect(screen.queryByRole('button', { name: /件を表示$/ })).toBeNull();
+    expect(dimmedValues(titles)).toEqual([]);
+  });
+});

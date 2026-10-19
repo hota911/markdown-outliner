@@ -134,6 +134,8 @@
 .outliner :is(.title-display, .note-display, .heading-title) .meta.is-marked { background: var(--text-highlight-bg); }
 .outliner :is(.estimate-subtotal, .estimate-total) { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
 .outliner .estimate-subtotal { line-height: 28px; }
+.outliner .show-more-line { margin: 0 0 2px 62px; }
+.outliner .show-more { font-size: 12px; line-height: 18px; padding: 1px 6px; }
 .outliner .title-display mark { background: var(--text-highlight-bg); color: inherit; border-radius: 2px; }
 /* An ancestor shown only for a matching descendant: the same row, dimmed until it is edited. */
 .outliner .is-context > .outline-line:not(:focus-within) { opacity: .6; }
@@ -179,7 +181,7 @@
 .outliner .local-copy { width: 100%; min-height: 140px; font-family: var(--font-monospace); font-size: 12px; }
 .outliner .empty { padding: 24px 16px; text-align: center; color: var(--text-faint); }
 .outliner .help { border-top: 1px solid var(--background-modifier-border); padding: 10px 0; color: var(--text-faint); font-size: 11px; }
-@media (max-width: 900px) { .outliner { margin: 12px auto; padding: 0 16px; } .outliner .outline-item { padding-left: calc(var(--depth) * 18px); } .outliner .row-actions { gap: 0; } .outliner .note-area { margin-left: 44px; width: calc(100% - 48px); } }
+@media (max-width: 900px) { .outliner { margin: 12px auto; padding: 0 16px; } .outliner .outline-item { padding-left: calc(var(--depth) * 18px); } .outliner .row-actions { gap: 0; } .outliner .note-area { margin-left: 44px; width: calc(100% - 48px); } .outliner .show-more-line { margin-left: 40px; } }
 /* Phones: the bookmarks go above the editor instead of taking width from it, and the file picker and the
    search get a row of their own. */
 @media (max-width: 600px) {
@@ -206,6 +208,7 @@
   .outliner .bullet { width: 32px; min-width: 32px; line-height: 36px; }
   /* Fold, handle and status button with their gaps, so the note starts under the title. */
   .outliner .note-area { margin-left: 92px; width: calc(100% - 92px); }
+  .outliner .show-more-line { margin-left: 88px; }
   .outliner .title-input, .outliner .title-display { min-height: 36px; padding: 6px 0; }
   /* The handle only selects: HTML5 drag and drop does not work reliably with touch, and the touch bar
      moves items instead. */
