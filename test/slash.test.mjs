@@ -41,3 +41,9 @@ test('offers the pomodoro estimate commands for tasks, and lowering only an esti
   assert.deepEqual(ja('見積'), ['estimate-up', 'estimate-down']);
   assert.deepEqual(ja('pomodoro'), ['estimate-up', 'estimate-down']);
 });
+
+test('offers Delete by its English and Japanese words, except for the zoomed-in item', () => {
+  const ids = (query, zoomed) => commandOptions(query, 'task', zoomed, null, messages.ja).map(option => option.id);
+  for (const query of ['del', 'erase', '削除', 'さくじょ', 'けす']) assert.deepEqual(ids(query, false), ['delete'], query);
+  assert.ok(!ids('', true).includes('delete'));
+});

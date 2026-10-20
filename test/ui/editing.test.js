@@ -257,3 +257,87 @@ describe('keyboard structure editing', () => {
     expect(document.activeElement).toBe(title('a'));
   });
 });
+
+describe('deleting items', () => {
+  const handle = (row, value) => row(value).getByTitle('項目を選択／ドラッグして移動');
+
+  it('Ctrl+Shift+Backspace deletes the item with its children and focuses the end of the item above', async () => {
+    const { user, screen, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n  note\n  - [ ] b1\n- [ ] c\n' });
+    await user.click(title('b'));
+    await user.keyboard('{Control>}{Shift>}{Backspace}{/Shift}{/Control}');
+    expect(titleValues()).toEqual(['a', 'c']);
+    expect(document.activeElement).toBe(title('a'));
+    expect(document.activeElement.selectionStart).toBe(1);
+    expect(screen.getByRole('status').textContent).toBe('子項目を含めて 2 項目を削除しました。Undo で戻せます。');
+    expect(await saved()).toBe('- [ ] a\n- [ ] c\n');
+    await user.click(screen.getByTitle('元に戻す'));
+    expect(await saved()).toBe('- [ ] a\n- [ ] b\n  note\n  - [ ] b1\n- [ ] c\n');
+  });
+
+  it('uses ⌘+Shift+Backspace on macOS, and focuses the item below when none is above', async () => {
+    const { user, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n' }, { mac: true });
+    await user.click(title('a'));
+    await user.keyboard('{Meta>}{Shift>}{Backspace}{/Shift}{/Meta}');
+    expect(titleValues()).toEqual(['b']);
+    expect(document.activeElement).toBe(title('b'));
+    expect(await saved()).toBe('- [ ] b\n');
+  });
+
+  it('deletes the focused item and the items hidden under it by a filter, skipping hidden neighbors for the focus', async () => {
+    const { user, screen, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] a\n- [x] hidden\n- [ ] b\n  - [x] done child\n' });
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示する状態' }), 'todo');
+    expect(titleValues()).toEqual(['a', 'b']);
+    await user.click(title('b'));
+    await user.keyboard('{Control>}{Shift>}{Backspace}{/Shift}{/Control}');
+    expect(document.activeElement).toBe(title('a'));
+    expect(screen.getByRole('status').textContent).toContain('2 項目');
+    expect(await saved()).toBe('- [ ] a\n- [x] hidden\n');
+  });
+
+  it('the selection bar deletes the selected items, and the shortcut on a selected item deletes them all', async () => {
+    const { user, screen, row, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n- [ ] c\n- [ ] d\n' });
+    await user.click(handle(row, 'a'));
+    await user.keyboard('{Shift>}');
+    await user.click(handle(row, 'b'));
+    await user.keyboard('{/Shift}');
+    await user.click(screen.getByRole('button', { name: '削除' }));
+    expect(titleValues()).toEqual(['c', 'd']);
+    expect(screen.queryByText(/項目を選択$/)).toBeNull();
+    expect(await saved()).toBe('- [ ] c\n- [ ] d\n');
+    await user.click(handle(row, 'c'));
+    await user.keyboard('{Shift>}');
+    await user.click(handle(row, 'd'));
+    await user.keyboard('{/Shift}');
+    await user.click(title('d'));
+    await user.keyboard('{Control>}{Shift>}{Backspace}{/Shift}{/Control}');
+    expect(await saved()).toBe('');
+  });
+
+  it('the shortcut on a focused handle deletes an embed line but not the embedded file', async () => {
+    const { user, row, adapter, saved } = await setup({ 'tasks.md': '- [ ] a\n- ![[work.md]]\n', 'work.md': '- [ ] w\n' });
+    const embedHandle = row('w').getByTitle('項目を選択／ドラッグして移動').closest('.outline-item').parentElement.closest('.outline-item').querySelector('.drag-handle');
+    embedHandle.focus();
+    await user.keyboard('{Control>}{Shift>}{Backspace}{/Shift}{/Control}');
+    expect(await saved()).toBe('- [ ] a\n');
+    expect(adapter.files.get('work.md')).toBe('- [ ] w\n');
+  });
+
+  it('/削除 deletes the item, and one undo brings it back with the /query text, as for other commands', async () => {
+    const { user, screen, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n' });
+    await user.type(title('b'), ' /削除');
+    await user.keyboard('{Enter}');
+    expect(titleValues()).toEqual(['a']);
+    expect(await saved()).toBe('- [ ] a\n');
+    await user.click(screen.getByTitle('元に戻す'));
+    expect(await saved()).toBe('- [ ] a\n- [ ] b /削除\n');
+  });
+
+  it('does not delete the zoomed item', async () => {
+    const { user, screen, row, titleValues } = await setup({ 'tasks.md': '- [ ] a\n  - [ ] a1\n' });
+    await user.click(row('a').getByTitle('この項目にズーム'));
+    screen.getByRole('textbox', { name: 'ズーム対象のタイトル' }).focus();
+    await user.keyboard('{Control>}{Shift>}{Backspace}{/Shift}{/Control}');
+    expect(titleValues()).toContain('a1');
+    expect(screen.getByRole('status').textContent).toBe('ズーム中の項目は削除できません。先にズームを解除してください。');
+  });
+});

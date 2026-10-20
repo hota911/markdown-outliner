@@ -634,6 +634,29 @@ export function removeEmbed(text: string, line: number): EditResult {
   return result(doc, doc.row.parentLine ?? line);
 }
 
+// Removes the items on `lines` with their notes and children. A line inside another of them goes
+// with it. An embed loses only its line, not the embedded file; headings cannot be removed.
+// `ranges` are the removed lines of the original text, `[from, to)`, in order, and `count` is the
+// number of items removed. The returned line is where the first of them was.
+export function remove(text: string, lines: number[]): EditResult & { ranges: { from: number; to: number }[]; count: number } {
+  const doc = scan(text);
+  const targets = lines.map(line => {
+    const row = doc.rows.find(value => value.line === line);
+    if (!Number.isInteger(line) || !row) throw new CoreError('noEditableItem');
+    if (row.kind === 'heading') throw new CoreError('headingReadOnly');
+    return row;
+  }).sort((a, b) => a.line - b.line);
+  if (!targets.length) throw new CoreError('noEditableItem');
+  const ranges: { from: number; to: number }[] = [];
+  for (const row of targets) {
+    const last = ranges[ranges.length - 1];
+    if (!last || row.line >= last.to) ranges.push({ from: row.line, to: row.end });
+  }
+  const count = doc.rows.filter(row => ranges.some(range => row.line >= range.from && row.line < range.to)).length;
+  for (const range of [...ranges].reverse()) doc.lines.splice(range.from, range.to - range.from);
+  return { ...result(doc, ranges[0].from), ranges, count };
+}
+
 // The tags written as `#tag` in a text, without the `#`, in order of first appearance. As in
 // Obsidian, a tag starts at the start of the text or after whitespace, runs over letters, digits,
 // `_`, `-` and `/` (nested tags), and is not only digits.

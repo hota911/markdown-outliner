@@ -520,3 +520,23 @@ test('見出しの子の追加は節の項目の先頭に入れ、本文だけ�
   assert.throws(() => core.insert('# A\nIntro\n', 0, { kind: 'bullet', child: true, tags: [] }), { code: 'insertNextToText' });
   assert.throws(() => core.insert('# A\n- a\n', 0, { kind: 'bullet', tags: [] }), { code: 'headingReadOnly' });
 });
+
+test('removes items with their notes and children, leaving other text', () => {
+  const text = '# Plan\n\n- [ ] a\n  note\n  - [ ] child\n    deep note\n- [ ] b\n\nParagraph\n';
+  assert.deepEqual(core.remove(text, [2]), { text: '# Plan\n\n- [ ] b\n\nParagraph\n', line: 2, ranges: [{ from: 2, to: 6 }], count: 2 });
+  assert.equal(core.remove(text, [6]).text, '# Plan\n\n- [ ] a\n  note\n  - [ ] child\n    deep note\n\nParagraph\n');
+  assert.equal(core.remove('- a\r\n- b\r\n', [1]).text, '- a\r\n');
+  assert.equal(core.remove('- a\n', [0]).text, '');
+});
+
+test('removes several items at once, an item inside another going with it', () => {
+  const text = '- [ ] a\n  - [ ] a1\n- [ ] b\n- [ ] c\n';
+  assert.deepEqual(core.remove(text, [3, 0, 1]), { text: '- [ ] b\n', line: 0, ranges: [{ from: 0, to: 2 }, { from: 3, to: 4 }], count: 3 });
+});
+
+test('removes an embed line but refuses headings and lines without items', () => {
+  assert.equal(core.remove('- ![[work.md]]\n  - [ ] under\n- [ ] b\n', [0]).text, '- [ ] b\n');
+  assert.throws(() => core.remove('# H\n- [ ] a\n', [0]), { code: 'headingReadOnly' });
+  assert.throws(() => core.remove('Text\n- [ ] a\n', [0]), { code: 'noEditableItem' });
+  assert.throws(() => core.remove('- [ ] a\n', []), { code: 'noEditableItem' });
+});
