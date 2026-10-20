@@ -46,6 +46,10 @@ const nextStatus = (status: Status | null) => statuses[(statuses.indexOf(status!
 export const isSearchShortcut = (event: KeyboardEvent) =>
   (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'f';
 
+// ⌘+Shift+Backspace on macOS, Ctrl+Shift+Backspace elsewhere: delete the item.
+export const isDeleteKey = (event: KeyboardEvent, mac: boolean) =>
+  event.key === 'Backspace' && event.shiftKey && !event.altKey && (mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey);
+
 // ↑↓, and on macOS also Ctrl+P / Ctrl+N (see MountOptions.mac).
 export const verticalKey = (event: KeyboardEvent, mac: boolean): 'ArrowUp' | 'ArrowDown' | null => {
   if (event.key === 'ArrowUp' || event.key === 'ArrowDown') return event.key;
@@ -547,6 +551,35 @@ export class Controller {
     if (column !== undefined && focused instanceof HTMLTextAreaElement && focused.dataset.field === 'title') focused.setSelectionRange(column, column);
   }
 
+  // Deletes items with their children and notes, after `prepare` (the same undo step). The focus goes
+  // to the end of the nearest remaining item on screen above them, else below, else the zoomed item.
+  private deleteRows(path: string, lines: number[], prepare = (text: string) => text) {
+    const root = this.zoomRoot(path);
+    if (root && lines.includes(root.line)) { this.showToast(this.t.edit.deleteZoomed); return; }
+    let result: ReturnType<typeof core.remove>;
+    try { result = core.remove(prepare(this.docs.get(path)!.text), lines); }
+    catch (error) { this.showToast(this.describe(error)); return; }
+    const { ranges, count } = result;
+    const removed = (line: number) => ranges.some(range => line >= range.from && line < range.to);
+    const visible = this.onScreen(path);
+    const remaining = this.rows(path).filter(row => (row.kind === 'task' || row.kind === 'bullet') && visible(row.line) && !removed(row.line));
+    const first = ranges[0].from;
+    const target = remaining.filter(row => row.line < first).pop() ?? remaining.find(row => row.line > first) ?? (root && root.kind !== 'heading' ? root : null);
+    const line = target && target.line - ranges.filter(range => range.to <= target.line).reduce((sum, range) => sum + range.to - range.from, 0);
+    this.mutate(path, () => ({ text: result.text, line: line ?? first }), line === null ? null : 'title');
+    const focused = this.activeElement;
+    if (line !== null && focused instanceof HTMLTextAreaElement && focused.dataset.field === 'title') focused.setSelectionRange(focused.value.length, focused.value.length);
+    if (count > lines.length) this.showToast(this.t.edit.itemsDeleted(count));
+  }
+
+  // The item on `line`, or the whole selection when it includes the item.
+  deleteRow = (path: string, line: number) =>
+    this.deleteRows(path, this.selectedPath === path && this.selectedLines.has(line) ? [...this.selectedLines] : [line]);
+
+  deleteSelection = () => {
+    if (this.selectedPath !== null && this.selectedLines.size) this.deleteRows(this.selectedPath, [...this.selectedLines]);
+  };
+
   extractToFile = async (path: string, line: number) => {
     const doc = this.docs.get(path)!;
     if (this.selectedLines.size > 1) { this.showToast(this.t.edit.extractMultiple); return; }
@@ -841,6 +874,11 @@ export class Controller {
       }
       return;
     }
+    if (isDeleteKey(event, this.mac)) {
+      event.preventDefault();
+      this.deleteRow(path, row.line);
+      return;
+    }
     const collapsedSelection = node.selectionStart === node.selectionEnd;
     const atStart = event.key === 'Backspace' && node.selectionStart === 0;
     const atEnd = event.key === 'Delete' && node.selectionEnd === node.value.length;
@@ -1102,6 +1140,11 @@ export class Controller {
         .catch((error: unknown) => this.showToast(this.describe(error)));
       return;
     }
+    if (command === 'delete') {
+      this.slash = null;
+      this.deleteRows(path, [line], strip);
+      return;
+    }
     if (command === 'todo' || command === 'in-progress' || command === 'done') mutateTitle(text => core.updateStatus(strip(text), line, command, this.today()));
     else if (command === 'task') mutateTitle(text => core.updateStatus(strip(text), line, 'todo', this.today()));
     else if (command === 'bullet') mutateTitle(text => core.toBullet(strip(text), line));
@@ -1334,6 +1377,11 @@ export class Controller {
   // Alt+Up / Alt+Down on a focused handle. This is how an embed line, which has no text field, moves
   // from the keyboard. A selection that includes the row moves as a whole.
   handleKeydown = (path: string, row: KeyedRow, event: KeyboardEvent) => {
+    if (isDeleteKey(event, this.mac)) {
+      event.preventDefault();
+      this.deleteRow(path, row.line);
+      return;
+    }
     if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
     event.preventDefault();
     const down = event.key === 'ArrowDown';

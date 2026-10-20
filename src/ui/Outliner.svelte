@@ -103,6 +103,7 @@
               {#each statuses as status (status)}
                 <button type="button" title={ctrl.t.selectionStatus(status)} onclick={() => ctrl.setSelectionStatus(status)}>{ctrl.t.status[status]}</button>
               {/each}
+              <button type="button" title={ctrl.t.toolbar.deleteSelectionTitle} onclick={ctrl.deleteSelection}>{ctrl.t.toolbar.deleteSelection}</button>
               <button type="button" title={ctrl.t.toolbar.clearSelectionTitle} onclick={ctrl.clearSelectionAndRender}>{ctrl.t.toolbar.clearSelection}</button>
             </div>
           {/if}

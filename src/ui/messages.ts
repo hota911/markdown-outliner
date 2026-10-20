@@ -68,6 +68,8 @@ const en = {
     selected: (count: number) => `${count} selected`,
     moveSelectionUp: 'Move the selected items up',
     moveSelectionDown: 'Move the selected items down',
+    deleteSelectionTitle: 'Delete the selected items with their children and notes',
+    deleteSelection: 'Delete',
     clearSelectionTitle: 'Deselect the selected items',
     clearSelection: 'Deselect',
     zoomOutTitle: 'Leave the zoomed item',
@@ -95,7 +97,7 @@ const en = {
 
   opening: 'Opening file…',
   noFiles: 'There are no Markdown files in this folder.',
-  help: '↑↓ (macOS: also Ctrl+P / Ctrl+N): move the cursor · Enter: add (at the start of the text: above) · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several · / or # at the start or after a space: commands or tags · ⌘/Ctrl+F: search box · click a #tag: add it to the filter, a link: open it (while editing: ⌘/Ctrl-click)',
+  help: '↑↓ (macOS: also Ctrl+P / Ctrl+N): move the cursor · Enter: add (at the start of the text: above) · ⌘/Ctrl+Enter: in progress → done · Tab / Shift+Tab: level · Shift+Enter: task ⇄ note · ⌘/Ctrl+Shift+Backspace: delete the item with its children · ⠿: drag (the indent of the insertion line shows the level) · Shift / ⌘-click: select several · / or # at the start or after a space: commands or tags · ⌘/Ctrl+F: search box · click a #tag: add it to the filter, a link: open it (while editing: ⌘/Ctrl-click)',
   closeToast: 'Close notification',
 
   bookmarks: {
@@ -200,6 +202,7 @@ const en = {
       embed: { label: 'Embed existing file', keywords: 'file link' },
       'estimate-up': { label: '🍅 Estimate +1', keywords: 'pomodoro tomato estimate add more' },
       'estimate-down': { label: '🍅 Estimate −1', keywords: 'pomodoro tomato estimate remove less' },
+      delete: { label: 'Delete', keywords: 'erase' },
     },
   },
 
@@ -236,6 +239,8 @@ const en = {
     renameFailed: (detail: string) => `Could not rename the file: ${detail}`,
     renameEmbedNotFound: (name: string) => `Renamed the file to ${name}, but could not update the link: no single embed of the old name was found. The text was left unchanged.`,
     renamed: (name: string) => `Renamed the file to ${name}. The undo history was cleared.`,
+    itemsDeleted: (count: number) => `Deleted ${count} items, including their children. Undo brings them back.`,
+    deleteZoomed: 'Cannot delete the zoomed item. Leave the zoom first.',
     deleteBusy: 'Cannot delete while saving or during a save conflict.',
     deleteUnsaved: 'Could not save the unsaved input. Save it, then delete.',
     deleteEmbeddedElsewhere: (name: string) => `${name} is also embedded elsewhere. Remove the other embeds first.`,
@@ -380,6 +385,8 @@ const ja: Messages = {
     selected: count => count + ' 項目を選択',
     moveSelectionUp: '選択した項目をまとめて上へ移動',
     moveSelectionDown: '選択した項目をまとめて下へ移動',
+    deleteSelectionTitle: '選択した項目を子項目・ノートごと削除',
+    deleteSelection: '削除',
     clearSelectionTitle: '選択した項目を解除',
     clearSelection: '選択解除',
     zoomOutTitle: 'ズームを解除',
@@ -407,7 +414,7 @@ const ja: Messages = {
 
   opening: 'ファイルを開いています…',
   noFiles: 'このフォルダには Markdown ファイルがありません。',
-  help: '↑↓（macOS では Ctrl+P / Ctrl+N も）: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択 · 先頭か空白の後の / と #: コマンドとタグ · ⌘/Ctrl+F: 絞り込みの入力欄へ · #タグをクリック: 絞り込みに追加、リンクをクリック: 開く（編集中は⌘/Ctrlクリック）',
+  help: '↑↓（macOS では Ctrl+P / Ctrl+N も）: カーソル移動 · Enter: 追加（本文の先頭では上に追加） · ⌘/Ctrl+Enter: 進行中→完了 · Tab / Shift+Tab: 階層 · Shift+Enter: タスク⇄ノート · ⌘/Ctrl+Shift+Backspace: 子項目ごと削除 · ⠿: ドラッグ（挿入線の字下げで階層を表示） · Shift / ⌘クリック: 複数選択 · 先頭か空白の後の / と #: コマンドとタグ · ⌘/Ctrl+F: 絞り込みの入力欄へ · #タグをクリック: 絞り込みに追加、リンクをクリック: 開く（編集中は⌘/Ctrlクリック）',
   closeToast: '通知を閉じる',
 
   bookmarks: {
@@ -509,6 +516,7 @@ const ja: Messages = {
       embed: { label: '既存のファイルを埋め込む', keywords: 'うめこみ うめこむ ふぁいる' },
       'estimate-up': { label: '🍅 見積もり +1', keywords: 'みつもり ポモドーロ ぽもどーろ 増やす ふやす' },
       'estimate-down': { label: '🍅 見積もり −1', keywords: 'みつもり ポモドーロ ぽもどーろ 減らす へらす' },
+      delete: { label: '削除', keywords: 'さくじょ 消す けす' },
     },
   },
 
@@ -544,6 +552,8 @@ const ja: Messages = {
     renameFailed: detail => 'ファイル名を変更できませんでした: ' + detail,
     renameEmbedNotFound: name => name + ' に名前を変更しましたが、リンクを更新できませんでした。元の名前の埋め込みが1つに定まらないため、本文は変更していません。',
     renamed: name => name + ' に名前を変更しました。Undo の履歴は消去しました。',
+    itemsDeleted: count => '子項目を含めて ' + count + ' 項目を削除しました。Undo で戻せます。',
+    deleteZoomed: 'ズーム中の項目は削除できません。先にズームを解除してください。',
     deleteBusy: '保存処理中または保存競合中は削除できません。',
     deleteUnsaved: '未保存の入力を保存できませんでした。保存してから削除してください。',
     deleteEmbeddedElsewhere: name => name + ' はほかの場所にも埋め込まれています。先にほかの埋め込みを消してください。',
