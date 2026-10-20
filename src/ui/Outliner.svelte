@@ -1,5 +1,6 @@
 <script lang="ts">
   import Bookmarks from './Bookmarks.svelte';
+  import ContextMenu from './ContextMenu.svelte';
   import Outline from './Outline.svelte';
   import { estimateLabel } from './estimate.ts';
   import { filterIcons, type Controller } from './controller.svelte.ts';
@@ -161,6 +162,9 @@
     <footer class="help">{ctrl.t.help}</footer>
   </div>
 </div>
+{#if ctrl.contextMenu}
+  <ContextMenu {ctrl} menu={ctrl.contextMenu} />
+{/if}
 {#if ctrl.toast}
   <div class="toast">
     <span role="status">{ctrl.toast}</span>

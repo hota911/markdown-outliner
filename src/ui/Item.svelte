@@ -187,7 +187,7 @@
   {:else}
     <!-- Drop target only; dragging is started from the handle button. -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="outline-line" {...lineEvents}>
+    <div class="outline-line" {...lineEvents} oncontextmenu={event => ctrl.openContextMenu(item.path, item.row, event)}>
       <button type="button" class="icon fold" title={ctrl.t.item.fold} disabled={!item.hasChildren} onclick={() => ctrl.toggleFold(item.path, item.row.line)}>{item.collapsed ? '▸' : '▾'}</button>
       {@render handle()}
       {#if item.status}
