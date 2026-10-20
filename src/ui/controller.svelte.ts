@@ -32,6 +32,9 @@ export interface Drop {
 }
 
 export interface SlashMenu { id: string; label: string; options: { id: string; label: string }[]; index: number }
+// The commands of the / menu for an item, opened by a right-click outside its text; `opener` gets
+// the focus back when the menu closes with Escape.
+export interface ContextMenu { path: string; line: number; x: number; y: number; options: { id: string; label: string }[]; opener: HTMLElement | null }
 // Gives each outliner its own option ids; Obsidian can show several outliners in one document.
 let slashMenus = 0;
 
@@ -154,6 +157,7 @@ export class Controller {
   searchSaved = $state(false);
   oneLineNotes = $state(false);
   private slash = $state<Slash | null>(null);
+  contextMenu = $state.raw<ContextMenu | null>(null);
   private readonly slashId = 'outliner-slash-' + ++slashMenus;
 
   // Messages in the display language chosen by the host (see MountOptions.language).
@@ -1030,12 +1034,15 @@ export class Controller {
     if (slash.step === 'tags') return tagOptions(slash.query, slash.tags);
     if (slash.step === 'files') return fileOptions(slash.query, slash.files, slash.path);
     const row = this.rows(slash.path).find(value => value.line === slash.line);
-    if (!row) return [];
-    const zoomed = this.zoomRoot(slash.path)?.line === row.line;
+    return row ? this.commandsFor(slash.path, row, slash.query) : [];
+  }
+
+  private commandsFor(path: string, row: KeyedRow, query: string) {
+    const zoomed = this.zoomRoot(path)?.line === row.line;
     // The zoomed-in row is the root of the view; zooming in expands it, and folding it would hide the whole view.
-    const hasChildren = !zoomed && this.rows(slash.path).some(child => child.parentLine === row.line);
+    const hasChildren = !zoomed && this.rows(path).some(child => child.parentLine === row.line);
     const fold = hasChildren ? this.collapsed.has(row.key) ? 'collapsed' : 'expanded' : null;
-    return commandOptions(slash.query, row.kind, zoomed, fold, this.t, estimateOf(row.title)?.estimated ?? 0);
+    return commandOptions(query, row.kind, zoomed, fold, this.t, estimateOf(row.title)?.estimated ?? 0);
   }
 
   // The open menu of a title, or null. A menu without matches is not shown, and Enter stays Enter.
@@ -1109,11 +1116,6 @@ export class Controller {
     // At the end of the text, the space typed before the `/` goes too.
     const title = value.slice(end) ? value.slice(0, start) + value.slice(end) : value.slice(0, start).trimEnd();
     const strip = (text: string) => core.updateTitle(text, line, title).text;
-    const mutateTitle = (fn: (text: string) => core.EditResult) => {
-      this.mutate(path, fn, 'title');
-      const focused = this.activeElement;
-      if (focused instanceof HTMLTextAreaElement && focused.dataset.field === 'title') focused.setSelectionRange(start, start);
-    };
     if (slash.step === 'files') {
       const name = relativePath(path, id);
       let replaced = false;
@@ -1140,6 +1142,18 @@ export class Controller {
         .catch((error: unknown) => this.showToast(this.describe(error)));
       return;
     }
+    await this.runCommand(path, line, command, title, strip, start);
+    if (node.isConnected && !(this.activeElement instanceof HTMLTextAreaElement)) node.focus();
+  };
+
+  // Runs a command of the menu other than embedding; `strip` takes the typed `/query` text out in
+  // the same edit, and the caret goes to `caret` in the title.
+  private async runCommand(path: string, line: number, command: SlashCommand, title: string, strip: (text: string) => string, caret: number) {
+    const mutateTitle = (fn: (text: string) => core.EditResult) => {
+      this.mutate(path, fn, 'title');
+      const focused = this.activeElement;
+      if (focused instanceof HTMLTextAreaElement && focused.dataset.field === 'title') focused.setSelectionRange(caret, caret);
+    };
     if (command === 'delete') {
       this.slash = null;
       this.deleteRows(path, [line], strip);
@@ -1156,7 +1170,53 @@ export class Controller {
       else if (command === 'collapse' || command === 'expand') this.setFold(path, line, command === 'collapse');
       else await this.extractToFile(path, line);
     }
-    if (node.isConnected && !(this.activeElement instanceof HTMLTextAreaElement)) node.focus();
+  }
+
+  // A right-click on an item outside its text (the handle, the status, the margins) opens the
+  // commands of the / menu there. The text keeps the native menu, with copy, paste and spelling.
+  openContextMenu = (path: string, row: KeyedRow, event: MouseEvent & { currentTarget: HTMLElement }) => {
+    const target = event.target as Element;
+    if (target.closest('textarea, a, .title-display, .note-display')) return;
+    const options = this.commandsFor(path, row, '');
+    if (!options.length) return;
+    event.preventDefault();
+    let { clientX: x, clientY: y } = event;
+    // The context menu key and Shift+F10 give no pointer position.
+    if (!x && !y) ({ left: x, bottom: y } = target.getBoundingClientRect());
+    this.slash = null;
+    this.contextMenu = { path, line: row.line, x, y, options, opener: event.currentTarget.querySelector<HTMLElement>('.drag-handle') };
+  };
+
+  closeContextMenu = (restoreFocus = false) => {
+    const menu = this.contextMenu;
+    this.contextMenu = null;
+    if (restoreFocus && menu?.opener?.isConnected) menu.opener.focus();
+  };
+
+  // Runs a command of the context menu as the / menu would with nothing typed, so the title stays.
+  runContextCommand = async (id: string) => {
+    const menu = this.contextMenu;
+    this.contextMenu = null;
+    if (!menu) return;
+    const { path, line } = menu;
+    const row = this.rows(path).find(value => value.line === line);
+    const node = this.titleNode(path, line);
+    if (!row || !node) return;
+    if (id === 'embed') {
+      // The file list opens under the title, after a `/` at its end, and typing filters it there.
+      node.focus();
+      const start = node.value === '' || /\s$/.test(node.value) ? node.value.length : node.value.length + 1;
+      node.value = node.value.padEnd(start) + '/';
+      node.setSelectionRange(start + 1, start + 1);
+      this.inputField(path, line, 'title', node, null);
+      this.slash = { path, line, start, query: '', step: 'commands', index: 0, files: [], tags: [] };
+      await this.runSlash('embed', node);
+      return;
+    }
+    await this.runCommand(path, line, id as SlashCommand, row.title, text => text, row.title.length);
+    if (this.activeElement instanceof HTMLTextAreaElement) return;
+    const back = [menu.opener, this.titleNode(path, line)].find(value => value?.isConnected);
+    back?.focus();
   };
 
   // --- Row actions --------------------------------------------------------------------------
