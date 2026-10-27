@@ -19,3 +19,21 @@ test('the selection bar deletes the selected items', async ({ openOutliner, page
   await page.getByRole('button', { name: t.toolbar.deleteSelection, exact: true }).click();
   await expect.poll(outliner.saved).toBe('- [ ] C\n');
 });
+
+test('Backspace or Delete deletes the selected items, but edits the text in a field', async ({ openOutliner, page }) => {
+  const outliner = await openOutliner('- [ ] A\n- [ ] B\n- [ ] C\n- [ ] D\n');
+  const handles = page.getByTitle(t.item.dragHandle);
+  await handles.nth(0).click();
+  await handles.nth(1).click({ modifiers: ['Shift'] });
+  const titles = page.getByRole('textbox', { name: t.item.title });
+  await titles.nth(3).click();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Backspace');
+  await expect.poll(outliner.saved).toBe('- [ ] A\n- [ ] B\n- [ ] C\n- [ ] \n');
+  await handles.nth(0).click();
+  await handles.nth(1).click({ modifiers: ['Shift'] });
+  await page.keyboard.press('Backspace');
+  await expect.poll(outliner.saved).toBe('- [ ] C\n- [ ] \n');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(outliner.titles).toEqual(['A', 'B', 'C', '']);
+});

@@ -50,6 +50,12 @@ export const isSearchShortcut = (event: KeyboardEvent) =>
 export const isDeleteKey = (event: KeyboardEvent, mac: boolean) =>
   event.key === 'Backspace' && event.shiftKey && !event.altKey && (mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey);
 
+// Delete or Backspace (the delete key on macOS) outside a text field: delete the selected items.
+// In a text field, which keeps the selection while it is edited, the keys edit the text.
+const isSelectionDeleteKey = (event: KeyboardEvent) =>
+  (event.key === 'Delete' || event.key === 'Backspace') && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey
+  && !(event.target as Element | null)?.closest?.('textarea, input, select, [contenteditable]:not([contenteditable="false"])');
+
 // ↑↓, and on macOS also Ctrl+P / Ctrl+N (see MountOptions.mac).
 export const verticalKey = (event: KeyboardEvent, mac: boolean): 'ArrowUp' | 'ArrowDown' | null => {
   if (event.key === 'ArrowUp' || event.key === 'ArrowDown') return event.key;
@@ -1297,7 +1303,8 @@ export class Controller {
     if (!drag.items) {
       drag.items = true;
       const doc = this.container!.ownerDocument;
-      (doc.activeElement as HTMLElement | null)?.blur?.();
+      // The focus stays inside the outliner, so that Delete reaches it.
+      this.container!.querySelector<HTMLElement>('.outliner-workspace')?.focus({ preventScroll: true });
       doc.getSelection?.()?.removeAllRanges();
     }
     event.preventDefault();
@@ -1326,6 +1333,8 @@ export class Controller {
       if (this.selectedLines.has(row.line)) this.selectedLines.delete(row.line); else this.selectedLines.add(row.line);
       this.selectionAnchor = row.line;
     }
+    // Safari does not focus a clicked button; the focused handle takes Delete for the selection.
+    (event.currentTarget as HTMLElement | null)?.focus?.();
     this.active = null;
     this.render();
   };
@@ -2160,6 +2169,10 @@ export class Controller {
       void this.saveAll();
     }
     if (isSearchShortcut(event) && this.focusSearch()) event.preventDefault();
+    if (this.selectedLines.size && isSelectionDeleteKey(event)) {
+      event.preventDefault();
+      this.deleteSelection();
+    }
   };
 
   // Moves the focus to the search box with its text selected, as Cmd/Ctrl+F does.

@@ -47,3 +47,13 @@ test.describe('dragging a text selection across items', () => {
     expect(await selected(page)).toEqual(['parent', 'next']);
   });
 });
+
+test('Delete deletes the items selected by a drag, and Undo brings them back', async ({ page, openOutliner }) => {
+  const outliner = await openOutliner('- [ ] alpha\n- [ ] beta\n- [ ] gamma\n- [ ] delta\n');
+  await dragText(page, 'alpha', 'beta');
+  expect(await selected(page)).toEqual(['alpha', 'beta']);
+  await page.keyboard.press('Delete');
+  await expect.poll(outliner.saved).toBe('- [ ] gamma\n- [ ] delta\n');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(outliner.titles).toEqual(['alpha', 'beta', 'gamma', 'delta']);
+});

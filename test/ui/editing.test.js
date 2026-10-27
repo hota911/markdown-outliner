@@ -313,6 +313,38 @@ describe('deleting items', () => {
     expect(await saved()).toBe('');
   });
 
+  it('Delete or Backspace on a selected handle deletes the selected items, and one undo brings them back', async () => {
+    const { user, row, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n  - [ ] b1\n- [ ] c\n- [ ] d\n' });
+    await user.click(handle(row, 'a'));
+    await user.keyboard('{Shift>}');
+    await user.click(handle(row, 'b'));
+    await user.keyboard('{/Shift}');
+    expect(document.activeElement).toBe(handle(row, 'b'));
+    await user.keyboard('{Delete}');
+    expect(titleValues()).toEqual(['c', 'd']);
+    expect(document.activeElement).toBe(title('c'));
+    expect(await saved()).toBe('- [ ] c\n- [ ] d\n');
+    await user.keyboard('{Control>}z{/Control}');
+    expect(titleValues()).toEqual(['a', 'b', 'b1', 'c', 'd']);
+    await user.click(handle(row, 'c'));
+    await user.keyboard('{Backspace}');
+    expect(await saved()).toBe('- [ ] a\n- [ ] b\n  - [ ] b1\n- [ ] d\n');
+  });
+
+  it('Backspace and Delete in a text field edit the text while items are selected', async () => {
+    const { user, row, title, titleValues, saved } = await setup({ 'tasks.md': '- [ ] a\n- [ ] b\n- [ ] cd\n' });
+    await user.click(handle(row, 'a'));
+    await user.keyboard('{Shift>}');
+    await user.click(handle(row, 'b'));
+    await user.keyboard('{/Shift}');
+    await user.click(title('cd'));
+    title('cd').setSelectionRange(1, 1);
+    await user.keyboard('{Backspace}');
+    await user.keyboard('{Delete}');
+    expect(titleValues()).toEqual(['a', 'b', '']);
+    expect(await saved()).toBe('- [ ] a\n- [ ] b\n- [ ] \n');
+  });
+
   it('the shortcut on a focused handle deletes an embed line but not the embedded file', async () => {
     const { user, row, adapter, saved } = await setup({ 'tasks.md': '- [ ] a\n- ![[work.md]]\n', 'work.md': '- [ ] w\n' });
     const embedHandle = row('w').getByTitle('項目を選択／ドラッグして移動').closest('.outline-item').parentElement.closest('.outline-item').querySelector('.drag-handle');
